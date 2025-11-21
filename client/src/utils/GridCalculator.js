@@ -52,6 +52,64 @@ export class GridCalculator {
     };
   }
 
+  static generateRectangularGrid(
+    cols,
+    rows,
+    screenW,
+    screenH,
+    fixedRadius = null
+  ) {
+    const MARGIN_TOP = 100;
+
+    let radius = fixedRadius;
+
+    // Se NÃO tiver raio fixo, calcula para caber na tela (Lógica antiga)
+    if (!radius) {
+      const availW = screenW - 100;
+      const availH = screenH - MARGIN_TOP - 50;
+      const rBasedOnWidth = availW / (cols * 1.5 + 0.5);
+      const rBasedOnHeight = availH / (rows * Math.sqrt(3) + Math.sqrt(3) / 2);
+      radius = Math.min(rBasedOnWidth, rBasedOnHeight);
+      radius = Math.max(8, radius);
+    }
+
+    // --- 2. CONSTANTES ---
+    const hexW = 2 * radius;
+    const hexH = Math.sqrt(3) * radius;
+    const horizDist = hexW * 0.75;
+    const vertDist = hexH;
+
+    // --- 3. POSICIONAMENTO ---
+    // Se for raio fixo (mapa gigante), começamos centralizados,
+    // mas o grid vai extrapolar a tela.
+    const totalGridWidth = (cols - 1) * horizDist;
+    const totalGridHeight = (rows - 1) * vertDist;
+
+    const startX = screenW / 2 - totalGridWidth / 2;
+
+    // Se o grid for maior que a tela, centraliza o topo, senão centraliza no meio
+    let startY;
+    if (fixedRadius) {
+      startY = MARGIN_TOP + 50; // Começa um pouco abaixo do topo
+    } else {
+      startY = MARGIN_TOP + (screenH - MARGIN_TOP - 50 - totalGridHeight) / 2;
+    }
+
+    const positions = [];
+
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const yOffset = c % 2 !== 0 ? vertDist / 2 : 0;
+        const x = startX + c * horizDist;
+        const y = startY + r * vertDist + yOffset;
+
+        positions.push({ x, y, col: c, row: r });
+      }
+    }
+
+    return { positions, radius };
+  }
+
   static generateHexPositions(geomPoly, targetCount) {
     // CORREÇÃO: Cálculo manual da área usando os pontos do polígono Phaser
     const area = this.calculatePolygonArea(geomPoly.points);

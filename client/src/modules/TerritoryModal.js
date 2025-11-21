@@ -1,3 +1,4 @@
+import Phaser from "phaser"; // Import necessário se usar Phaser.*
 import { InteractiveHexagon } from "./components/InteractiveHexagon";
 import { GridCalculator } from "../utils/GridCalculator";
 
@@ -11,11 +12,12 @@ export class TerritoryModal {
     this.createBackdrop();
 
     // Container Centralizado
+    // REMOVIDO: setScrollFactor(0) - Isso alinha o input com o mundo
     this.container = this.scene.add.container(
       this.scene.scale.width / 2,
       this.scene.scale.height / 2
     );
-    this.container.setScrollFactor(0).setDepth(21).setVisible(false);
+    this.container.setDepth(21).setVisible(false);
 
     this.borderGraphics = this.scene.add.graphics();
     this.container.add(this.borderGraphics);
@@ -28,13 +30,10 @@ export class TerritoryModal {
       this.scene.scale.width,
       this.scene.scale.height,
       0x000000,
-      0.85
+      0.5
     );
-    this.backdrop
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(20)
-      .setVisible(false);
+    // REMOVIDO: setScrollFactor(0)
+    this.backdrop.setOrigin(0, 0).setDepth(20).setVisible(false);
 
     this.backdrop.setInteractive();
     this.backdrop.on("pointerdown", () => this.scene.closeTerritoryModal());
@@ -42,7 +41,7 @@ export class TerritoryModal {
 
   show(index, mapGenerator) {
     const rawPoly = mapGenerator.getPolygon(index);
-    const data = mapGenerator.territoryData[index]; // Aqui temos data.size
+    const data = mapGenerator.territoryData[index];
 
     if (!rawPoly) return;
 
@@ -59,8 +58,7 @@ export class TerritoryModal {
     // 2. Desenhar Borda
     this.drawBorder(geometry.points);
 
-    // 3. Definir Quantidade de Hexágonos baseado no Size
-    // Passamos o objeto 'data' inteiro ou apenas a propriedade size
+    // 3. Definir Quantidade
     const targetCount = this.determineTerritorySize(data);
 
     // 4. Gerar Grid
@@ -70,7 +68,6 @@ export class TerritoryModal {
     );
 
     // 5. Criar Componentes Visuais
-    // Usa a cor do terreno ou um fallback
     const hexColor = data.terrain ? data.terrain.color : 0x888888;
     this.createHexagons(gridData, hexColor);
   }
@@ -79,7 +76,6 @@ export class TerritoryModal {
     this.backdrop.setVisible(false);
     this.container.setVisible(false);
 
-    // Limpa componentes
     this.hexagons.forEach((hex) => hex.destroy());
     this.hexagons = [];
     this.borderGraphics.clear();
@@ -126,18 +122,12 @@ export class TerritoryModal {
     console.log(`Hex ${newId} selecionado.`);
   }
 
-  /**
-   * Converte a string de tamanho (Pequeno, Médio, Grande) em quantidade de slots
-   */
   determineTerritorySize(data) {
-    // Mapa de configuração
     const sizeMap = {
       Pequeno: 10,
       Médio: 20,
       Grande: 30,
     };
-
-    // Retorna o valor mapeado ou 20 como padrão de segurança
     return sizeMap[data.size] || 20;
   }
 }

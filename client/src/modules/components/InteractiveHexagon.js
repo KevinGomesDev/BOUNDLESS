@@ -4,17 +4,11 @@ export class InteractiveHexagon {
   constructor(scene, container, config) {
     this.scene = scene;
     this.id = config.id;
-    this.baseColor = config.color || 0x888888; // Cor fallback se vier undefined
+    this.baseColor = config.color || 0x888888;
     this.radius = config.radius;
-
-    // Callback de clique (passado pelo pai)
     this.onSelect = config.onSelect;
 
-    // Cria o gráfico
     this.graphics = scene.add.graphics();
-
-    // --- CORREÇÃO CRÍTICA DE POSICIONAMENTO ---
-    // Movemos o OBJETO para a posição final, e desenhamos em (0,0)
     this.graphics.setPosition(config.x, config.y);
     container.add(this.graphics);
 
@@ -25,28 +19,36 @@ export class InteractiveHexagon {
   }
 
   setupInteractive() {
-    // Como o gráfico já está em X,Y, o HitArea deve ser local (0,0)
-    const hitCircle = new Phaser.Geom.Circle(0, 0, this.radius * 0.95);
+    const points = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = Phaser.Math.DegToRad(60 * i);
+      points.push({
+        x: this.radius * Math.cos(angle),
+        y: this.radius * Math.sin(angle),
+      });
+    }
+    points.push(points[0]);
 
-    this.graphics.setInteractive(hitCircle, Phaser.Geom.Circle.Contains);
+    const hitShape = new Phaser.Geom.Polygon(points);
+
+    this.graphics.setInteractive(hitShape, Phaser.Geom.Polygon.Contains);
 
     this.graphics.on("pointerover", () => {
+      if (!this.graphics.visible) return;
       this.scene.input.manager.canvas.style.cursor = "pointer";
-      this.draw(0xffffff); // Highlight Branco
+      this.draw(0xffffff);
     });
 
     this.graphics.on("pointerout", () => {
       this.scene.input.manager.canvas.style.cursor = "default";
-      this.draw(); // Volta ao normal
+      this.draw();
     });
 
     this.graphics.on("pointerdown", (pointer, localX, localY, event) => {
-      // --- CORREÇÃO CRÍTICA DE EVENTO ---
-      event.stopPropagation(); // <--- IMPEDE O CLIQUE DE PASSAR PARA O BACKDROP
+      // --- CORREÇÃO: REMOVIDO stopPropagation ---
+      // Isso permite que o evento suba para a Scene e ative o Drag do CombatModal
 
-      if (this.onSelect) {
-        this.onSelect(this.id);
-      }
+      if (this.onSelect) this.onSelect(this.id);
     });
   }
 
@@ -60,20 +62,22 @@ export class InteractiveHexagon {
     g.clear();
 
     let color = this.baseColor;
-    let alpha = 1; // Semitransparente para ver o fundo preto se quiser
-    let lineThick = 2;
+    let alpha = 1;
+    let lineThick = 1;
+    let lineColor = 0x000000;
 
     if (overrideColor !== null) {
       color = overrideColor;
+      lineThick = 2;
+      lineColor = 0xffffff;
     } else if (this.isSelected) {
-      color = 0xffd700; // Dourado
-      lineThick = 4;
+      color = 0xffd700;
+      lineThick = 3;
     }
 
     g.fillStyle(color, alpha);
-    g.lineStyle(lineThick, 0x000000, 1);
+    g.lineStyle(lineThick, lineColor, 1);
 
-    // Desenha centrado em 0,0 (pois o objeto graphics já está transladado)
     g.beginPath();
     for (let i = 0; i < 6; i++) {
       const angle = Phaser.Math.DegToRad(60 * i);
