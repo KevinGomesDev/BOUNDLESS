@@ -1,0 +1,16 @@
+/* Remove margens padrão do navegador */
+body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  /* Cor do HUD para esconder faixas de sobra se o monitor não for 16:9 */
+  background-color: #222222;
+  overflow: hidden; /* Impede barras de rolagem acidentais */
+}
+
+/* Garante que o canvas seja um bloco sólido */
+canvas {
+  display: block;
+}
