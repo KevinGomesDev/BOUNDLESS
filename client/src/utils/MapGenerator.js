@@ -7,8 +7,8 @@ export class MapGenerator {
     this.width = width;
     this.height = height;
 
-    this.MAP_SIZE = 25; // Quantidade alvo de territórios de terra
-    this.MIN_TERRITORY_DIST = 100; // Distância mínima entre centros
+    this.MAP_SIZE = 25;
+    this.MIN_TERRITORY_DIST = 100;
 
     this.delaunay = null;
     this.voronoi = null;
@@ -97,16 +97,13 @@ export class MapGenerator {
     const SIZES = ["Pequeno", "Médio", "Grande"];
 
     this.territoryData = this.points.map((point, index) => {
-      // Recupera o formato do polígono imediatamente
       const polygon = this.voronoi.cellPolygon(index);
 
-      // LÓGICA PARA O MAR
       if (index >= this.numLandTerritories) {
         return {
           id: index,
           type: "WATER",
           terrain: TERRAIN_TYPES.OCEAN,
-          // Propriedades extras (Mar é neutro e explorado por padrão)
           ownership: null,
           format: polygon,
           size: null,
@@ -115,23 +112,20 @@ export class MapGenerator {
         };
       }
 
-      // LÓGICA PARA A TERRA
       const [x, y] = point;
       const terrain = this.biomeGenerator.getBiomeForPoint(x, y);
 
-      // Sorteia tamanho aleatório
       const randomSize = SIZES[Math.floor(Math.random() * SIZES.length)];
 
       return {
         id: index,
         type: "LAND",
         terrain: terrain,
-        // Novos campos solicitados:
-        ownership: null, // Sem dono inicial
-        format: polygon, // Array de pontos [[x,y], ...]
-        size: randomSize, // Pequeno, Médio ou Grande
-        eventId: 0, // Sem evento
-        explored: false, // Névoa de guerra inicial
+        ownership: null,
+        format: polygon,
+        size: randomSize,
+        eventId: 0,
+        explored: false,
       };
     });
   }

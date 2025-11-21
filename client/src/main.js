@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { MenuScene } from "./scenes/MenuScene";
 import { GameScene } from "./scenes/GameScene";
 import { UIScene } from "./scenes/UIScene";
 
@@ -16,7 +17,7 @@ const config = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
 
-  scene: [GameScene, UIScene],
+  scene: [MenuScene, GameScene, UIScene],
 };
 
 new Phaser.Game(config);

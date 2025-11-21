@@ -1,59 +1,78 @@
-import Phaser from "phaser";
-
+import { GameConfig } from "../../config/GameConfig";
 export class TopBar {
   constructor(scene) {
     this.scene = scene;
     this.width = scene.scale.width;
     this.height = 80;
 
+    // Container principal da barra (Fixo na tela)
     this.container = scene.add.container(0, 0);
+    this.container.setScrollFactor(0).setDepth(100);
+
     this.resourceTexts = {};
-    this.infoGroup = null;
+
+    // Container do Tooltip (Camada superior, invisível por padrão)
+    this.tooltipContainer = scene.add.container(0, 0);
+    this.tooltipContainer.setScrollFactor(0).setDepth(101).setVisible(false);
 
     this.createBackground();
     this.createResourcesArea();
     this.createInfoArea();
+    this.createTooltip(); // Inicializa os gráficos do tooltip
   }
-
-  // ... (Mantenha createBackground e createResourcesArea iguais) ...
 
   createBackground() {
     const bg = this.scene.add.graphics();
-    bg.fillStyle(0x111111, 1);
+    bg.fillStyle(GameConfig.UI.COLORS.BAR_BG || 0x111111, 1);
     bg.fillRect(0, 0, this.width, this.height);
+
     bg.lineStyle(2, 0x444444, 1);
     bg.beginPath();
     bg.moveTo(0, this.height);
     bg.lineTo(this.width, this.height);
     bg.strokePath();
+
     this.container.add(bg);
   }
 
   createResourcesArea() {
-    const resources = [
-      { key: "gold", icon: "🟡", label: "Ouro", value: 1000 },
-      { key: "wood", icon: "🌲", label: "Madeira", value: 500 },
-      { key: "food", icon: "🍎", label: "Comida", value: 800 },
-      { key: "pop", icon: "👥", label: "Súditos", value: 25 },
-    ];
+    // Pega os recursos definidos no GameConfig
+    const resources = Object.values(GameConfig.RESOURCES);
 
     let startX = 30;
-    const gap = 120;
+    // Calcula o espaço disponível (reservando 400px para a info da direita)
+    const availableWidth = this.width - 400 - startX;
+    const gap = availableWidth / resources.length;
 
     resources.forEach((res, index) => {
       const xPos = startX + index * gap;
       const yPos = this.height / 2;
 
+      const textValue = `${res.icon} ${res.startValue}`;
+
       const textObj = this.scene.add
-        .text(xPos, yPos, `${res.icon} ${res.value}`, {
+        .text(xPos, yPos, textValue, {
           fontFamily: "Arial",
-          fontSize: "18px",
+          fontSize: "16px",
           color: "#ffffff",
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5);
 
-      this.resourceTexts[res.key] = textObj;
+      // Interatividade para o Tooltip
+      textObj.setInteractive({ useHandCursor: true });
+
+      textObj.on("pointerover", () => {
+        textObj.setColor(res.color); // Muda para a cor do recurso no hover
+        this.showTooltip(xPos, this.height + 10, res);
+      });
+
+      textObj.on("pointerout", () => {
+        textObj.setColor("#ffffff"); // Volta para branco
+        this.hideTooltip();
+      });
+
+      this.resourceTexts[res.id] = textObj;
       this.container.add(textObj);
     });
   }
@@ -82,6 +101,72 @@ export class TopBar {
     this.container.add([this.infoTitle, this.infoSubtitle]);
   }
 
+  // --- LÓGICA DE TOOLTIP ---
+
+  createTooltip() {
+    this.tooltipBg = this.scene.add.graphics();
+
+    this.tooltipTitle = this.scene.add.text(10, 10, "", {
+      fontFamily: "Arial",
+      fontSize: "16px",
+      fontStyle: "bold",
+      color: "#ffaa00",
+    });
+
+    this.tooltipDesc = this.scene.add.text(10, 35, "", {
+      fontFamily: "Arial",
+      fontSize: "14px",
+      color: "#cccccc",
+      wordWrap: { width: 350 }, // Quebra de linha automática
+    });
+
+    this.tooltipContainer.add([
+      this.tooltipBg,
+      this.tooltipTitle,
+      this.tooltipDesc,
+    ]);
+  }
+
+  showTooltip(x, y, resourceData) {
+    // Preenche os dados
+    this.tooltipTitle.setText(`${resourceData.icon} ${resourceData.label}`);
+    this.tooltipTitle.setColor(resourceData.color);
+    this.tooltipDesc.setText(resourceData.description);
+
+    // Redesenha o fundo baseado no tamanho do texto
+    const width = 370; // Largura fixa confortável para leitura
+    const height = this.tooltipDesc.height + 50; // Altura dinâmica
+
+    this.tooltipBg.clear();
+    this.tooltipBg.fillStyle(0x000000, 0.95);
+    this.tooltipBg.lineStyle(1, 0x666666, 1);
+    this.tooltipBg.fillRoundedRect(0, 0, width, height, 8);
+    this.tooltipBg.strokeRoundedRect(0, 0, width, height, 8);
+
+    // Ajusta posição X se for sair da tela pela direita
+    let finalX = x;
+    if (finalX + width > this.width) {
+      finalX = this.width - width - 10;
+    }
+
+    this.tooltipContainer.setPosition(finalX, y);
+    this.tooltipContainer.setVisible(true);
+  }
+
+  hideTooltip() {
+    this.tooltipContainer.setVisible(false);
+  }
+
+  // --- ATUALIZAÇÕES ---
+
+  updateResource(key, newValue) {
+    if (this.resourceTexts[key]) {
+      const currentText = this.resourceTexts[key].text;
+      const icon = currentText.split(" ")[0];
+      this.resourceTexts[key].setText(`${icon} ${newValue}`);
+    }
+  }
+
   updateTerritoryInfo(data) {
     if (!data) {
       this.infoTitle.setText("Mundo Aberto");
@@ -89,7 +174,6 @@ export class TopBar {
       this.infoSubtitle.setText("Nenhum território selecionado");
       return;
     }
-    // ... Lógica existente ...
     if (data.type === "LAND") {
       this.infoTitle.setText(`Território #${data.id} - ${data.terrain.name}`);
       this.infoTitle.setColor("#ffffff");
@@ -104,26 +188,14 @@ export class TopBar {
     }
   }
 
-  updateResource(key, newValue) {
-    if (this.resourceTexts[key]) {
-      const currentText = this.resourceTexts[key].text;
-      const icon = currentText.split(" ")[0];
-      this.resourceTexts[key].setText(`${icon} ${newValue}`);
-    }
-  }
-
-  // --- NOVO MÉTODO ---
   setCombatState(isActive, territoryName = "", color = 0xffffff) {
     if (isActive) {
       this.infoTitle.setText(`⚔️ COMBATE: ${territoryName.toUpperCase()}`);
-      // Converte cor int (0xff0000) para string hex css ('#ff0000')
       const hexString = "#" + color.toString(16).padStart(6, "0");
       this.infoTitle.setColor(hexString);
-
       this.infoSubtitle.setText("Modo Tático Ativado");
-      this.infoSubtitle.setColor("#ffaa00"); // Laranja alerta
+      this.infoSubtitle.setColor("#ffaa00");
     } else {
-      // Restaura estado padrão
       this.updateTerritoryInfo(null);
       this.infoSubtitle.setColor("#888888");
     }
