@@ -9,16 +9,24 @@ export class InteractionHandler {
     this.hoveredIndex = -1;
 
     // Gráficos
-    this.selectionGraphics = scene.add.graphics();
-    this.highlightGraphics = scene.add.graphics();
+    this.selectionGraphics = scene.add.graphics(); // Persistente
+    this.highlightGraphics = scene.add.graphics(); // Volátil (Hover)
 
     this.setupInput();
   }
 
   setupInput() {
     this.scene.input.on("pointermove", (pointer) => {
-      // Se estiver arrastando a câmera (verificamos se o botão está apertado), não faz hover
-      if (pointer.isDown) return;
+      // 1. Se o modal estiver aberto, ignora o mapa de fundo
+      if (this.scene.isModalOpen) return;
+
+      // 2. Se não estiver na visão de Mapa Mundi, ignora
+      if (this.scene.currentView !== "STRATEGY") {
+        this.clearHover();
+        return;
+      }
+
+      if (pointer.isDown) return; // Não faz hover se estiver arrastando
 
       if (pointer.x < this.mapWidth) {
         this.handleHover(pointer);
@@ -27,7 +35,36 @@ export class InteractionHandler {
       }
     });
 
+    this.scene.input.on("pointermove", (pointer) => {
+      // SE O MODAL ESTIVER ABERTO, NÃO FAÇA NADA.
+      // Não limpe, não calcule hover, apenas ignore.
+      if (this.scene.isModalOpen) return;
+
+      if (this.scene.currentView && this.scene.currentView !== "STRATEGY") {
+        this.clearHover();
+        return;
+      }
+
+      // 2. Se não estiver na visão de Mapa Mundi, ignora cliques no mapa
+      if (this.scene.currentView !== "STRATEGY") return;
+
+      if (pointer.isDown) return;
+      if (pointer.x < this.mapWidth) {
+        this.handleHover(pointer);
+      } else {
+        this.clearHover();
+      }
+    });
+
     this.scene.input.on("pointerdown", (pointer) => {
+      // CORREÇÃO AQUI:
+      // Se o modal estiver aberto, este Handler NÃO deve fazer nada.
+      // A responsabilidade de fechar agora é do próprio Modal.
+      if (this.scene.isModalOpen) return;
+
+      if (this.scene.currentView && this.scene.currentView !== "STRATEGY")
+        return;
+
       if (pointer.x < this.mapWidth) {
         this.handleClick(pointer);
       }
@@ -48,6 +85,7 @@ export class InteractionHandler {
 
     if (data && data.type === "LAND") {
       this.scene.input.manager.canvas.style.cursor = "pointer";
+      // Só desenha hover se não estiver selecionado
       if (index !== this.selectedIndex) {
         this.drawBorder(this.highlightGraphics, index, 0xffffff, 4);
       }
@@ -67,25 +105,25 @@ export class InteractionHandler {
       pointer.worldX,
       pointer.worldY
     );
+
     const data = this.mapGenerator.territoryData[index];
-    const uiScene = this.scene.scene.get("UIScene"); // Pega referência da outra cena
+    const uiScene = this.scene.scene.get("UIScene");
 
     if (data && data.type === "LAND") {
       if (this.selectedIndex === index) {
-        // Deselecionar
-        this.selectedIndex = -1;
-        this.selectionGraphics.clear();
-        uiScene.updateInfo(null);
+        // --- LÓGICA DE MODAL (2º CLIQUE) ---
+        // Se já estava selecionado e clicou de novo -> Abre Modal de Território
+        this.scene.openTerritoryModal(index);
       } else {
-        // Selecionar
+        // Selecionar Novo Território
         this.selectedIndex = index;
         this.selectionGraphics.clear();
         this.drawBorder(this.selectionGraphics, index, 0xffffff, 5);
-        this.highlightGraphics.clear(); // Limpa hover para não sobrepor
+        this.highlightGraphics.clear();
         uiScene.updateInfo(data);
       }
     } else {
-      // Clicou fora/mar
+      // Clicou fora/mar -> Deselecionar tudo
       this.selectedIndex = -1;
       this.selectionGraphics.clear();
       uiScene.updateInfo(null);
