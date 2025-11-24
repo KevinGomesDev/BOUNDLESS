@@ -2,6 +2,13 @@ import Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene";
 import { GameScene } from "./scenes/GameScene";
 import { UIScene } from "./scenes/UIScene";
+import { KingdomsScene } from "./scenes/KingdomsScene";
+import { KingdomCreationScene } from "./scenes/KingdomCreationScene.js";
+import { EntryScene } from "./scenes/EntryScene";
+import socketService from "./services/SocketService"; // <--- Importe o serviço
+
+// Inicia a conexão com o servidor Socket.io
+socketService.connect();
 
 const config = {
   type: Phaser.AUTO,
@@ -17,7 +24,14 @@ const config = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
 
-  scene: [MenuScene, GameScene, UIScene],
+  scene: [
+    KingdomsScene,
+    KingdomCreationScene,
+    EntryScene,
+    MenuScene,
+    GameScene,
+    UIScene,
+  ],
 };
 
 new Phaser.Game(config);

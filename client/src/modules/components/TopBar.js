@@ -1,4 +1,5 @@
 import { GameConfig } from "../../config/GameConfig";
+
 export class TopBar {
   constructor(scene) {
     this.scene = scene;
