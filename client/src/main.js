@@ -5,6 +5,8 @@ import { UIScene } from "./scenes/UIScene";
 import { KingdomsScene } from "./scenes/KingdomsScene";
 import { KingdomCreationScene } from "./scenes/KingdomCreationScene.js";
 import { EntryScene } from "./scenes/EntryScene";
+import { LobbyScene } from "./scenes/LobbyScene";
+import { MatchBrowserScene } from "./scenes/MatchBrowserScene";
 import socketService from "./services/SocketService"; // <--- Importe o serviço
 
 // Inicia a conexão com o servidor Socket.io
@@ -25,12 +27,14 @@ const config = {
   },
 
   scene: [
-    KingdomsScene,
-    KingdomCreationScene,
     EntryScene,
     MenuScene,
+    KingdomsScene,
+    KingdomCreationScene,
     GameScene,
     UIScene,
+    LobbyScene,
+    MatchBrowserScene,
   ],
 };
 

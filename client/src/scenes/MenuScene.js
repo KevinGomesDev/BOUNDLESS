@@ -10,29 +10,70 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    // 1. Fundo (Pode desenhar logo para não ficar tela preta)
     new HexBackground(this).create();
 
-    // Tenta pegar do registry, se não tiver, pega do localStorage
+    // 2. Recupera Sessão
     let username = this.registry.get("username");
     let userId = this.registry.get("userId");
 
+    // Lógica de recuperação do LocalStorage (F5)
     if (!userId) {
-      // Recupera do backup
       userId = localStorage.getItem("userId");
       username = localStorage.getItem("username");
 
-      // Se recuperou, salva no registry de volta
       if (userId) {
         this.registry.set("userId", userId);
         this.registry.set("username", username);
       } else {
-        // Se não tem nem no storage, chuta o usuário pro login
         this.scene.start("EntryScene");
         return;
       }
     }
 
+    // 3. LOADING STATE (Enquanto verifica se tem partida)
+    this.loadingText = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        "Verificando campo de batalha...",
+        {
+          font: "20px Arial",
+          color: "#aaa",
+        }
+      )
+      .setOrigin(0.5);
+
+    // 4. PERGUNTA AO SERVIDOR
+    this.checkActiveSession(userId);
+  }
+
+  checkActiveSession(userId) {
+    // Escuta a resposta (apenas uma vez)
+    socketService.once("auth:session_checked", ({ activeMatchId }) => {
+      this.loadingText.destroy(); // Remove o texto de loading
+
+      if (activeMatchId) {
+        // CASO A: Tem partida ativa -> Vai direto pro jogo
+        console.log("Reconectando à partida:", activeMatchId);
+        this.registry.set("currentMatchId", activeMatchId);
+        this.scene.start("GameScene");
+      } else {
+        // CASO B: Livre -> Desenha o Menu normal
+        this.showMenuUI();
+      }
+    });
+
+    // Envia a pergunta
+    socketService.emit("auth:check_session", { userId });
+  }
+
+  // Movemos toda a criação visual antiga para este método
+  showMenuUI() {
+    const username = this.registry.get("username");
     const { width, height } = this.scale;
+
+    // ... (Código do Painel, Título e Botões que você já tinha) ...
     const panelW = 450;
     const panelH = 550;
     const centerX = width / 2;
@@ -41,8 +82,8 @@ export class MenuScene extends Phaser.Scene {
 
     new DarkPanel(this, centerX - panelW / 2, panelTopY, panelW, panelH);
 
-    // Título e Boas-vindas
     this.createTitle(centerX, panelTopY + 60);
+
     this.add
       .text(centerX, panelTopY + 110, `Bem-vindo, ${username}!`, {
         fontFamily: "Arial",
@@ -51,19 +92,12 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // --- CORREÇÃO DE ALINHAMENTO ---
+    // Botões
     const btnH = 55;
     const gap = 25;
     const numButtons = 4;
-
-    // Calculamos a altura total que a pilha de botões ocupa
     const totalGroupHeight = btnH * numButtons + gap * (numButtons - 1);
-
-    // Queremos que o CENTRO do grupo de botões fique um pouco abaixo do centro da tela (+40px)
-    // para compensar o título lá em cima.
     const groupCenterY = centerY + 40;
-
-    // A posição inicial (Y do primeiro botão) é o centro do grupo menos metade da altura total
     const startY = groupCenterY - totalGroupHeight / 2;
 
     this.createButtons(centerX, startY, btnH, gap);
@@ -90,22 +124,15 @@ export class MenuScene extends Phaser.Scene {
   }
 
   createButtons(x, startY, btnH, gap) {
-    // BOTÃO 1
-    new TextButton(this, x, startY, "CRIAR NOVA SALA", () => {
-      console.log("Criar sala...");
-      this.scene.start("GameScene");
+    // BOTÃO 1: NOVA PARTIDA (Vai para o Lobby de Configuração)
+    new TextButton(this, x, startY, "NOVA PARTIDA", () => {
+      this.scene.start("LobbyScene");
     });
 
-    // BOTÃO 2
-    new TextButton(
-      this,
-      x,
-      startY + (btnH + gap),
-      "ENTRAR EM SALA EXISTENTE",
-      () => {
-        console.log("Lista de salas...");
-      }
-    );
+    // BOTÃO 2: PROCURAR PARTIDA (Vai para a Lista)
+    new TextButton(this, x, startY + (btnH + gap), "PROCURAR PARTIDA", () => {
+      this.scene.start("MatchBrowserScene");
+    });
 
     // BOTÃO 3
     new TextButton(this, x, startY + (btnH + gap) * 2, "MEUS REINOS", () => {

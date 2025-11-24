@@ -48,6 +48,11 @@ class SocketService {
     this.socket.off(event);
   }
 
+  once(event, callback) {
+    if (!this.socket) return;
+    this.socket.once(event, callback);
+  }
+
   // Retorna o ID do socket (útil para debug)
   getId() {
     return this.socket ? this.socket.id : null;

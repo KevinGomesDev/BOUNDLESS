@@ -1,4 +1,3 @@
-// client/src/scenes/EntryScene.js
 import Phaser from "phaser";
 import HexBackground from "../modules/ui/HexBackground";
 import DarkPanel from "../modules/ui/DarkPanel";
@@ -18,19 +17,86 @@ export class EntryScene extends Phaser.Scene {
     const centerX = width / 2;
     const centerY = height / 2;
 
+    // 1. VERIFICAÇÃO DE SESSÃO EXISTENTE (AUTO-LOGIN)
+    const savedUserId = localStorage.getItem("userId");
+    const savedUsername = localStorage.getItem("username");
+
+    if (savedUserId) {
+      // Se já tem ID, mostra "Carregando" e verifica sessão
+      this.showLoadingState(centerX, centerY, savedUsername);
+      this.checkSession(savedUserId);
+    } else {
+      // Se não tem ID, mostra os formulários de Login/Registro
+      this.showAuthForms(centerX, centerY);
+    }
+
+    // Setup dos listeners globais (sucesso/erro)
+    this.setupSocketEvents();
+  }
+
+  // --- ESTADO DE CARREGAMENTO (AUTO-LOGIN) ---
+  showLoadingState(x, y, username) {
+    this.add
+      .text(x, y - 50, "BATTLE REALMS", {
+        fontFamily: "Arial",
+        fontSize: "42px",
+        fontStyle: "bold",
+        color: "#ffd700",
+      })
+      .setOrigin(0.5);
+
+    this.loadingText = this.add
+      .text(x, y + 50, `Bem-vindo de volta, ${username || "Viajante"}...`, {
+        fontFamily: "Arial",
+        fontSize: "20px",
+        color: "#aaa",
+      })
+      .setOrigin(0.5);
+
+    // Animação simples
+    this.tweens.add({
+      targets: this.loadingText,
+      alpha: 0.5,
+      duration: 800,
+      yoyo: true,
+      loop: -1,
+    });
+  }
+
+  checkSession(userId) {
+    // Salva no registry para garantir
+    this.registry.set("userId", userId);
+    this.registry.set("username", localStorage.getItem("username"));
+
+    // Pergunta ao servidor se há partida ativa
+    // Usamos 'once' porque é uma verificação única
+    socketService.once("auth:session_checked", ({ activeMatchId }) => {
+      if (activeMatchId) {
+        console.log("Reconectando ao jogo:", activeMatchId);
+        this.registry.set("currentMatchId", activeMatchId);
+        this.scene.start("GameScene");
+      } else {
+        console.log("Sessão válida, indo para Menu.");
+        this.scene.start("MenuScene");
+      }
+    });
+
+    // Envia pedido
+    socketService.emit("auth:check_session", { userId });
+  }
+
+  // --- ESTADO DE FORMULÁRIOS (LOGIN/REGISTRO) ---
+  showAuthForms(centerX, centerY) {
     // --- Layout ---
     const panelW = 350;
     const panelH = 450;
-    const gap = 40; // Espaço entre os painéis
+    const gap = 40;
     const startY = centerY - panelH / 2;
 
-    // Painel Esquerdo (Login) fica à esquerda do centro
     const leftPanelX = centerX - panelW - gap / 2;
-
-    // Painel Direito (Registro) fica à direita do centro
     const rightPanelX = centerX + gap / 2;
 
-    // Feedback de Erro Geral (centralizado no topo)
+    // Feedback de Erro
     this.errorText = this.add
       .text(centerX, startY - 50, "", {
         fontFamily: "Arial",
@@ -40,7 +106,7 @@ export class EntryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // --- Título Principal ---
+    // Título
     this.add
       .text(centerX, startY - 100, "BATTLE REALMS", {
         fontFamily: "Arial",
@@ -59,24 +125,17 @@ export class EntryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // --- Bloco da Esquerda: LOGIN ---
     this.createLoginBlock(leftPanelX, startY, panelW, panelH);
-
-    // --- Bloco da Direita: REGISTRO ---
     this.createRegisterBlock(rightPanelX, startY, panelW, panelH);
-
-    // --- Socket Listeners ---
-    this.setupSocketEvents();
   }
 
   createLoginBlock(x, y, w, h) {
     new DarkPanel(this, x, y, w, h);
-
-    const centerX = x + w / 2;
-    let currentY = y + 50;
+    const cx = x + w / 2;
+    let cy = y + 50;
 
     this.add
-      .text(centerX, currentY, "LOGIN", {
+      .text(cx, cy, "LOGIN", {
         fontFamily: "Arial",
         fontSize: "24px",
         fontStyle: "bold",
@@ -84,59 +143,37 @@ export class EntryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    currentY += 70;
-    this.loginUser = new TextInput(
-      this,
-      centerX - 140,
-      currentY,
-      280,
-      50,
-      "Usuário"
-    );
+    cy += 70;
+    this.loginUser = new TextInput(this, cx - 140, cy, 280, 50, "Usuário");
+    cy += 70;
+    this.loginPass = new TextInput(this, cx - 140, cy, 280, 50, "Senha", true);
 
-    currentY += 70;
-    this.loginPass = new TextInput(
-      this,
-      centerX - 140,
-      currentY,
-      280,
-      50,
-      "Senha",
-      true
-    );
+    // Navegação
+    this.loginUser.setNextInput(this.loginPass);
+    this.loginPass.setNextInput(this.loginUser);
+    const triggerLogin = () => this.handleLogin();
+    this.loginUser.setOnEnter(triggerLogin);
+    this.loginPass.setOnEnter(triggerLogin);
 
-    currentY += 100;
+    cy += 100;
     this.btnLogin = new TextButton(
       this,
-      centerX,
-      currentY,
+      cx,
+      cy,
       "ENTRAR",
       () => this.handleLogin(),
       280,
       55
     );
-
-    // --- NOVO: Configurando Navegação (TAB e ENTER) ---
-    // Tab no User vai para Senha
-    this.loginUser.setNextInput(this.loginPass);
-
-    // Tab na Senha volta para User (loop) ou vai pro botão (se ele fosse focável)
-    this.loginPass.setNextInput(this.loginUser);
-
-    // Enter em qualquer um tenta logar
-    const triggerLogin = () => this.handleLogin();
-    this.loginUser.setOnEnter(triggerLogin);
-    this.loginPass.setOnEnter(triggerLogin);
   }
 
   createRegisterBlock(x, y, w, h) {
     new DarkPanel(this, x, y, w, h);
-
-    const centerX = x + w / 2;
-    let currentY = y + 50;
+    const cx = x + w / 2;
+    let cy = y + 50;
 
     this.add
-      .text(centerX, currentY, "REGISTRAR", {
+      .text(cx, cy, "REGISTRAR", {
         fontFamily: "Arial",
         fontSize: "24px",
         fontStyle: "bold",
@@ -144,65 +181,39 @@ export class EntryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    currentY += 60;
-    this.regUser = new TextInput(
-      this,
-      centerX - 140,
-      currentY,
-      280,
-      50,
-      "Usuário"
-    );
+    cy += 60;
+    this.regUser = new TextInput(this, cx - 140, cy, 280, 50, "Usuário");
+    cy += 65;
+    this.regEmail = new TextInput(this, cx - 140, cy, 280, 50, "E-mail");
+    cy += 65;
+    this.regPass = new TextInput(this, cx - 140, cy, 280, 50, "Senha", true);
 
-    currentY += 65;
-    this.regEmail = new TextInput(
-      this,
-      centerX - 140,
-      currentY,
-      280,
-      50,
-      "E-mail"
-    );
+    // Navegação
+    this.regUser.setNextInput(this.regEmail);
+    this.regEmail.setNextInput(this.regPass);
+    this.regPass.setNextInput(this.regUser);
+    const triggerRegister = () => this.handleRegister();
+    this.regUser.setOnEnter(triggerRegister);
+    this.regEmail.setOnEnter(triggerRegister);
+    this.regPass.setOnEnter(triggerRegister);
 
-    currentY += 65;
-    this.regPass = new TextInput(
-      this,
-      centerX - 140,
-      currentY,
-      280,
-      50,
-      "Senha",
-      true
-    );
-
-    currentY += 90;
+    cy += 90;
     this.btnRegister = new TextButton(
       this,
-      centerX,
-      currentY,
+      cx,
+      cy,
       "CRIAR CONTA",
       () => this.handleRegister(),
       280,
       55
     );
-
-    // --- NOVO: Configurando Navegação (TAB e ENTER) ---
-    this.regUser.setNextInput(this.regEmail);
-    this.regEmail.setNextInput(this.regPass);
-    this.regPass.setNextInput(this.regUser); // Loop
-
-    const triggerRegister = () => this.handleRegister();
-    this.regUser.setOnEnter(triggerRegister);
-    this.regEmail.setOnEnter(triggerRegister);
-    this.regPass.setOnEnter(triggerRegister);
   }
 
   handleLogin() {
     const username = this.loginUser.getValue();
     const password = this.loginPass.getValue();
-
     if (!username || !password) {
-      this.showError("Preencha usuário e senha para entrar.");
+      this.showError("Preencha usuário e senha.");
       return;
     }
     this.showError("");
@@ -214,9 +225,8 @@ export class EntryScene extends Phaser.Scene {
     const username = this.regUser.getValue();
     const email = this.regEmail.getValue();
     const password = this.regPass.getValue();
-
     if (!username || !email || !password) {
-      this.showError("Preencha todos os campos para registrar.");
+      this.showError("Preencha todos os campos.");
       return;
     }
     this.showError("");
@@ -225,30 +235,41 @@ export class EntryScene extends Phaser.Scene {
   }
 
   setupSocketEvents() {
-    // Sucesso (Tanto faz se veio do Login ou Registro)
+    // Sucesso no Login/Registro MANUAL
     socketService.on("auth:success", (data) => {
-      console.log("Autenticado:", data);
-      // Salva na sessão
+      console.log("Autenticado via Form:", data);
       this.registry.set("userId", data.id);
       this.registry.set("username", data.username);
-
       localStorage.setItem("userId", data.id);
       localStorage.setItem("username", data.username);
 
-      // VAI PARA O MENU
-      this.scene.start("MenuScene");
+      if (data.activeMatchId) {
+        this.registry.set("currentMatchId", data.activeMatchId);
+        this.scene.start("GameScene");
+      } else {
+        this.scene.start("MenuScene");
+      }
     });
 
-    // Erro
+    // Erro no Login/Registro
     socketService.on("error", (data) => {
       this.showError(data.message || "Erro de autenticação.");
-      // Restaura textos dos botões
-      this.btnLogin.textObj.setText("ENTRAR");
-      this.btnRegister.textObj.setText("CRIAR CONTA");
+      if (this.btnLogin) this.btnLogin.textObj.setText("ENTRAR");
+      if (this.btnRegister) this.btnRegister.textObj.setText("CRIAR CONTA");
+
+      // Se der erro no Auto-Login (ex: usuário deletado), limpa storage e mostra form
+      if (this.loadingText && this.loadingText.active) {
+        localStorage.removeItem("userId");
+        localStorage.removeItem("username");
+        this.scene.restart(); // Reinicia a cena para mostrar o form limpo
+      }
     });
   }
 
   showError(msg) {
+    // Se o texto de erro ainda não foi criado (auto-login falhou), não tenta usar
+    if (!this.errorText) return;
+
     this.errorText.setText(msg);
     if (msg) {
       this.tweens.add({
@@ -264,5 +285,6 @@ export class EntryScene extends Phaser.Scene {
   shutdown() {
     socketService.off("auth:success");
     socketService.off("error");
+    socketService.off("auth:session_checked");
   }
 }

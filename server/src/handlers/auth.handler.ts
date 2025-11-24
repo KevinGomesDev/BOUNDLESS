@@ -4,6 +4,17 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma"; // Importamos nossa conexão
 import { LoginData, RegisterData } from "../types";
 
+async function findActiveMatchId(userId: string): Promise<string | null> {
+  const activePlayerEntry = await prisma.matchPlayer.findFirst({
+    where: {
+      userId: userId,
+      match: { status: "ACTIVE" }, // Apenas partidas em andamento
+    },
+    select: { matchId: true },
+  });
+  return activePlayerEntry ? activePlayerEntry.matchId : null;
+}
+
 export const registerAuthHandlers = (io: Server, socket: Socket) => {
   socket.on("auth:register", async (data: RegisterData) => {
     try {
@@ -40,7 +51,6 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
     }
   });
 
-  // --- LOGIN (NOVO!) ---
   socket.on("auth:login", async (data: LoginData) => {
     try {
       const { username, password } = data;
@@ -73,6 +83,16 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
     } catch (error) {
       console.error("[AUTH] Erro Login:", error);
       socket.emit("error", { message: "Erro interno ao logar." });
+    }
+  });
+
+  socket.on("auth:check_session", async ({ userId }) => {
+    try {
+      const activeMatchId = await findActiveMatchId(userId);
+      socket.emit("auth:session_checked", { activeMatchId });
+    } catch (error) {
+      // Se der erro, apenas diz que não tem nada para o menu carregar normal
+      socket.emit("auth:session_checked", { activeMatchId: null });
     }
   });
 };

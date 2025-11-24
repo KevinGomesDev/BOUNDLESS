@@ -175,17 +175,27 @@ export class TopBar {
       this.infoSubtitle.setText("Nenhum território selecionado");
       return;
     }
+
+    // Lógica para Terra
     if (data.type === "LAND") {
-      this.infoTitle.setText(`Território #${data.id} - ${data.terrain.name}`);
+      // O MapRenderer injeta 'terrainName' (Ex: "Floresta")
+      const name = data.terrainName || "Terra Desconhecida";
+
+      this.infoTitle.setText(`Território #${data.mapIndex} - ${name}`);
       this.infoTitle.setColor("#ffffff");
-      const owner =
-        data.ownership !== null ? `Jogador ${data.ownership}` : "Neutro";
+
+      // Lógica de Dono (ownerId vem do banco)
+      // Futuramente você pode cruzar esse ID com a lista de jogadores para pegar o Nickname
+      const owner = data.ownerId ? "Ocupado" : "Neutro";
       const size = data.size || "Padrão";
-      this.infoSubtitle.setText(`${size} • ${owner}`);
-    } else {
+
+      this.infoSubtitle.setText(`Tamanho: ${size} • Controle: ${owner}`);
+    }
+    // Lógica para Água
+    else {
       this.infoTitle.setText("Águas Internacionais");
       this.infoTitle.setColor("#4da6ff");
-      this.infoSubtitle.setText("Zona não habitável");
+      this.infoSubtitle.setText("Zona não navegável");
     }
   }
 
