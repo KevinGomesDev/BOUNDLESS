@@ -1,6 +1,9 @@
 import Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene";
-import { GameScene } from "./scenes/GameScene";
+import { GameScene } from "./worldmap/scenes/GameScene";
+import { TerritoryScene } from "./worldmap/scenes/TerritoryScene";
+import { BattleScene } from "./worldmap/scenes/BattleScene";
+import { KingdomScene } from "./worldmap/scenes/KingdomScene";
 import { UIScene } from "./scenes/UIScene";
 import { KingdomsScene } from "./scenes/KingdomsScene";
 import { KingdomCreationScene } from "./scenes/KingdomCreationScene.js";
@@ -32,6 +35,9 @@ const config = {
     KingdomsScene,
     KingdomCreationScene,
     GameScene,
+    TerritoryScene,
+    BattleScene,
+    KingdomScene,
     UIScene,
     LobbyScene,
     MatchBrowserScene,

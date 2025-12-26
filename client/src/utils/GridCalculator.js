@@ -14,7 +14,7 @@ export class GridCalculator {
     return Math.abs(area / 2);
   }
 
-  static normalizePolygon(rawPoly, screenW, screenH) {
+  static normalizePolygon(rawPoly, screenW, screenH, fillFactor = 0.7) {
     // 1. Bounding Box Original
     let minX = Infinity,
       maxX = -Infinity,
@@ -32,9 +32,9 @@ export class GridCalculator {
     const polyW = maxX - minX;
     const polyH = maxY - minY;
 
-    // 2. Escala (70% da tela)
-    const scaleX = (screenW * 0.7) / Math.max(1, polyW);
-    const scaleY = (screenH * 0.7) / Math.max(1, polyH);
+    // 2. Escala (fillFactor da tela, padrão 70%, mas pode ser customizado)
+    const scaleX = (screenW * fillFactor) / Math.max(1, polyW);
+    const scaleY = (screenH * fillFactor) / Math.max(1, polyH);
     const scale = Math.min(scaleX, scaleY);
 
     // 3. Centraliza pontos em relação ao (0,0)

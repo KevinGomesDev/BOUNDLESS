@@ -10,14 +10,51 @@ export class UIScene extends Phaser.Scene {
 
   create() {
     this.topBar = new TopBar(this);
+
+    // Detecta qual cena está ativa e atualiza a aba correspondente
+    this.events.on("wake", () => {
+      this.updateActiveTab();
+    });
+  }
+
+  updateActiveTab() {
+    // Pega a cena ativa que não seja a UIScene
+    const scenes = this.scene.manager.scenes;
+    for (const scene of scenes) {
+      if (scene.scene.isActive() && scene.scene.key !== "UIScene") {
+        const tabMap = {
+          GameScene: "worldmap",
+          TerritoryScene: "territory",
+          BattleScene: "battle",
+          KingdomScene: "kingdom",
+        };
+        const tabId = tabMap[scene.scene.key];
+        if (tabId && this.topBar) {
+          this.topBar.setActiveTab(tabId);
+        }
+        break;
+      }
+    }
   }
 
   // --- MÉTODOS CHAMADOS PELA GAMESCENE ---
 
-  // Renomeado de updateInfo para updateTerritoryInfo para bater com a chamada da GameScene
+  // Mantido por compatibilidade, direciona para HOVER
   updateTerritoryInfo(data) {
     if (this.topBar) {
-      this.topBar.updateTerritoryInfo(data);
+      this.topBar.updateHoveredInfo(data);
+    }
+  }
+
+  updateHoveredTerritoryInfo(data) {
+    if (this.topBar) {
+      this.topBar.updateHoveredInfo(data);
+    }
+  }
+
+  updateSelectedTerritoryInfo(data) {
+    if (this.topBar) {
+      this.topBar.updateSelectedInfo(data);
     }
   }
 
@@ -45,6 +82,18 @@ export class UIScene extends Phaser.Scene {
       } else {
         this.topBar.setCombatState(false);
       }
+    }
+  }
+
+  setTabEnabled(tabId, enabled) {
+    if (this.topBar) {
+      this.topBar.setTabEnabled(tabId, enabled);
+    }
+  }
+
+  setActiveTab(tabId) {
+    if (this.topBar) {
+      this.topBar.setActiveTab(tabId);
     }
   }
 }

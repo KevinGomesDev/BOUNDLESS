@@ -3,8 +3,8 @@ import { Socket, Server } from "socket.io";
 import { prisma } from "../lib/prisma";
 import { CrisisState, CrisisType } from "../types";
 import { CRISIS_DEFINITIONS } from "../data/crises";
-import { TERRAIN_TYPES } from "../data/terrains";
-import { MapGenerator } from "../logic/MapGenerator";
+import { TERRAIN_TYPES } from "../worldmap/data/terrains";
+import { MapGenerator } from "../worldmap/generation/MapGenerator";
 
 const MAP_SIZE = 25; // Certifique-se que isso bate com o tamanho gerado pelo MapGenerator se usar indices fixos
 

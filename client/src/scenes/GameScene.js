@@ -79,6 +79,8 @@ export class GameScene extends Phaser.Scene {
   setupSocket(w, h) {
     socketService.on("game:terrains_data", (config) => {
       this.terrainConfig = config;
+      // Persist config for cross-scene usage
+      this.game.registry.set("terrainConfig", config);
       socketService.emit("match:request_map");
     });
 
@@ -130,15 +132,8 @@ export class GameScene extends Phaser.Scene {
       // 2. Atualiza a TopBar (UI)
       const uiScene = this.scene.get("UIScene");
       if (uiScene) {
-        if (target) {
-          // Mostra info do target (mesmo se for água, para contexto)
-          uiScene.updateTerritoryInfo(target);
-        } else if (this.selectedTerritory) {
-          // Se saiu do mapa mas tem seleção, volta a mostrar a seleção
-          uiScene.updateTerritoryInfo(this.selectedTerritory);
-        } else {
-          uiScene.updateTerritoryInfo(null);
-        }
+        // Atualiza sempre o bloco de HOVER com o alvo atual (ou null)
+        uiScene.updateHoveredTerritoryInfo(target);
       }
     }
   }
@@ -165,10 +160,12 @@ export class GameScene extends Phaser.Scene {
   deselectAll() {
     console.log("Limpando seleção.");
     this.selectedTerritory = null;
+    // Clear saved selection
+    this.game.registry.set("selectedTerritory", null);
     this.mapRenderer.highlightSelection(null);
 
     const uiScene = this.scene.get("UIScene");
-    if (uiScene) uiScene.updateTerritoryInfo(null);
+    if (uiScene) uiScene.updateSelectedTerritoryInfo(null);
   }
 
   processTerritorySelection(territory) {
@@ -185,11 +182,13 @@ export class GameScene extends Phaser.Scene {
       // TROCA SELEÇÃO
       console.log("Selecionado:", territory.terrainName);
       this.selectedTerritory = territory;
+      // Save selection for other scenes (e.g., TerritoryScene)
+      this.game.registry.set("selectedTerritory", territory);
 
       this.mapRenderer.highlightSelection(territory);
 
       const uiScene = this.scene.get("UIScene");
-      if (uiScene) uiScene.updateTerritoryInfo(territory);
+      if (uiScene) uiScene.updateSelectedTerritoryInfo(territory);
     }
   }
 

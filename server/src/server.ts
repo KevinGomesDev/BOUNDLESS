@@ -6,6 +6,7 @@ import { registerAuthHandlers } from "./handlers/auth.handler";
 import { registerKingdomHandlers } from "./handlers/kingdom.handler";
 import { registerMatchHandlers } from "./handlers/match.handler";
 import { registerTroopHandlers } from "./handlers/troop.handler";
+import { registerWorldMapHandlers } from "./worldmap/handlers/worldmap.handler";
 
 const app = express();
 const server = http.createServer(app);
@@ -25,6 +26,7 @@ io.on("connection", (socket: Socket) => {
   registerKingdomHandlers(io, socket);
   registerMatchHandlers(io, socket);
   registerTroopHandlers(io, socket);
+  registerWorldMapHandlers(io, socket);
 
   socket.on("disconnect", () => {
     console.log("Jogador desconectou:", socket.id);
