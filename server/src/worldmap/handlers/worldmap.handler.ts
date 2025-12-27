@@ -6,15 +6,9 @@ import { TERRAIN_TYPES } from "../data/terrains";
 export const registerWorldMapHandlers = (io: Server, socket: Socket) => {
   // --- 1. DADOS ESTÁTICOS DE TERRENOS ---
   socket.on("worldmap:get_terrains", () => {
-    console.log(
-      "[WORLDMAP] Cliente pediu terrenos. Enviando:",
-      Object.keys(TERRAIN_TYPES)
-    );
-
     if (Object.keys(TERRAIN_TYPES).length === 0) {
       console.error("[ERRO CRÍTICO] TERRAIN_TYPES está vazio no servidor!");
     }
-
     socket.emit("worldmap:terrains_data", TERRAIN_TYPES);
   });
 

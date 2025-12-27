@@ -88,11 +88,25 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
 
   socket.on("auth:check_session", async ({ userId }) => {
     try {
+      // Primeiro, verifica se o usuário existe no banco
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        // Usuário não existe mais no banco - sessão inválida
+        console.log(`[AUTH] Sessão inválida: usuário ${userId} não encontrado`);
+        return socket.emit("auth:session_invalid");
+      }
+
+      // Usuário existe, procura por partida ativa
       const activeMatchId = await findActiveMatchId(userId);
       socket.emit("auth:session_checked", { activeMatchId });
     } catch (error) {
-      // Se der erro, apenas diz que não tem nada para o menu carregar normal
-      socket.emit("auth:session_checked", { activeMatchId: null });
+      console.error("[AUTH] Erro ao verificar sessão:", error);
+      // Se der erro, invalida a sessão por segurança
+      socket.emit("auth:session_invalid");
     }
   });
 };

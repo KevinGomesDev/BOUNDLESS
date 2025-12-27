@@ -19,8 +19,15 @@ app.get("/", (req, res) => {
 });
 
 // --- Gerenciador de Conexões ---
+// Contador para estatísticas (opcional, útil para debug)
+let connectionCount = 0;
+
 io.on("connection", (socket: Socket) => {
-  console.log("Jogador conectado:", socket.id);
+  connectionCount++;
+  // Log mais discreto - só mostra contagem total
+  console.log(
+    `[SOCKET] Nova conexão (${connectionCount} ativos): ${socket.id}`
+  );
 
   registerAuthHandlers(io, socket);
   registerKingdomHandlers(io, socket);
@@ -29,7 +36,13 @@ io.on("connection", (socket: Socket) => {
   registerWorldMapHandlers(io, socket);
 
   socket.on("disconnect", () => {
-    console.log("Jogador desconectou:", socket.id);
+    connectionCount--;
+    // Só loga desconexão se ainda houver interesse em debug
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[SOCKET] Desconectou (${connectionCount} ativos): ${socket.id}`
+      );
+    }
   });
 });
 

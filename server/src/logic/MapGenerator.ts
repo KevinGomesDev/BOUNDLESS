@@ -3,6 +3,16 @@ import { Delaunay } from "d3-delaunay";
 import { BiomeGenerator } from "./BiomeGenerator";
 import { TERRAIN_TYPES, TerrainType } from "../data/terrains";
 
+// Tipos de tamanho compatíveis com o enum do Prisma
+export type TerritorySize = "SMALL" | "MEDIUM" | "LARGE";
+
+// Mapa de slots por tamanho
+const SLOTS_MAP: Record<TerritorySize, number> = {
+  SMALL: 5,
+  MEDIUM: 10,
+  LARGE: 15,
+};
+
 // Define a estrutura de dados que o gerador cospe
 export interface GeneratedTerritory {
   id: number;
@@ -10,7 +20,8 @@ export interface GeneratedTerritory {
   type: "LAND" | "WATER";
   terrain: TerrainType;
   polygonPoints: [number, number][]; // Array de pontos para o front desenhar
-  size: string;
+  size: TerritorySize;
+  areaSlots: number;
 }
 
 export class MapGenerator {
@@ -100,7 +111,7 @@ export class MapGenerator {
     const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
 
     // --- 4. Montar Dados Finais ---
-    const SIZES = ["Pequeno", "Médio", "Grande"];
+    const SIZES: TerritorySize[] = ["SMALL", "MEDIUM", "LARGE"];
 
     this.territoryData = allPoints
       .map((point, index) => {
@@ -114,10 +125,11 @@ export class MapGenerator {
           return {
             id: index,
             center: { x: point[0], y: point[1] },
-            type: "WATER",
+            type: "WATER" as const,
             terrain: TERRAIN_TYPES.OCEAN,
             polygonPoints: polygon as [number, number][],
-            size: "Vasto",
+            size: "MEDIUM" as TerritorySize,
+            areaSlots: 0,
           };
         }
 
@@ -125,14 +137,16 @@ export class MapGenerator {
         const [x, y] = point;
         const terrain = this.biomeGenerator.getBiomeForPoint(x, y);
         const randomSize = SIZES[Math.floor(Math.random() * SIZES.length)];
+        const areaSlots = SLOTS_MAP[randomSize];
 
         return {
           id: index,
           center: { x, y },
-          type: "LAND",
+          type: "LAND" as const,
           terrain: terrain,
           polygonPoints: polygon as [number, number][],
           size: randomSize,
+          areaSlots,
         };
       })
       .filter((t) => t !== null) as GeneratedTerritory[];

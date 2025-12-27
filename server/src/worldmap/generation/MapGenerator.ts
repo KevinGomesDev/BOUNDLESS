@@ -10,7 +10,8 @@ export interface GeneratedTerritory {
   type: "LAND" | "WATER";
   terrain: TerrainType;
   polygonPoints: [number, number][]; // Array de pontos para o front desenhar
-  size: string;
+  size: "SMALL" | "MEDIUM" | "LARGE";
+  areaSlots: number;
 }
 
 export class MapGenerator {
@@ -100,7 +101,12 @@ export class MapGenerator {
     const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
 
     // --- 4. Montar Dados Finais ---
-    const SIZES = ["Pequeno", "Médio", "Grande"];
+    const SIZES: ("SMALL" | "MEDIUM" | "LARGE")[] = [
+      "SMALL",
+      "MEDIUM",
+      "LARGE",
+    ];
+    const SLOTS_MAP = { SMALL: 5, MEDIUM: 10, LARGE: 15 };
 
     this.territoryData = allPoints
       .map((point, index) => {
@@ -117,7 +123,8 @@ export class MapGenerator {
             type: "WATER",
             terrain: TERRAIN_TYPES.OCEAN,
             polygonPoints: polygon as [number, number][],
-            size: "Vasto",
+            size: "LARGE" as const,
+            areaSlots: 0,
           };
         }
 
@@ -125,6 +132,7 @@ export class MapGenerator {
         const [x, y] = point;
         const terrain = this.biomeGenerator.getBiomeForPoint(x, y);
         const randomSize = SIZES[Math.floor(Math.random() * SIZES.length)];
+        const areaSlots = SLOTS_MAP[randomSize];
 
         return {
           id: index,
@@ -133,6 +141,7 @@ export class MapGenerator {
           terrain: terrain,
           polygonPoints: polygon as [number, number][],
           size: randomSize,
+          areaSlots: areaSlots,
         };
       })
       .filter((t) => t !== null) as GeneratedTerritory[];

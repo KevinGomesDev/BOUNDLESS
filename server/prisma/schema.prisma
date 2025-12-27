@@ -80,10 +80,14 @@ model MatchPlayer {
   user           User     @relation(fields: [userId], references: [id])
   kingdomId      String
   kingdom        Kingdom  @relation(fields: [kingdomId], references: [id])
+  playerIndex    Int      @default(0)        // 0 = Host, 1 = Guest (define cor)
+  playerColor    String   @default("#ff0000") // Vermelho padrão
+  isReady        Boolean  @default(false)    // Pronto na fase de preparação
+  capitalTerritoryId String?                 // Território inicial/capital
   troopLevels    String   @default("{}")
   troopTemplates String   @default("{}")
   customChoices  String   @default("{}")
-  resources      String   @default("{}")
+  resources      String   @default("{\"gold\":20,\"food\":20,\"wood\":20,\"stone\":20,\"mana\":20}")
   hasPlayedTurn  Boolean  @default(false)
   unitCount      Int      @default(0)
   buildingCount  Int      @default(0)
@@ -92,18 +96,22 @@ model MatchPlayer {
 }
 
 model Territory {
-  id             String   @id @default(uuid())
+  id             String        @id @default(uuid())
   matchId        String
-  match          Match    @relation(fields: [matchId], references: [id])
+  match          Match         @relation(fields: [matchId], references: [id])
   mapIndex       Int
-  centerX        Float    @default(0)
-  centerY        Float    @default(0)
+  centerX        Float         @default(0)
+  centerY        Float         @default(0)
   type           String
   terrainType    String
   polygonData    String
-  ownerId        String?
-  hasCrisisIntel Boolean  @default(false)
-  isDisabled     Boolean  @default(false)
+  size           TerritorySize @default(MEDIUM)
+  areaSlots      Int           @default(10)
+  usedSlots      Int           @default(0)
+  ownerId        String?       // ID do MatchPlayer que controla (null = selvagem)
+  isCapital      Boolean       @default(false) // É a capital de algum jogador?
+  hasCrisisIntel Boolean       @default(false)
+  isDisabled     Boolean       @default(false)
 }
 
 model Unit {
@@ -149,4 +157,11 @@ enum UnitCategory {
   REGENTE
   PRISIONEIRO
   INVOCACAO
+  MONSTRO
+}
+
+enum TerritorySize {
+  SMALL
+  MEDIUM
+  LARGE
 }
