@@ -40,10 +40,14 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
         data: { username, email, password: hashedPassword },
       });
 
+      // Armazena o ID no socket para uso nos handlers
+      socket.data.userId = newUser.id;
+
       console.log(`[AUTH] Novo usuário: ${newUser.username}`);
       socket.emit("auth:success", {
         id: newUser.id,
         username: newUser.username,
+        token: newUser.id, // Token é o userId
       });
     } catch (error) {
       console.error("[AUTH] Erro:", error);
@@ -76,10 +80,17 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
         return socket.emit("error", { message: "Credenciais inválidas." });
       }
 
+      // Armazena o ID no socket para uso nos handlers
+      socket.data.userId = user.id;
+
       console.log(`[AUTH] Login bem-sucedido: ${user.username}`);
 
       // 3. Retorna sucesso
-      socket.emit("auth:success", { id: user.id, username: user.username });
+      socket.emit("auth:success", {
+        id: user.id,
+        username: user.username,
+        token: user.id,
+      });
     } catch (error) {
       console.error("[AUTH] Erro Login:", error);
       socket.emit("error", { message: "Erro interno ao logar." });
@@ -107,6 +118,56 @@ export const registerAuthHandlers = (io: Server, socket: Socket) => {
       console.error("[AUTH] Erro ao verificar sessão:", error);
       // Se der erro, invalida a sessão por segurança
       socket.emit("auth:session_invalid");
+    }
+  });
+
+  // --- VERIFICAR TOKEN ---
+  socket.on("auth:verify", async ({ userId, token }) => {
+    try {
+      // Aceita tanto userId quanto token (são a mesma coisa)
+      const id = userId || token;
+
+      // Valida se foi fornecido
+      if (!id) {
+        return socket.emit("error", {
+          message: "Token inválido: userId não fornecido",
+          code: "INVALID_TOKEN",
+        });
+      }
+
+      // Busca o usuário no banco de dados
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, email: true },
+      });
+
+      if (!user) {
+        return socket.emit("error", {
+          message: "Token inválido: usuário não encontrado",
+          code: "USER_NOT_FOUND",
+        });
+      }
+
+      // Armazena o ID no socket para uso nos handlers posteriores
+      socket.data.userId = user.id;
+
+      console.log(`[AUTH] Token verificado para: ${user.username}`);
+
+      // Emite resposta de token válido
+      socket.emit("auth:verified", {
+        success: true,
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+        token: user.id, // Token é o userId
+        message: "Token verificado com sucesso",
+      });
+    } catch (error) {
+      console.error("[AUTH] Erro ao verificar token:", error);
+      socket.emit("error", {
+        message: "Erro ao verificar token",
+        code: "VERIFICATION_ERROR",
+      });
     }
   });
 };

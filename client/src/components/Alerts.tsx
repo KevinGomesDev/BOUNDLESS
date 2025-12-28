@@ -15,15 +15,17 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   className = "",
 }) => {
   const sizeClasses = {
-    small: "spinner-small",
-    medium: "spinner-medium",
-    large: "spinner-large",
+    small: "w-5 h-5",
+    medium: "w-10 h-10",
+    large: "w-16 h-16",
   };
 
   return (
-    <div className={`loading-spinner-wrapper ${className}`}>
-      <div className={`loading-spinner ${sizeClasses[size]}`}></div>
-      {message && <p className="spinner-message">{message}</p>}
+    <div className={`flex flex-col items-center gap-4 p-5 ${className}`}>
+      <div
+        className={`${sizeClasses[size]} border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin`}
+      ></div>
+      {message && <p className="text-purple-300/80 text-sm m-0">{message}</p>}
     </div>
   );
 };
@@ -45,14 +47,21 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
   if (!error) return null;
 
   return (
-    <div className={`error-alert ${className}`}>
-      <span className="error-icon">⚠️</span>
-      <span className="error-message">{error}</span>
-      {onDismiss && (
-        <button className="error-close" onClick={onDismiss}>
-          ✕
-        </button>
-      )}
+    <div className={`group relative ${className}`}>
+      <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-lg blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="relative flex items-center gap-3 p-4 bg-red-950/80 backdrop-blur border-2 border-red-500/50 rounded-lg mb-4 overflow-hidden hover:border-red-500 transition-all duration-300">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+        <span className="text-2xl flex-shrink-0 animate-pulse">⚔️</span>
+        <span className="flex-1 text-red-200 font-semibold">{error}</span>
+        {onDismiss && (
+          <button
+            className="bg-transparent border-none text-red-400 cursor-pointer text-xl p-1 flex-shrink-0 hover:text-red-200 hover:scale-110 transition-all duration-200"
+            onClick={onDismiss}
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -89,139 +98,24 @@ export const SuccessAlert: React.FC<SuccessAlertProps> = ({
   if (!visible) return null;
 
   return (
-    <div className={`success-alert ${className}`}>
-      <span className="success-icon">✓</span>
-      <span className="success-message">{message}</span>
-      {onDismiss && (
-        <button
-          className="success-close"
-          onClick={() => {
-            setVisible(false);
-            onDismiss();
-          }}
-        >
-          ✕
-        </button>
-      )}
+    <div className={`group relative ${className}`}>
+      <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-lg blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="relative flex items-center gap-3 p-4 bg-green-950/80 backdrop-blur border-2 border-green-500/50 rounded-lg mb-4 overflow-hidden hover:border-green-500 transition-all duration-300">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-green-500 to-transparent"></div>
+        <span className="text-2xl flex-shrink-0">✨</span>
+        <span className="flex-1 text-green-200 font-semibold">{message}</span>
+        {onDismiss && (
+          <button
+            className="bg-transparent border-none text-green-400 cursor-pointer text-xl p-1 flex-shrink-0 hover:text-green-200 hover:scale-110 transition-all duration-200"
+            onClick={() => {
+              setVisible(false);
+              onDismiss();
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 };
-
-// CSS para estilos base
-const styles = `
-/* Loading Spinner */
-.loading-spinner-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.loading-spinner {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.loading-spinner-small {
-  width: 20px;
-  height: 20px;
-}
-
-.loading-spinner-medium {
-  width: 40px;
-  height: 40px;
-}
-
-.loading-spinner-large {
-  width: 60px;
-  height: 60px;
-}
-
-.spinner-message {
-  color: #666;
-  font-size: 14px;
-  margin: 0;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Error Alert */
-.error-alert {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
-  margin-bottom: 12px;
-}
-
-.error-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.error-message {
-  flex: 1;
-}
-
-.error-close {
-  background: none;
-  border: none;
-  color: #721c24;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.error-close:hover {
-  opacity: 0.7;
-}
-
-/* Success Alert */
-.success-alert {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-  border-radius: 4px;
-  margin-bottom: 12px;
-}
-
-.success-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.success-message {
-  flex: 1;
-}
-
-.success-close {
-  background: none;
-  border: none;
-  color: #155724;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.success-close:hover {
-  opacity: 0.7;
-}
-`;
-
-export const alertStyles = styles;

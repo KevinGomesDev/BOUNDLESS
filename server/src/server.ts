@@ -5,8 +5,18 @@ import { Server, Socket } from "socket.io";
 import { registerAuthHandlers } from "./handlers/auth.handler";
 import { registerKingdomHandlers } from "./handlers/kingdom.handler";
 import { registerMatchHandlers } from "./handlers/match.handler";
-import { registerTroopHandlers } from "./handlers/troop.handler";
 import { registerWorldMapHandlers } from "./worldmap/handlers/worldmap.handler";
+import { registerTurnHandlers } from "./handlers/turn.handler";
+import { registerRegentHandlers } from "./handlers/regent.handler";
+import { registerHeroHandlers } from "./handlers/hero.handler";
+import { registerTroopHandlers } from "./handlers/troop.handler";
+import { registerBattleHandlers } from "./handlers/battle.handler";
+import { registerItemsHandlers } from "./handlers/items.handler";
+import { registerSummonHandlers } from "./handlers/summon.handler";
+import { registerMovementHandlers } from "./handlers/movement.handler";
+import { registerCrisisHandlers } from "./handlers/crisis.handler";
+import { registerSkillsHandlers } from "./handlers/skills.handler";
+import { registerActionHandlers } from "./handlers/action.handler";
 
 const app = express();
 const server = http.createServer(app);
@@ -18,13 +28,10 @@ app.get("/", (req, res) => {
   res.send("Backend Battle Realm (Modular) Online!");
 });
 
-// --- Gerenciador de Conexões ---
-// Contador para estatísticas (opcional, útil para debug)
 let connectionCount = 0;
 
 io.on("connection", (socket: Socket) => {
   connectionCount++;
-  // Log mais discreto - só mostra contagem total
   console.log(
     `[SOCKET] Nova conexão (${connectionCount} ativos): ${socket.id}`
   );
@@ -32,12 +39,21 @@ io.on("connection", (socket: Socket) => {
   registerAuthHandlers(io, socket);
   registerKingdomHandlers(io, socket);
   registerMatchHandlers(io, socket);
-  registerTroopHandlers(io, socket);
   registerWorldMapHandlers(io, socket);
+  registerTurnHandlers(io, socket);
+  registerRegentHandlers(io, socket);
+  registerHeroHandlers(io, socket);
+  registerTroopHandlers(io, socket);
+  registerBattleHandlers(io, socket);
+  registerItemsHandlers(io, socket);
+  registerSummonHandlers(io, socket);
+  registerMovementHandlers(io, socket);
+  registerCrisisHandlers(io, socket);
+  registerSkillsHandlers(io, socket);
+  registerActionHandlers(io, socket);
 
   socket.on("disconnect", () => {
     connectionCount--;
-    // Só loga desconexão se ainda houver interesse em debug
     if (process.env.NODE_ENV !== "production") {
       console.log(
         `[SOCKET] Desconectou (${connectionCount} ativos): ${socket.id}`

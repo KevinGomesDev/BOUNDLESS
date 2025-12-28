@@ -6,7 +6,6 @@ export const ALIGNMENT_DEFINITIONS = [
     name: "Alinhamento: BOM",
     description:
       "Reinos de ordem, luz e justiça. Buscam proteger os fracos e expurgar a escuridão do mundo.",
-    // Estamos reutilizando os campos 'passiveName' e 'passiveEffect' do card para a mecânica
     passiveName: "Mecânica: Luz Sagrada",
     passiveEffect:
       "Seus ataques contra unidades de alinhamento MAL causam Dano Extra. Ataques contra Neutros ou Bons não possuem bônus.",

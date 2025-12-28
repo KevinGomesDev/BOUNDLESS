@@ -31,7 +31,30 @@ model Kingdom {
   ownerId        String
   owner          User      @relation(fields: [ownerId], references: [id])
   matchHistory   MatchPlayer[]
+  units          Unit[]        // Regentes e unidades permanentes do reino
+  structures     Structure[]   // Estruturas permanentes do reino
+  troopTemplates TroopTemplate[] // Templates das 5 tropas do reino
+  inventory      String   @default("[]") // Itens do reino (JSON)
   createdAt      DateTime  @default(now())
+}
+
+// Template de Tropa - Definido na criação do Reino
+model TroopTemplate {
+  id             String    @id @default(uuid())
+  kingdomId      String
+  kingdom        Kingdom   @relation(fields: [kingdomId], references: [id], onDelete: Cascade)
+  slotIndex      Int       // 0-4 (5 tropas por reino)
+  name           String    // Nome personalizado da tropa
+  passiveId      String    // ID da passiva escolhida
+  resourceType   String    // minerio, suprimentos, arcana, experiencia
+  // Atributos base (10 pontos distribuídos)
+  combat         Int       @default(2)
+  acuity         Int       @default(2)
+  focus          Int       @default(2)
+  armor          Int       @default(2)
+  vitality       Int       @default(2)
+  
+  @@unique([kingdomId, slotIndex])
 }
 
 enum Alignment {
@@ -62,12 +85,14 @@ model Match {
   id             String   @id @default(uuid())
   status         String   @default("WAITING")
   currentRound   Int      @default(1)
+  currentTurn    TurnType @default(ADMINISTRACAO)
   crisisMeter    Int      @default(0)
   crisisState    String?
   players        MatchPlayer[]
   territories    Territory[]
   units          Unit[]
   structures     Structure[]
+  battles        Battle[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -87,12 +112,14 @@ model MatchPlayer {
   troopLevels    String   @default("{}")
   troopTemplates String   @default("{}")
   customChoices  String   @default("{}")
-  resources      String   @default("{\"gold\":20,\"food\":20,\"wood\":20,\"stone\":20,\"mana\":20}")
+  resources      String   @default("{\"minerio\":0,\"suprimentos\":0,\"arcana\":0,\"experiencia\":0,\"devocao\":0}")
   hasPlayedTurn  Boolean  @default(false)
+  hasFinishedAdminTurn Boolean @default(false)
   unitCount      Int      @default(0)
   buildingCount  Int      @default(0)
   units          Unit[]
   structures     Structure[]
+  battleUnits    BattleUnit[]
 }
 
 model Territory {
@@ -111,21 +138,35 @@ model Territory {
   ownerId        String?       // ID do MatchPlayer que controla (null = selvagem)
   isCapital      Boolean       @default(false) // É a capital de algum jogador?
   hasCrisisIntel Boolean       @default(false)
+  constructionCount Int        @default(0)     // Total de construções (Produtores + Fortalezas)
+  fortressCount  Int           @default(0)     // Apenas fortalezas (máximo 3)
   isDisabled     Boolean       @default(false)
 }
 
 model Unit {
   id             String      @id @default(uuid())
-  matchId        String
-  match          Match       @relation(fields: [matchId], references: [id])
+  // Vinculação ao Reino (proprietário permanente)
+  kingdomId      String?
+  kingdom        Kingdom?    @relation(fields: [kingdomId], references: [id])
+  // Vinculação à Partida (quando o reino está jogando)
+  matchId        String?
+  match          Match?      @relation(fields: [matchId], references: [id])
+  // Vinculação ao Jogador na Partida (quando em partida)
   ownerId        String?
   owner          MatchPlayer? @relation(fields: [ownerId], references: [id])
+  name           String?
+  equipment      String      @default("[]") // Itens equipados (máx 3) (JSON)
+  // Relacionamentos de unidades
   summonerId     String?
   summoner       Unit?        @relation("Summons", fields: [summonerId], references: [id])
   summons        Unit[]       @relation("Summons")
+  battleUnits    BattleUnit[]
+  // Dados da Unidade
   category       UnitCategory
   type           String
+  level          Int          @default(1)
   heroClass      String?
+  classFeatures  String       @default("[]")
   combat         Int
   acuity         Int
   focus          Int
@@ -134,21 +175,27 @@ model Unit {
   currentHp      Int
   movesLeft      Int
   actionsLeft    Int
-  locationIndex  Int
+  locationIndex  Int?
 }
 
 model Structure {
   id             String      @id @default(uuid())
-  matchId        String
-  match          Match       @relation(fields: [matchId], references: [id])
+  // Vinculação ao Reino (proprietário permanente)
+  kingdomId      String?
+  kingdom        Kingdom?    @relation(fields: [kingdomId], references: [id])
+  // Vinculação à Partida (quando o reino está jogando)
+  matchId        String?
+  match          Match?      @relation(fields: [matchId], references: [id])
+  // Vinculação ao Jogador na Partida (quando em partida)
   ownerId        String?
   owner          MatchPlayer? @relation(fields: [ownerId], references: [id])
+  // Dados da Estrutura
   type           String
   maxHp          Int
   currentHp      Int
   resourceType   String?
   productionRate Int
-  locationIndex  Int
+  locationIndex  Int?
 }
 
 enum UnitCategory {
@@ -164,4 +211,68 @@ enum TerritorySize {
   SMALL
   MEDIUM
   LARGE
+}
+
+enum TurnType {
+  ADMINISTRACAO
+  EXERCITOS
+  MOVIMENTACAO
+  CRISE
+  ACAO
+  BATALHA
+}
+
+// =====================
+// Battle System Models
+// =====================
+
+model Battle {
+  id               String   @id @default(uuid())
+  matchId          String
+  match            Match    @relation(fields: [matchId], references: [id])
+  status           String   @default("ACTIVE") // ACTIVE | ENDED
+  gridWidth        Int      @default(20)
+  gridHeight       Int      @default(20)
+  round            Int      @default(1)
+  currentTurnIndex Int      @default(0)        // índice na ordem de iniciativa
+  initiativeOrder  String   @default("[]")      // JSON: [battleUnitId...]
+  actionOrder      String   @default("[]")      // JSON: [matchPlayerId...], ordem de jogadores
+  supplyBids       String   @default("{}")      // JSON: {matchPlayerId: bid}
+  ransomPrice      Int?
+  ransomResource   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  units            BattleUnit[]
+  logs             BattleLog[]
+}
+
+model BattleUnit {
+  id          String      @id @default(uuid())
+  battleId    String
+  battle      Battle      @relation(fields: [battleId], references: [id])
+  unitId      String
+  unit        Unit        @relation(fields: [unitId], references: [id])
+  ownerId     String
+  owner       MatchPlayer @relation(fields: [ownerId], references: [id])
+  posX        Int         @default(0)
+  posY        Int         @default(0)
+  initiative  Int         @default(0)
+  movesLeft   Int         @default(3)
+  actionsLeft Int         @default(1)
+  isAlive     Boolean     @default(true)
+  actionMarks Int         @default(0)          // Marcas de Ação acumuladas
+  protection  Int         @default(0)          // Proteção atual (2x Armadura ao iniciar)
+  protectionBroken Boolean @default(false)     // Não pode ser recuperada se quebrar
+  conditions  String      @default("[]")        // JSON: ["CONGELADA", ...]
+  grabbedByBattleUnitId String?
+  corpseRemoved Boolean   @default(false)      // Se verdadeiro, cadáver não bloqueia mais
+}
+
+model BattleLog {
+  id        String   @id @default(uuid())
+  battleId  String
+  battle    Battle   @relation(fields: [battleId], references: [id])
+  timestamp DateTime @default(now())
+  type      String   // MOVE | ATTACK | END_TURN | START | END
+  payload   String   @default("{}") // JSON string com detalhes
 }

@@ -64,9 +64,10 @@ export interface GameContextType {
   ) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  restoreSessionFromStorage: () => Promise<boolean>;
 
   // Kingdom
-  createKingdom: (data: any) => Promise<void>;
+  createKingdom: (data: any) => Promise<Kingdom | void>;
   loadKingdoms: () => Promise<void>;
 
   // Match

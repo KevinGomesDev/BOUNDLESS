@@ -166,6 +166,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => reject(new Error("Timeout na autenticação")), 10000);
         });
 
+        // Salva token e usuário no localStorage
+        // Tenta encontrar o token em diferentes nomes possíveis
+        const token =
+          user.token || user.accessToken || user.jwt || user.auth_token;
+
+        if (token) {
+          localStorage.setItem("auth_token", token);
+        }
+        localStorage.setItem("auth_user", JSON.stringify(user));
+
         dispatch({ type: "SET_USER", payload: user });
         dispatch({ type: "SET_AUTH_LOADING", payload: false });
       } catch (error: any) {
@@ -204,6 +214,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         setTimeout(() => reject(new Error("Timeout na autenticação")), 10000);
       });
 
+      // Salva token e usuário no localStorage
+      // Tenta encontrar o token em diferentes nomes possíveis
+      const token =
+        user.token || user.accessToken || user.jwt || user.auth_token;
+
+      if (token) {
+        localStorage.setItem("auth_token", token);
+      }
+      localStorage.setItem("auth_user", JSON.stringify(user));
+
       dispatch({ type: "SET_USER", payload: user });
       dispatch({ type: "SET_AUTH_LOADING", payload: false });
     } catch (error: any) {
@@ -216,51 +236,113 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     socketService.emit("auth:logout");
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
     dispatch({ type: "RESET" });
   }, []);
 
-  // --- Kingdom Methods ---
-  const createKingdom = useCallback(
-    async (data: any) => {
-      dispatch({ type: "SET_KINGDOM_LOADING", payload: true });
-      dispatch({ type: "SET_KINGDOM_ERROR", payload: null });
+  const restoreSessionFromStorage = useCallback(async () => {
+    try {
+      const savedUser = localStorage.getItem("auth_user");
+      const savedToken = localStorage.getItem("auth_token");
 
-      try {
-        socketService.emit("kingdom:create", {
-          userId: state.user?.id,
-          ...data,
-        });
-
-        const kingdom = await new Promise<Kingdom>((resolve, reject) => {
-          const successHandler = (data: any) => {
-            socketService.off("kingdom:created", successHandler);
-            socketService.off("error", errorHandler);
-            resolve(data);
-          };
-
-          const errorHandler = (data: any) => {
-            socketService.off("kingdom:created", successHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error(data.message));
-          };
-
-          socketService.on("kingdom:created", successHandler);
-          socketService.on("error", errorHandler);
-
-          setTimeout(() => reject(new Error("Timeout ao criar reino")), 10000);
-        });
-
-        dispatch({ type: "SET_KINGDOM", payload: kingdom });
-        dispatch({ type: "SET_KINGDOM_LOADING", payload: false });
-      } catch (error: any) {
-        const errorMessage = error?.message || "Erro ao criar reino";
-        dispatch({ type: "SET_KINGDOM_ERROR", payload: errorMessage });
-        dispatch({ type: "SET_KINGDOM_LOADING", payload: false });
-        throw error;
+      if (!savedUser || !savedToken) {
+        return false;
       }
-    },
-    [state.user?.id]
-  );
+
+      const user = JSON.parse(savedUser);
+
+      // Valida o token com o servidor
+      socketService.emit("auth:verify", { token: savedToken });
+
+      const isValid = await new Promise<boolean>((resolve) => {
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const successHandler = () => {
+          clearTimeout(timeoutId);
+          socketService.off("auth:verified", successHandler);
+          socketService.off("error", errorHandler);
+          resolve(true);
+        };
+
+        const errorHandler = () => {
+          clearTimeout(timeoutId);
+          socketService.off("auth:verified", successHandler);
+          socketService.off("error", errorHandler);
+          resolve(false);
+        };
+
+        socketService.on("auth:verified", successHandler);
+        socketService.on("error", errorHandler);
+
+        timeoutId = setTimeout(() => {
+          socketService.off("auth:verified", successHandler);
+          socketService.off("error", errorHandler);
+          resolve(false);
+        }, 5000);
+      });
+
+      if (isValid) {
+        dispatch({ type: "SET_USER", payload: user });
+        return true;
+      } else {
+        // Token inválido, limpa o localStorage
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+        return false;
+      }
+    } catch (error) {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("auth_user");
+      return false;
+    }
+  }, []);
+
+  // --- Kingdom Methods ---
+  const createKingdom = useCallback(async (data: any) => {
+    dispatch({ type: "SET_KINGDOM_LOADING", payload: true });
+    dispatch({ type: "SET_KINGDOM_ERROR", payload: null });
+
+    try {
+      socketService.emit("kingdom:create", data);
+
+      const kingdom = await new Promise<Kingdom>((resolve, reject) => {
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const successHandler = (kingdomData: any) => {
+          clearTimeout(timeoutId);
+          socketService.off("kingdom:created", successHandler);
+          socketService.off("error", errorHandler);
+          resolve(kingdomData);
+        };
+
+        const errorHandler = (error: any) => {
+          clearTimeout(timeoutId);
+          socketService.off("kingdom:created", successHandler);
+          socketService.off("error", errorHandler);
+          reject(new Error(error.message || "Erro ao criar reino"));
+        };
+
+        socketService.on("kingdom:created", successHandler);
+        socketService.on("error", errorHandler);
+
+        timeoutId = setTimeout(() => {
+          socketService.off("kingdom:created", successHandler);
+          socketService.off("error", errorHandler);
+          reject(new Error("Timeout ao criar reino"));
+        }, 10000);
+      });
+
+      dispatch({ type: "SET_KINGDOM", payload: kingdom });
+      dispatch({ type: "SET_KINGDOM_LOADING", payload: false });
+      return kingdom;
+    } catch (error: any) {
+      const errorMessage = error?.message || "Erro ao criar reino";
+      dispatch({ type: "SET_KINGDOM_ERROR", payload: errorMessage });
+      dispatch({ type: "SET_KINGDOM_LOADING", payload: false });
+      throw error;
+    }
+  }, []);
 
   const loadKingdoms = useCallback(async () => {
     dispatch({ type: "SET_KINGDOM_LOADING", payload: true });
@@ -269,25 +351,37 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socketService.emit("kingdom:list");
 
       const kingdoms = await new Promise<Kingdom[]>((resolve, reject) => {
-        const successHandler = (data: any) => {
-          socketService.off("kingdom:list", successHandler);
+        let resolved = false;
+
+        const cleanup = () => {
+          socketService.off("kingdom:list_success", successHandler);
           socketService.off("error", errorHandler);
-          resolve(data.kingdoms || []);
+          clearTimeout(timeoutId);
+        };
+
+        const successHandler = (data: any) => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          resolve(Array.isArray(data) ? data : data.kingdoms || []);
         };
 
         const errorHandler = (data: any) => {
-          socketService.off("kingdom:list", successHandler);
-          socketService.off("error", errorHandler);
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           reject(new Error(data.message));
         };
 
-        socketService.on("kingdom:list", successHandler);
+        socketService.on("kingdom:list_success", successHandler);
         socketService.on("error", errorHandler);
 
-        setTimeout(
-          () => reject(new Error("Timeout ao carregar reinos")),
-          10000
-        );
+        let timeoutId = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          reject(new Error("Timeout ao carregar reinos"));
+        }, 10000);
       });
 
       dispatch({ type: "SET_KINGDOMS", payload: kingdoms });
@@ -308,7 +402,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       try {
         socketService.emit("match:start", {
           players: playerIds.map((id) => ({
-            userId: id,
+            playerId: id,
             kingdomId: state.kingdom?.id,
           })),
         });
@@ -437,6 +531,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     register,
     login,
     logout,
+    restoreSessionFromStorage,
     createKingdom,
     loadKingdoms,
     startMatch,

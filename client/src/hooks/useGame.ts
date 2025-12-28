@@ -32,6 +32,7 @@ export function useAuth() {
     register: game.register,
     login: game.login,
     logout: game.logout,
+    restoreSessionFromStorage: game.restoreSessionFromStorage,
     user: game.state.user,
     isAuthenticated: game.state.isAuthenticated,
     isLoading: game.state.isAuthLoading,

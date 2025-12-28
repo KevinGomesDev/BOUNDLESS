@@ -49,13 +49,13 @@ const PLAYER_COLORS = [
   "#f4a261", // Laranja (Player 4)
 ];
 
-// Recursos iniciais para todos os jogadores
+// Recursos iniciais para todos os jogadores (zerados, serão calculados ao iniciar)
 const INITIAL_RESOURCES = {
-  gold: 20,
-  food: 20,
-  wood: 20,
-  stone: 20,
-  mana: 20,
+  minerio: 0,
+  suprimentos: 0,
+  arcana: 0,
+  experiencia: 0,
+  devocao: 0,
 };
 
 export const registerMatchHandlers = (io: Server, socket: Socket) => {
@@ -358,10 +358,32 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
         // Muda para ACTIVE e inicia o jogo
         await prisma.match.update({
           where: { id: matchId },
-          data: { status: "ACTIVE" },
+          data: {
+            status: "ACTIVE",
+            currentRound: 1,
+            currentTurn: "ADMINISTRACAO",
+          },
         });
 
-        io.to(matchId).emit("match:started", { matchId });
+        // Importar e inicializar recursos de todos os jogadores
+        const { restoreAllPlayersResources } = await import(
+          "../utils/turn.utils"
+        );
+        await restoreAllPlayersResources(matchId);
+
+        io.to(matchId).emit("match:started", {
+          matchId,
+          round: 1,
+          turn: "ADMINISTRACAO",
+        });
+
+        // Emitir evento de início do turno de administração
+        io.to(matchId).emit("turn:administration_started", {
+          round: 1,
+          turn: "ADMINISTRACAO",
+          message: "Rodada 1 - Turno de Administração iniciado!",
+        });
+
         console.log(`[MATCH] Jogo iniciado: ${matchId}`);
       } else {
         // Avisa que um jogador ficou pronto

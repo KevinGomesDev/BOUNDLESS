@@ -1,102 +1,76 @@
-import { useEffect } from "react";
-import { useConnection, useAuth, useGameState } from "./hooks/useGame";
-import "./App.css";
-
-function AppContent() {
-  const { connect, isConnected, error: connectionError } = useConnection();
-  const {
-    login,
-    register,
-    isLoading: authLoading,
-    error: authError,
-  } = useAuth();
-  const gameState = useGameState();
-
-  useEffect(() => {
-    // Conecta ao servidor na inicialização
-    connect().catch(console.error);
-  }, [connect]);
-
-  const handleLogin = async () => {
-    try {
-      await login("testuser", "password123");
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
-  };
-
-  const handleRegister = async () => {
-    try {
-      await register("testuser", "test@example.com", "password123");
-    } catch (error) {
-      console.error("Register failed:", error);
-    }
-  };
-
-  return (
-    <div className="app">
-      <h1>Battle Realm - Frontend</h1>
-
-      {/* Connection Status */}
-      <div
-        style={{
-          padding: "10px",
-          marginBottom: "20px",
-          backgroundColor: isConnected ? "#d4edda" : "#f8d7da",
-          borderRadius: "4px",
-        }}
-      >
-        <h3>Conexão: {isConnected ? "✅ Conectado" : "❌ Desconectado"}</h3>
-        {connectionError && <p style={{ color: "red" }}>{connectionError}</p>}
-      </div>
-
-      {/* Auth Section */}
-      <div
-        style={{
-          padding: "20px",
-          border: "1px solid #ddd",
-          marginBottom: "20px",
-          borderRadius: "4px",
-        }}
-      >
-        <h2>Autenticação</h2>
-        <button onClick={handleLogin} disabled={!isConnected || authLoading}>
-          {authLoading ? "Carregando..." : "Fazer Login"}
-        </button>
-        <button
-          onClick={handleRegister}
-          disabled={!isConnected || authLoading}
-          style={{ marginLeft: "10px" }}
-        >
-          {authLoading ? "Carregando..." : "Registrar"}
-        </button>
-        {authError && <p style={{ color: "red" }}>{authError}</p>}
-        {gameState.user && (
-          <p style={{ color: "green" }}>
-            ✅ Usuário: {gameState.user.username}
-          </p>
-        )}
-      </div>
-
-      {/* Game State Debug */}
-      <div
-        style={{
-          padding: "20px",
-          backgroundColor: "#f5f5f5",
-          borderRadius: "4px",
-          maxHeight: "400px",
-          overflow: "auto",
-        }}
-      >
-        <h2>Estado do Jogo</h2>
-        <pre>{JSON.stringify(gameState, null, 2)}</pre>
-      </div>
-    </div>
-  );
-}
+import { useEffect, useState } from "react";
+import { useConnection } from "./hooks/useGame";
+import { useAuth } from "./hooks/useGame";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import HomePage from "./pages/HomePage";
+import DashboardPage from "./pages/DashboardPage";
 
 function App() {
-  return <AppContent />;
+  const { connect, isConnected } = useConnection();
+  const {
+    user,
+    isLoading: isAuthLoading,
+    restoreSessionFromStorage,
+  } = useAuth();
+  const [isRestoring, setIsRestoring] = useState(true);
+
+  // Inicializa conexão e restaura sessão
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        // 1. Conecta ao servidor
+        await connect();
+
+        // 2. Aguarda um pouco para garantir que socket está pronto
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // 3. Tenta restaurar sessão do localStorage
+        await restoreSessionFromStorage();
+      } catch (error) {
+        console.error("[App] ❌ Erro ao inicializar:", error);
+      } finally {
+        setIsRestoring(false);
+      }
+    };
+
+    initApp();
+  }, [connect, restoreSessionFromStorage]);
+
+  // Mostra loading enquanto:
+  // - Conectando ao servidor
+  // - Restaurando sessão
+  // - Verificando autenticação
+  const isInitializing = isRestoring || isAuthLoading || !isConnected;
+
+  if (isInitializing && isRestoring) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-slate-400">Carregando...</p>
+          <p className="text-slate-500 text-sm mt-2">
+            {!isConnected
+              ? "Conectando ao servidor..."
+              : "Restaurando sua sessão..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Rota protegida: DashboardPage precisa de autenticação
+  // HomePage é pública
+  return (
+    <>
+      {user ? (
+        <ProtectedRoute>
+          <DashboardPage />
+        </ProtectedRoute>
+      ) : (
+        <HomePage />
+      )}
+    </>
+  );
 }
 
 export default App;

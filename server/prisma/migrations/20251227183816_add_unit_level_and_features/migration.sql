@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Unit" ADD COLUMN     "classFeatures" TEXT NOT NULL DEFAULT '[]',
+ADD COLUMN     "level" INTEGER NOT NULL DEFAULT 1;
