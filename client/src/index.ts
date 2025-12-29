@@ -1,36 +1,19 @@
-// Context
-export { GameContext, GameProvider } from "./context/GameContext";
+// Features - Main exports
+export * from "./features/auth";
+export * from "./features/kingdom";
+export * from "./features/match";
+export * from "./features/map";
+export * from "./features/game";
 
-// Hooks
-export {
-  useGame,
-  useGameState,
-  useAuth,
-  useKingdom,
-  useMatch,
-  useMap,
-  useConnection,
-} from "./hooks/useGame";
+// Core
+export * from "./core";
+
+// Providers
+export { AppProvider } from "./providers";
 
 // Services
 export { socketService } from "./services/socket.service";
 
-// Types
-export type {
-  GameState,
-  GameContextType,
-  User,
-  Kingdom,
-  Match,
-  AuthMessage,
-  ErrorResponse,
-  SuccessResponse,
-} from "./types/game.types";
-
 // Components
 export { AsyncButton } from "./components/AsyncButton";
 export { LoadingSpinner, ErrorAlert, SuccessAlert } from "./components/Alerts";
-
-// Pages
-export { LoginPage } from "./pages/LoginPage";
-export { CreateKingdomPage } from "./pages/CreateKingdomPage";

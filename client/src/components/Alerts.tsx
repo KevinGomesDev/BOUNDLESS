@@ -23,9 +23,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   return (
     <div className={`flex flex-col items-center gap-4 p-5 ${className}`}>
       <div
-        className={`${sizeClasses[size]} border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin`}
+        className={`${sizeClasses[size]} border-4 border-medieval-red-700/40 border-t-medieval-red-600 rounded-full animate-spin`}
       ></div>
-      {message && <p className="text-purple-300/80 text-sm m-0">{message}</p>}
+      {message && <p className="text-gray-300 text-sm m-0">{message}</p>}
     </div>
   );
 };
@@ -48,9 +48,9 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
 
   return (
     <div className={`group relative ${className}`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-lg blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <div className="relative flex items-center gap-3 p-4 bg-red-950/80 backdrop-blur border-2 border-red-500/50 rounded-lg mb-4 overflow-hidden hover:border-red-500 transition-all duration-300">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+      <div className="absolute inset-0 bg-gradient-to-r from-medieval-red-800/20 to-medieval-blood/20 rounded-lg blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="relative flex items-center gap-3 p-4 bg-medieval-red-950/80 backdrop-blur border-2 border-medieval-blood/50 rounded-lg mb-4 overflow-hidden hover:border-medieval-blood transition-all duration-300">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-medieval-blood to-transparent"></div>
         <span className="text-2xl flex-shrink-0 animate-pulse">⚔️</span>
         <span className="flex-1 text-red-200 font-semibold">{error}</span>
         {onDismiss && (

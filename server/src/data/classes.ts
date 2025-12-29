@@ -6,7 +6,7 @@ export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
     id: "BARBARIAN",
     name: "Bárbaro",
     archetype: "FISICA",
-    resourceUsed: "COMIDA", // Física usa Comida
+    resourceUsed: "FOOD", // Física usa Comida
     description:
       "Guerreiro selvagem que ganha força com a fúria. Pode atacar múltiplas vezes sem proteção.",
     skills: [
@@ -39,7 +39,7 @@ export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
     id: "WARRIOR",
     name: "Guerreiro",
     archetype: "FISICA",
-    resourceUsed: "COMIDA", // Física usa Comida
+    resourceUsed: "FOOD", // Física usa Comida
     description:
       "Soldado disciplinado e experiente. Mestre em ataques múltiplos e em recuperação tática.",
     skills: [
@@ -73,7 +73,7 @@ export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
     id: "CLERIC",
     name: "Clérigo",
     archetype: "ESPIRITUAL",
-    resourceUsed: "DEVOCAO",
+    resourceUsed: "DEVOTION",
     description:
       "Escolhido divino com poderes sagrados. Protege aliados e expele maldições.",
     skills: [

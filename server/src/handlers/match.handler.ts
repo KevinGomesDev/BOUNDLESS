@@ -9,28 +9,30 @@ import {
   BUILDABLE_STRUCTURES,
   STRUCTURE_DEFINITIONS,
 } from "../data/structures";
+import {
+  getAvailableStructures,
+  getTerritoryConstructionInfo,
+  buildStructureFree,
+} from "../utils/construction.utils";
 
-const MAP_SIZE = 25; // Certifique-se que isso bate com o tamanho gerado pelo MapGenerator se usar indices fixos
+const MAP_SIZE = 25; // Grid 5x5 de terra
 
-// --- Função Auxiliar: Gerar a Crise Secreta ---
+/**
+ * Gera uma crise secreta para a partida
+ * - Tipo aleatório (KAIJU, WALKERS, AMORPHOUS)
+ * - 3 territórios com intel da crise
+ */
 function generateSecretCrisis(): CrisisState {
-  // 1. Sorteia o Tipo
   const types = Object.keys(CRISIS_DEFINITIONS) as CrisisType[];
   const selectedType = types[Math.floor(Math.random() * types.length)];
-
-  // 2. Busca os dados base no arquivo de configuração
   const definition = CRISIS_DEFINITIONS[selectedType];
 
-  // 3. Sorteia 3 territórios para conterem "Intel"
+  // Sorteia 3 territórios para conter intel (apenas dos 25 de terra)
   const intelIndices = new Set<number>();
   while (intelIndices.size < 3) {
-    // Nota: Como o mapa agora é procedural, o ideal é sortear baseado no tamanho real do array gerado
-    // Mas para inicialização, usamos um range seguro ou ajustamos depois da geração do mapa.
-    // Aqui usamos um número arbitrário seguro para o exemplo.
     intelIndices.add(Math.floor(Math.random() * MAP_SIZE));
   }
 
-  // 4. Monta o Estado Inicial
   return {
     type: selectedType,
     isActive: false,
@@ -43,23 +45,100 @@ function generateSecretCrisis(): CrisisState {
 
 // Cores dos jogadores por índice
 const PLAYER_COLORS = [
-  "#e63946", // Vermelho (Player 1 - Host)
-  "#457b9d", // Azul (Player 2)
+  "#e63946", // Vermelho (Host)
+  "#457b9d", // Azul (Guest)
   "#2a9d8f", // Verde (Player 3)
   "#f4a261", // Laranja (Player 4)
 ];
 
-// Recursos iniciais para todos os jogadores (zerados, serão calculados ao iniciar)
+// Recursos iniciais (zerados até o turno de administração restaurar)
 const INITIAL_RESOURCES = {
-  minerio: 0,
-  suprimentos: 0,
-  arcana: 0,
-  experiencia: 0,
-  devocao: 0,
+  ore: 0,
+  supplies: 0,
+  arcane: 0,
+  experience: 0,
+  devotion: 0,
 };
 
+/**
+ * Formata dados de um jogador para enviar ao cliente
+ */
+function formatPlayerData(player: any) {
+  return {
+    id: player.id,
+    userId: player.userId,
+    username: player.user?.username || "Desconhecido",
+    playerIndex: player.playerIndex,
+    playerColor: player.playerColor,
+    kingdomName: player.kingdom?.name || "Reino Oculto",
+    capitalTerritoryId: player.capitalTerritoryId,
+    isReady: player.isReady,
+    resources: player.resources
+      ? JSON.parse(player.resources)
+      : INITIAL_RESOURCES,
+  };
+}
+
+/**
+ * Envia estado completo da partida para todos os jogadores
+ *
+ * O estado inclui:
+ * - Status da partida (WAITING, PREPARATION, ACTIVE, FINISHED)
+ * - Rodada e turno atuais
+ * - Quem está jogando e quem já terminou seu turno
+ * - Recursos de cada jogador
+ * - Quem precisa agir agora (activePlayerIds)
+ */
+async function broadcastMatchState(io: Server, matchId: string) {
+  try {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        players: { include: { user: true, kingdom: true } },
+      },
+    });
+
+    if (!match) return;
+    // Determinar quem deve agir no turno atual
+    let activePlayerIds: string[] = [];
+    if (match.status === "ACTIVE") {
+      activePlayerIds = match.players
+        .filter((p) => {
+          if (match.currentTurn === "ADMINISTRACAO") {
+            return !p.hasFinishedAdminTurn;
+          }
+          return !p.hasPlayedTurn;
+        })
+        .map((p) => p.id);
+    }
+
+    const matchState = {
+      matchId: match.id,
+      status: match.status,
+      currentRound: match.currentRound,
+      currentTurn: match.currentTurn,
+      activePlayerIds, // ← Quem precisa agir agora
+      players: match.players.map((p) => ({
+        ...formatPlayerData(p),
+        hasFinishedCurrentTurn:
+          match.currentTurn === "ADMINISTRACAO"
+            ? p.hasFinishedAdminTurn
+            : p.hasPlayedTurn,
+      })),
+      crisisState: match.crisisState ? JSON.parse(match.crisisState) : null,
+      updatedAt: new Date(),
+    };
+
+    io.to(matchId).emit("match:state_updated", matchState);
+  } catch (error) {
+    console.error("[MATCH] Erro ao enviar estado da partida:", error);
+  }
+}
+
 export const registerMatchHandlers = (io: Server, socket: Socket) => {
-  // --- 1. LISTAR SALAS ABERTAS ---
+  // ============================================================
+  // 1. LISTAR PARTIDAS ABERTAS
+  // ============================================================
   socket.on("match:list_open", async () => {
     try {
       const matches = await prisma.match.findMany({
@@ -72,32 +151,35 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
 
       const publicData = matches.map((m) => ({
         id: m.id,
-        hostName: m.players[0]?.user.username || "Desconhecido",
-        kingdomName: m.players[0]?.kingdom.name || "Reino Oculto",
+        hostUsername: m.players[0]?.user.username || "Desconhecido",
+        hostKingdomName: m.players[0]?.kingdom.name || "Reino Oculto",
+        playerCount: m.players.length,
         createdAt: m.createdAt,
       }));
 
       socket.emit("match:list_result", publicData);
     } catch (error) {
+      console.error("[MATCH] Erro ao listar partidas:", error);
       socket.emit("error", { message: "Erro ao buscar partidas." });
     }
   });
 
-  // --- 2. CRIAR SALA (HOST) ---
-  // Gera Mapa, Crise e coloca em WAITING
+  // ============================================================
+  // 2. CRIAR PARTIDA (HOST)
+  // ============================================================
   socket.on("match:create", async ({ userId, kingdomId }) => {
     try {
       console.log(
-        `[MATCH] Criando sala para User ${userId} com Reino ${kingdomId}`
+        `[MATCH] Host ${userId} criando partida com Reino ${kingdomId}`
       );
 
-      // Gera a Crise em memória
+      // Gerar crise secreta
       const crisisStateObj = generateSecretCrisis();
       const crisisStateJson = JSON.stringify(crisisStateObj);
 
-      // Transação: Cria Partida + Player 1 + Mapa
+      // Transação atômica: partida + jogador + mapa
       const matchId = await prisma.$transaction(async (tx) => {
-        // A. Cria a Partida WAITING
+        // Criar partida
         const match = await tx.match.create({
           data: {
             status: "WAITING",
@@ -106,7 +188,7 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
           },
         });
 
-        // B. Adiciona o Host (Player 1) com cor vermelha e recursos iniciais
+        // Adicionar host como jogador
         await tx.matchPlayer.create({
           data: {
             matchId: match.id,
@@ -119,15 +201,12 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
           },
         });
 
-        // C. Gera o Mapa Procedural
-        console.log("[MATCH] Gerando terreno procedural...");
+        // Gerar mapa procedural
+        console.log("[MATCH] Gerando mapa grid 5x5...");
         const mapGen = new MapGenerator(2000, 1600);
         const territories = mapGen.generate();
 
-        // Ajuste técnico: Atualizar indices de intel da crise para garantir que caiam em terra
-        // (Opcional: refinamento da lógica de crise poderia ser feito aqui)
-
-        // D. Salva Territórios no Banco
+        // Salvar territórios no banco
         for (const t of territories) {
           const terrainKey =
             Object.keys(TERRAIN_TYPES).find(
@@ -148,7 +227,6 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
               usedSlots: 0,
               ownerId: null,
               isDisabled: false,
-              // Verifica se este ID foi sorteado na crise
               hasCrisisIntel: crisisStateObj.intelTerritoryIndices.includes(
                 t.id
               ),
@@ -156,56 +234,65 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
           });
         }
 
+        console.log(
+          `[MATCH] Partida criada: ${match.id} (Mapa: 25 terra + ${
+            territories.length - 25
+          } água)`
+        );
         return match.id;
       });
 
-      // Entra na sala do socket e avisa sucesso
+      // Juntar socket à sala
       socket.join(matchId);
       socket.emit("match:created_success", { matchId });
     } catch (error) {
-      console.error(error);
+      console.error("[MATCH] Erro ao criar partida:", error);
       socket.emit("error", { message: "Falha ao criar partida." });
     }
   });
 
-  // --- 3. ENTRAR NA SALA (GUEST) ---
-  // Muda status para PREPARATION e atribui territórios iniciais
+  // ============================================================
+  // 3. ENTRAR EM PARTIDA (GUEST)
+  // ============================================================
   socket.on("match:join", async ({ matchId, userId, kingdomId }) => {
     try {
+      console.log(`[MATCH] Guest ${userId} entrando na partida ${matchId}`);
+
       const match = await prisma.match.findUnique({
         where: { id: matchId },
-        include: { players: true, territories: true },
+        include: {
+          players: { include: { user: true, kingdom: true } },
+          territories: true,
+        },
       });
 
+      // Validações
       if (!match)
         return socket.emit("error", { message: "Partida não encontrada." });
       if (match.status !== "WAITING")
-        return socket.emit("error", {
-          message: "Partida já começou ou terminou.",
-        });
+        return socket.emit("error", { message: "Partida já começou." });
       if (match.players.length >= 2)
         return socket.emit("error", { message: "Sala cheia." });
 
-      // Filtra territórios médios disponíveis para atribuir como capitais
-      const mediumTerritories = match.territories.filter(
+      // Buscar territórios médios disponíveis para capitais
+      const mediumLandTerritories = match.territories.filter(
         (t) => t.type === "LAND" && t.size === "MEDIUM" && !t.ownerId
       );
 
-      if (mediumTerritories.length < 2) {
+      if (mediumLandTerritories.length < 2) {
         return socket.emit("error", {
-          message: "Mapa não tem territórios suficientes.",
+          message: "Mapa não tem territórios suficientes para capitais.",
         });
       }
 
-      // Embaralha e pega 2 territórios aleatórios para as capitais
-      const shuffled = mediumTerritories.sort(() => Math.random() - 0.5);
+      // Embaralhar e atribuir capitais
+      const shuffled = mediumLandTerritories.sort(() => Math.random() - 0.5);
       const hostCapital = shuffled[0];
       const guestCapital = shuffled[1];
-
       const hostPlayer = match.players[0];
 
+      // Transação: adicionar guest + atualizar capitais
       await prisma.$transaction([
-        // Adiciona o Player 2 (Guest)
         prisma.matchPlayer.create({
           data: {
             matchId,
@@ -219,38 +306,28 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
           },
         }),
 
-        // Atualiza Host com sua capital
         prisma.matchPlayer.update({
           where: { id: hostPlayer.id },
           data: { capitalTerritoryId: hostCapital.id },
         }),
 
-        // Marca território do Host como ocupado e capital
         prisma.territory.update({
           where: { id: hostCapital.id },
-          data: {
-            ownerId: hostPlayer.id,
-            isCapital: true,
-          },
+          data: { ownerId: hostPlayer.id, isCapital: true },
         }),
 
-        // Marca território do Guest como ocupado e capital
         prisma.territory.update({
           where: { id: guestCapital.id },
-          data: {
-            ownerId: null, // Será atualizado depois que criarmos o guest
-            isCapital: true,
-          },
+          data: { isCapital: true },
         }),
 
-        // Muda status para PREPARATION
         prisma.match.update({
           where: { id: matchId },
           data: { status: "PREPARATION" },
         }),
       ]);
 
-      // Atualiza o ownerId do território do guest (precisamos do ID do guest criado)
+      // Atualizar proprietário do território do guest
       const guestPlayer = await prisma.matchPlayer.findFirst({
         where: { matchId, userId },
       });
@@ -264,30 +341,40 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
 
       socket.join(matchId);
 
-      // AVISA TODOS que a fase de preparação começou
+      // Buscar dados atualizados dos jogadores
+      const updatedMatch = await prisma.match.findUnique({
+        where: { id: matchId },
+        include: { players: { include: { user: true, kingdom: true } } },
+      });
+
+      // Notificar todos os jogadores
       io.to(matchId).emit("match:preparation_started", {
         matchId,
-        hostCapitalId: hostCapital.mapIndex,
-        guestCapitalId: guestCapital.mapIndex,
+        hostCapitalMapIndex: hostCapital.mapIndex,
+        guestCapitalMapIndex: guestCapital.mapIndex,
+        players: updatedMatch?.players.map(formatPlayerData) || [],
       });
+
+      // Broadcast estado completo
+      await broadcastMatchState(io, matchId);
 
       console.log(`[MATCH] Fase de preparação iniciada: ${matchId}`);
     } catch (error) {
-      console.error(error);
+      console.error("[MATCH] Erro ao entrar na partida:", error);
       socket.emit("error", { message: "Erro ao entrar na partida." });
     }
   });
 
-  // --- 4. DADOS ESTÁTICOS ---
+  // ============================================================
+  // 4. OBTER DADOS ESTÁTICOS
+  // ============================================================
   socket.on("game:get_terrains", () => {
-    if (Object.keys(TERRAIN_TYPES).length === 0) {
-      console.error("[ERRO CRÍTICO] TERRAIN_TYPES está vazio no servidor!");
-    }
     socket.emit("game:terrains_data", TERRAIN_TYPES);
   });
 
-  // --- 5. CARREGAR MAPA ---
-  // Atualizado para funcionar em PREPARATION ou ACTIVE
+  // ============================================================
+  // 5. CARREGAR MAPA
+  // ============================================================
   socket.on("match:request_map", async ({ matchId } = {}) => {
     try {
       let match;
@@ -295,7 +382,7 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
       if (matchId) {
         match = await prisma.match.findUnique({ where: { id: matchId } });
       } else {
-        // Fallback: busca partida em preparação ou ativa
+        // Fallback: busca última partida ativa ou em preparação
         match = await prisma.match.findFirst({
           where: { status: { in: ["PREPARATION", "ACTIVE"] } },
           orderBy: { createdAt: "desc" },
@@ -303,107 +390,61 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
       }
 
       if (!match) {
-        return socket.emit("error", {
-          message: "Nenhuma partida encontrada.",
-        });
+        return socket.emit("error", { message: "Nenhuma partida encontrada." });
       }
 
+      // Buscar territórios e jogadores
       const territories = await prisma.territory.findMany({
         where: { matchId: match.id },
         orderBy: { mapIndex: "asc" },
       });
 
-      // Inclui dados dos jogadores para cores e brasões
       const players = await prisma.matchPlayer.findMany({
         where: { matchId: match.id },
-        include: { kingdom: true },
+        include: { user: true, kingdom: true },
       });
 
-      console.log(`[MATCH] Enviando mapa da partida ${match.id}`);
+      console.log(
+        `[MATCH] Enviando mapa ${match.id} (${territories.length} territórios, ${players.length} jogadores)`
+      );
+
       socket.emit("match:map_data", {
-        territories,
-        players: players.map((p) => ({
-          id: p.id,
-          playerIndex: p.playerIndex,
-          playerColor: p.playerColor,
-          kingdomName: p.kingdom.name,
-          capitalTerritoryId: p.capitalTerritoryId,
-          isReady: p.isReady,
-        })),
+        matchId: match.id,
         status: match.status,
+        territories: territories.map((t) => ({
+          id: t.id,
+          mapIndex: t.mapIndex,
+          centerX: t.centerX,
+          centerY: t.centerY,
+          type: t.type,
+          terrainType: t.terrainType,
+          polygonData: t.polygonData,
+          size: t.size,
+          areaSlots: t.areaSlots,
+          usedSlots: t.usedSlots,
+          ownerId: t.ownerId,
+          isCapital: t.isCapital,
+          hasCrisisIntel: t.hasCrisisIntel,
+          constructionCount: t.constructionCount,
+          fortressCount: t.fortressCount,
+          isDisabled: t.isDisabled,
+        })),
+        players: players.map(formatPlayerData),
       });
     } catch (error) {
       console.error("[MATCH] Erro ao carregar mapa:", error);
-      socket.emit("error", { message: "Erro interno ao carregar o mapa." });
+      socket.emit("error", { message: "Erro ao carregar mapa." });
     }
   });
 
-  // --- 6. JOGADOR PRONTO (Fase de Preparação) ---
-  socket.on("match:player_ready", async ({ matchId, userId }) => {
-    try {
-      // Atualiza o jogador como pronto
-      await prisma.matchPlayer.updateMany({
-        where: { matchId, userId },
-        data: { isReady: true },
-      });
-
-      // Verifica se todos estão prontos
-      const players = await prisma.matchPlayer.findMany({
-        where: { matchId },
-      });
-
-      const allReady = players.every((p) => p.isReady);
-
-      if (allReady) {
-        // Muda para ACTIVE e inicia o jogo
-        await prisma.match.update({
-          where: { id: matchId },
-          data: {
-            status: "ACTIVE",
-            currentRound: 1,
-            currentTurn: "ADMINISTRACAO",
-          },
-        });
-
-        // Importar e inicializar recursos de todos os jogadores
-        const { restoreAllPlayersResources } = await import(
-          "../utils/turn.utils"
-        );
-        await restoreAllPlayersResources(matchId);
-
-        io.to(matchId).emit("match:started", {
-          matchId,
-          round: 1,
-          turn: "ADMINISTRACAO",
-        });
-
-        // Emitir evento de início do turno de administração
-        io.to(matchId).emit("turn:administration_started", {
-          round: 1,
-          turn: "ADMINISTRACAO",
-          message: "Rodada 1 - Turno de Administração iniciado!",
-        });
-
-        console.log(`[MATCH] Jogo iniciado: ${matchId}`);
-      } else {
-        // Avisa que um jogador ficou pronto
-        io.to(matchId).emit("match:player_ready_update", {
-          userId,
-          allReady: false,
-        });
-      }
-    } catch (error) {
-      console.error("[MATCH] Erro ao marcar pronto:", error);
-      socket.emit("error", { message: "Erro ao marcar como pronto." });
-    }
-  });
-
-  // --- 7. BUSCAR DADOS DA FASE DE PREPARAÇÃO ---
+  // ============================================================
+  // 6. BUSCAR DADOS DA FASE DE PREPARAÇÃO
+  // ============================================================
   socket.on("match:get_preparation_data", async ({ matchId, userId }) => {
     try {
       const player = await prisma.matchPlayer.findFirst({
         where: { matchId, userId },
-        include: { kingdom: true },
+        include: { kingdom: true, user: true },
       });
 
       if (!player) {
@@ -416,14 +457,33 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
           })
         : null;
 
+      const match = await prisma.match.findUnique({
+        where: { id: matchId },
+        include: { players: { include: { user: true, kingdom: true } } },
+      });
+
       socket.emit("match:preparation_data", {
         playerId: player.id,
         playerIndex: player.playerIndex,
         playerColor: player.playerColor,
-        kingdomName: player.kingdom.name,
-        capital: capital,
+        username: player.user?.username,
+        kingdomName: player.kingdom?.name,
+        capital: capital
+          ? {
+              id: capital.id,
+              mapIndex: capital.mapIndex,
+              centerX: capital.centerX,
+              centerY: capital.centerY,
+              terrainType: capital.terrainType,
+              size: capital.size,
+            }
+          : null,
         isReady: player.isReady,
-        freeBuildingsRemaining: 3, // TODO: calcular baseado nas construções já posicionadas
+        freeBuildingsRemaining: (() => {
+          const freeUsed = (player as any).freeBuildingsUsed ?? 0;
+          return Math.max(0, 3 - freeUsed);
+        })(),
+        allPlayers: match?.players.map(formatPlayerData) || [],
       });
     } catch (error) {
       console.error("[MATCH] Erro ao buscar dados de preparação:", error);
@@ -431,10 +491,11 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
     }
   });
 
-  // --- 8. BUSCAR LISTA DE ESTRUTURAS DISPONÍVEIS ---
+  // ============================================================
+  // 7. ESTRUTURAS DISPONÍVEIS
+  // ============================================================
   socket.on("game:get_structures", async (data: any, callback?: Function) => {
     try {
-      // Envia apenas estruturas construíveis (sem CITADEL)
       const structures = BUILDABLE_STRUCTURES.map((s) => ({
         id: s.id,
         name: s.name,
@@ -445,7 +506,6 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
         specialEffect: s.specialEffect,
       }));
 
-      // Suporta callback e evento
       if (callback && typeof callback === "function") {
         callback({ success: true, structures });
       } else {
@@ -461,7 +521,110 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
     }
   });
 
-  // --- 9. BUSCAR DEFINIÇÃO DE UMA ESTRUTURA ---
+  // ============================================================
+  // 9. CONSTRUÇÕES NA FASE DE PREPARAÇÃO (GRATUITAS)
+  // ============================================================
+  socket.on("preparation:list_available_structures", async () => {
+    try {
+      const structures = BUILDABLE_STRUCTURES.map((s) => ({
+        id: s.id,
+        name: s.name,
+        icon: s.icon,
+        color: s.color,
+        maxHp: s.maxHp,
+        resourceGenerated: s.resourceGenerated,
+        specialEffect: s.specialEffect,
+      }));
+      socket.emit("preparation:available_structures", { structures });
+    } catch (error) {
+      console.error("[MATCH] Erro ao listar estruturas (preparação):", error);
+      socket.emit("error", { message: "Erro ao listar estruturas." });
+    }
+  });
+
+  socket.on(
+    "preparation:get_territory_construction_info",
+    async ({ territoryId }) => {
+      try {
+        const info = await getTerritoryConstructionInfo(territoryId);
+        if (!info) {
+          socket.emit("error", { message: "Território não encontrado" });
+          return;
+        }
+        socket.emit("preparation:territory_construction_info", { info });
+      } catch (error) {
+        console.error(
+          "[MATCH] Erro ao obter informações de construção (preparação):",
+          error
+        );
+        socket.emit("error", {
+          message: "Erro ao obter informações de construção",
+        });
+      }
+    }
+  );
+
+  socket.on(
+    "preparation:build_structure",
+    async ({ matchId, playerId, territoryId, structureType }) => {
+      try {
+        const match = await prisma.match.findUnique({ where: { id: matchId } });
+        if (!match) {
+          socket.emit("error", { message: "Partida não encontrada" });
+          return;
+        }
+        if (match.status !== "PREPARATION") {
+          socket.emit("error", {
+            message: "Construções gratuitas apenas na Preparação",
+          });
+          return;
+        }
+
+        const player = await prisma.matchPlayer.findUnique({
+          where: { id: playerId },
+        });
+        if (!player) {
+          socket.emit("error", { message: "Jogador não encontrado" });
+          return;
+        }
+        if ((player as any).freeBuildingsUsed >= 3) {
+          socket.emit("preparation:build_failed", {
+            message: "Limite de 3 construções gratuitas atingido",
+          });
+          return;
+        }
+
+        const result = await buildStructureFree(
+          matchId,
+          playerId,
+          territoryId,
+          structureType
+        );
+        if (result.success) {
+          const freeUsed = (player as any).freeBuildingsUsed ?? 0;
+          socket.emit("preparation:build_success", {
+            message: result.message,
+            structure: result.structure,
+            freeBuildingsRemaining: Math.max(0, 3 - (freeUsed + 1)),
+          });
+          io.to(matchId).emit("structure:created", {
+            structure: result.structure,
+            playerId,
+            territoryId,
+          });
+        } else {
+          socket.emit("preparation:build_failed", { message: result.message });
+        }
+      } catch (error) {
+        console.error("[MATCH] Erro ao construir (preparação):", error);
+        socket.emit("error", { message: "Erro ao construir estrutura" });
+      }
+    }
+  );
+
+  // ============================================================
+  // 8. DETALHES DE UMA ESTRUTURA
+  // ============================================================
   socket.on("game:get_structure", async ({ structureId }) => {
     try {
       const structure = STRUCTURE_DEFINITIONS[structureId];
@@ -472,6 +635,99 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
       }
     } catch (error) {
       socket.emit("error", { message: "Erro ao buscar estrutura." });
+    }
+  });
+
+  // ============================================================
+  // 10. REQUISITAR ESTADO COMPLETO DA PARTIDA
+  // ============================================================
+  socket.on("match:request_state", async ({ matchId }) => {
+    try {
+      await broadcastMatchState(io, matchId);
+    } catch (error) {
+      console.error("[MATCH] Erro ao enviar estado:", error);
+      socket.emit("error", { message: "Erro ao obter estado da partida." });
+    }
+  });
+
+  // ============================================================
+  // 11. MARCAR JOGADOR COMO PRONTO
+  // ============================================================
+  socket.on("match:player_ready", async ({ matchId, userId }) => {
+    try {
+      const player = await prisma.matchPlayer.findFirst({
+        where: { matchId, userId },
+      });
+      if (!player) {
+        socket.emit("error", { message: "Jogador não encontrado" });
+        return;
+      }
+
+      // Exigir 3 construções gratuitas antes de ficar pronto
+      if ((player as any).freeBuildingsUsed < 3) {
+        socket.emit("error", {
+          message:
+            "Coloque 3 construções gratuitas na preparação antes de ficar pronto.",
+        });
+        return;
+      }
+
+      await prisma.matchPlayer.updateMany({
+        where: { matchId, userId },
+        data: { isReady: true },
+      });
+
+      const players = await prisma.matchPlayer.findMany({
+        where: { matchId },
+      });
+
+      const allReady = players.every((p) => p.isReady);
+
+      if (allReady) {
+        // Iniciar jogo
+        await prisma.match.update({
+          where: { id: matchId },
+          data: {
+            status: "ACTIVE",
+            currentRound: 1,
+            currentTurn: "ADMINISTRACAO",
+          },
+        });
+
+        // Restaurar recursos iniciais
+        const { restoreAllPlayersResources } = await import(
+          "../utils/turn.utils"
+        );
+        await restoreAllPlayersResources(matchId);
+
+        io.to(matchId).emit("match:started", {
+          matchId,
+          round: 1,
+          turn: "ADMINISTRACAO",
+        });
+
+        io.to(matchId).emit("turn:administration_started", {
+          round: 1,
+          turn: "ADMINISTRACAO",
+          message: "Rodada 1 - Turno de Administração iniciado!",
+        });
+
+        // Broadcast estado completo
+        await broadcastMatchState(io, matchId);
+
+        console.log(`[MATCH] Jogo iniciado: ${matchId}`);
+      } else {
+        io.to(matchId).emit("match:player_ready_update", {
+          userId,
+          allReady: false,
+        });
+
+        // Broadcast estado para mostrar quem ficou pronto
+        await broadcastMatchState(io, matchId);
+      }
+    } catch (error) {
+      console.error("[MATCH] Erro ao marcar pronto:", error);
+      socket.emit("error", { message: "Erro ao marcar como pronto." });
     }
   });
 };

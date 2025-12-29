@@ -3,8 +3,14 @@ import { io, Socket } from "socket.io-client";
 class SocketService {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 10;
   private listeners: Map<string, Set<Function>> = new Map();
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private lastPongTime: number = Date.now();
+  private readonly HEARTBEAT_INTERVAL = 5000; // 5 segundos
+  private readonly PING_INTERVAL = 15000; // 15 segundos
+  private readonly PING_TIMEOUT = 30000; // 30 segundos sem resposta = reconectar
 
   /**
    * Retorna informações de debug do socket
@@ -40,8 +46,10 @@ class SocketService {
       this.socket = io(url, {
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
+        reconnectionDelayMax: 10000,
         reconnectionAttempts: this.maxReconnectAttempts,
+        timeout: 20000,
+        transports: ["websocket", "polling"],
       });
 
       this.socket.on("connect", () => {
@@ -52,6 +60,9 @@ class SocketService {
           this.socket?.id
         );
         this.reconnectAttempts = 0;
+        this.lastPongTime = Date.now();
+        this.startHeartbeat();
+        this.startPing();
         resolve();
       });
 
@@ -62,6 +73,8 @@ class SocketService {
           "\n📝 Motivo:",
           reason
         );
+        this.stopHeartbeat();
+        this.stopPing();
       });
 
       this.socket.on("error", (error) => {
@@ -83,6 +96,8 @@ class SocketService {
    * Desconecta do servidor
    */
   disconnect(): void {
+    this.stopHeartbeat();
+    this.stopPing();
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -213,6 +228,94 @@ class SocketService {
       this.off(event, wrappedCallback);
     };
     this.on(event, wrappedCallback);
+  }
+
+  /**
+   * Inicia o heartbeat periódico
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket?.connected) {
+        this.emit("heartbeat", { timestamp: Date.now() });
+      }
+    }, this.HEARTBEAT_INTERVAL);
+  }
+
+  /**
+   * Para o heartbeat
+   */
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  /**
+   * Inicia o sistema de ping/pong
+   */
+  private startPing(): void {
+    this.stopPing();
+
+    // Listener para pong do servidor
+    if (this.socket) {
+      this.socket.on("pong", () => {
+        this.lastPongTime = Date.now();
+        console.log("[Socket] 🏓 Pong recebido");
+      });
+    }
+
+    // Envia ping periodicamente
+    this.pingInterval = setInterval(() => {
+      const timeSinceLastPong = Date.now() - this.lastPongTime;
+
+      if (timeSinceLastPong > this.PING_TIMEOUT) {
+        console.warn(
+          `[Socket] ⚠️ Sem resposta há ${Math.round(
+            timeSinceLastPong / 1000
+          )}s. Forçando reconexão...`
+        );
+        this.forceReconnect();
+        return;
+      }
+
+      if (this.socket?.connected) {
+        console.log("[Socket] 🏓 Enviando ping...");
+        this.socket.emit("ping");
+      }
+    }, this.PING_INTERVAL);
+  }
+
+  /**
+   * Para o sistema de ping
+   */
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    if (this.socket) {
+      this.socket.off("pong");
+    }
+  }
+
+  /**
+   * Força uma reconexão manual
+   */
+  private forceReconnect(): void {
+    console.log("[Socket] 🔄 Forçando reconexão...");
+    this.stopHeartbeat();
+    this.stopPing();
+
+    if (this.socket) {
+      this.socket.disconnect();
+      setTimeout(() => {
+        if (this.socket) {
+          this.socket.connect();
+        }
+      }, 1000);
+    }
   }
 
   /**

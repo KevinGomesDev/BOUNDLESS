@@ -63,7 +63,7 @@ export async function canRegentLevelUp(
     where: {
       matchId: unit.matchId,
       locationIndex: unit.locationIndex,
-      resourceType: "EXPERIENCIA",
+      resourceType: "EXPERIENCE",
       ownerId: playerId,
     },
   });
@@ -108,7 +108,7 @@ export async function levelUpRegent(
 
   // Gasta experiência
   try {
-    await spendResources(playerId, { experiencia: cost } as any);
+    await spendResources(playerId, { experience: cost } as any);
   } catch (error) {
     return {
       success: false,

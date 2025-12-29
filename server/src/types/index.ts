@@ -1,5 +1,50 @@
 // src/types/index.ts
 import { Alignment, Race } from "@prisma/client";
+import {
+  TurnType,
+  TURN_ORDER,
+  CONSTRUCTION_COSTS,
+  MAX_CONSTRUCTIONS_PER_TERRITORY,
+  MAX_FORTRESSES_PER_TERRITORY,
+  MOVEMENT_COST_BETWEEN_TERRITORIES,
+  MOVEMENT_WITHIN_TERRITORY_COST,
+} from "../data/turns";
+import {
+  REGENT_LEVELUP_BASE_COST,
+  REGENT_LEVELUP_INCREMENT,
+  HERO_LEVELUP_BASE_COST,
+  HERO_LEVELUP_INCREMENT,
+  HERO_RECRUITMENT_COSTS,
+  MAX_HEROES_PER_PLAYER,
+  MAX_HERO_LEVEL,
+  REGENT_ATTRIBUTE_POINTS_PER_LEVEL,
+  HERO_ATTRIBUTE_POINTS_PER_LEVEL,
+  REGENT_INITIAL_ATTRIBUTE_POINTS,
+  HERO_INITIAL_ATTRIBUTE_POINTS,
+  TROOP_RECRUITMENT_BASE_COST,
+  TROOP_LEVELUP_COSTS,
+  MAX_TROOP_LEVEL,
+  TROOP_ATTRIBUTE_POINTS_PER_LEVEL,
+} from "../data/units";
+import {
+  TributeDecision,
+  CRISIS_METER_START,
+  CRISIS_METER_MAX,
+  CRISIS_METER_TRIGGERED_AT_TURN,
+} from "../data/crisis";
+import {
+  SkillCategory,
+  SkillCostTier,
+  RangeType,
+  COST_VALUES,
+  RANGE_VALUES,
+  SkillDefinition,
+} from "../data/skills-system";
+import {
+  ClassArchetype,
+  TroopCategory,
+  TROOP_RESOURCE_MAP,
+} from "../data/archetypes";
 
 export interface RegisterData {
   username: string;
@@ -88,134 +133,35 @@ export interface UnitDefinition {
 
 // --- RECURSOS ---
 export type ResourceType =
-  | "MINERIO"
-  | "ARCANA"
-  | "COMIDA"
-  | "EXPERIENCIA"
-  | "DEVOCAO";
+  | "ORE"
+  | "ARCANE"
+  | "FOOD"
+  | "EXPERIENCE"
+  | "DEVOTION";
 
 // Interface para os recursos de um jogador
 export interface PlayerResources {
-  minerio: number;
-  suprimentos: number;
-  arcana: number;
-  experiencia: number;
-  devocao: number;
+  ore: number;
+  supplies: number;
+  arcane: number;
+  experience: number;
+  devotion: number;
 }
 
 // --- TURNOS E RODADAS ---
-export enum TurnType {
-  ADMINISTRACAO = "ADMINISTRACAO",
-  EXERCITOS = "EXERCITOS",
-  MOVIMENTACAO = "MOVIMENTACAO",
-  CRISE = "CRISE",
-  ACAO = "ACAO",
-  BATALHA = "BATALHA",
-}
+// Importado de ./data/turns
 
-// Ordem dos turnos em uma rodada
-export const TURN_ORDER: TurnType[] = [
-  TurnType.ADMINISTRACAO,
-  TurnType.EXERCITOS,
-  TurnType.MOVIMENTACAO,
-  TurnType.CRISE,
-  TurnType.ACAO,
-  TurnType.BATALHA,
-];
-
-// Custos de construção baseado na quantidade de construções já existentes
-export const CONSTRUCTION_COSTS: Record<number, number> = {
-  1: 0, // Primeira construção (capital) é grátis
-  2: 2, // Segunda construção
-  3: 4, // Terceira construção
-  4: 6, // Quarta construção
-  5: 8, // Quinta construção
-  6: 10, // Sexta construção
-  7: 12, // Sétima construção
-  8: 14, // Oitava construção
-};
-
-// Limites de construção
-export const MAX_CONSTRUCTIONS_PER_TERRITORY = 8;
-export const MAX_FORTRESSES_PER_TERRITORY = 3;
+// Constantes importadas de ./data/turns
 
 // --- UNIDADES (REGENTE E HERÓI) ---
-// Custos de Level Up de Regente (começa em 6 e incrementa 3 por nível)
-export const REGENT_LEVELUP_BASE_COST = 6;
-export const REGENT_LEVELUP_INCREMENT = 3;
-
-// Custos de Level Up de Herói (começa em 4 e incrementa 2 por nível)
-export const HERO_LEVELUP_BASE_COST = 4;
-export const HERO_LEVELUP_INCREMENT = 2;
-
-// Custos de recrutamento de Herói (baseado na quantidade de heróis que já tem)
-export const HERO_RECRUITMENT_COSTS: Record<number, number> = {
-  0: 4, // Primeiro herói
-  1: 6, // Segundo herói
-  2: 8, // Terceiro herói
-  3: 10, // Quarto herói
-  4: 12, // Quinto herói
-  5: 14, // Sexto herói
-};
-
-export const MAX_HEROES_PER_PLAYER = 6;
-export const MAX_HERO_LEVEL = 10;
-
-// Pontos de atributo por level
-export const REGENT_ATTRIBUTE_POINTS_PER_LEVEL = 6;
-export const HERO_ATTRIBUTE_POINTS_PER_LEVEL = 4;
-
-// Atributos iniciais
-export const REGENT_INITIAL_ATTRIBUTE_POINTS = 30;
-export const HERO_INITIAL_ATTRIBUTE_POINTS = 15;
-
-// --- TROPAS ---
-// Custos de recrutamento de Tropas (baseado na quantidade de tropas da mesma categoria)
-// Fórmula: (quantidade_atual + 1) × 2
-export const TROOP_RECRUITMENT_BASE_COST = 2;
-
-// Custos de Level Up de Categoria de Tropa (Nível 1→2: 2, 2→3: 3, etc.)
-export const TROOP_LEVELUP_COSTS: Record<number, number> = {
-  1: 2, // Nível 1 → 2
-  2: 3, // Nível 2 → 3
-  3: 4, // Nível 3 → 4
-  4: 5, // Nível 4 → 5
-  5: 6, // Nível 5 → 6
-  6: 7, // Nível 6 → 7
-  7: 8, // Nível 7 → 8
-  8: 9, // Nível 8 → 9
-  9: 10, // Nível 9 → 10
-};
-
-export const MAX_TROOP_LEVEL = 10;
-export const TROOP_ATTRIBUTE_POINTS_PER_LEVEL = 2;
-
-// Categorias de tropas e seus recursos
-export type TroopCategory =
-  | "DEFENSOR"
-  | "EMBOSCADOR"
-  | "ATACANTE"
-  | "CONJURADOR";
-
-export const TROOP_RESOURCE_MAP: Record<TroopCategory, keyof PlayerResources> =
-  {
-    DEFENSOR: "minerio",
-    EMBOSCADOR: "suprimentos",
-    ATACANTE: "experiencia",
-    CONJURADOR: "arcana",
-  };
+// Constantes importadas de ./data/units
+// Constantes importadas de ./data/archetypes para TroopCategory e TROOP_RESOURCE_MAP
 
 // --- MOVIMENTO ---
-export const MOVEMENT_COST_BETWEEN_TERRITORIES = 1; // 1 Suprimento por movimento entre territórios
-export const MOVEMENT_WITHIN_TERRITORY_COST = 0; // Movimento dentro do mesmo território é grátis
+// Constantes importadas de ./data/turns
 
 // --- CLASSES ---
-export type ClassArchetype =
-  | "MAGICA"
-  | "MECANICA"
-  | "FISICA"
-  | "ESPIRITUAL"
-  | "CAOTICA";
+// ClassArchetype importado de ./data/archetypes
 
 export interface ClassDefinition {
   id: string; // "WARRIOR"
@@ -227,40 +173,10 @@ export interface ClassDefinition {
 }
 
 // --- HABILIDADES ---
-export type SkillCategory = "ATIVA" | "REATIVA" | "PASSIVA";
-export type SkillCostTier = "BAIXO" | "MEDIO" | "ALTO"; // 1, 2, 3
-export type RangeType = "ADJACENTE" | "BAIXO" | "MEDIO" | "ALTO"; // 1, 2, 4, 6
-
-export interface SkillDefinition {
-  id: string;
-  name: string;
-  description: string;
-  category: SkillCategory;
-
-  // Apenas para Ativas e Reativas
-  costTier?: SkillCostTier;
-  range?: RangeType;
-}
-
-// Helper para traduzir Tier em Número
-export const COST_VALUES: Record<SkillCostTier, number> = {
-  BAIXO: 1,
-  MEDIO: 2,
-  ALTO: 3,
-};
-
-export const RANGE_VALUES: Record<RangeType, number> = {
-  ADJACENTE: 1,
-  BAIXO: 2,
-  MEDIO: 4,
-  ALTO: 6,
-};
+// Importado de ./data/skills-system
+// SkillCategory, SkillCostTier, RangeType, SkillDefinition, COST_VALUES, RANGE_VALUES
 // --- CRISE: MEDIDOR DE CRISE E PILHA DE TRIBUTO ---
-export enum TributeDecision {
-  CONTRIBUIR = "CONTRIBUIR", // Incrementa a pilha
-  SABOTAR = "SABOTAR", // Reduz a pilha
-  NAOINTERVIER = "NAOINTERVIER", // Não contribui
-}
+// TributeDecision importado de ./data/crisis
 
 export interface TributeSubmission {
   playerId: string;
@@ -279,5 +195,50 @@ export interface TributePileResult {
   topSabotageAmount: number;
 }
 
-export const CRISIS_METER_START = 1; // MC começa em 1
-export const CRISIS_METER_MAX = 15; // Quando chega a 15, crise começaexport const CRISIS_METER_TRIGGERED_AT_TURN = 5; // No 5º turno da rodada
+// Constantes importadas de ./data/crisis
+// Re-exports para manter compatibilidade com imports antigos
+export {
+  TurnType,
+  TURN_ORDER,
+  CONSTRUCTION_COSTS,
+  MAX_CONSTRUCTIONS_PER_TERRITORY,
+  MAX_FORTRESSES_PER_TERRITORY,
+  MOVEMENT_COST_BETWEEN_TERRITORIES,
+  MOVEMENT_WITHIN_TERRITORY_COST,
+} from "../data/turns";
+export {
+  REGENT_LEVELUP_BASE_COST,
+  REGENT_LEVELUP_INCREMENT,
+  HERO_LEVELUP_BASE_COST,
+  HERO_LEVELUP_INCREMENT,
+  HERO_RECRUITMENT_COSTS,
+  MAX_HEROES_PER_PLAYER,
+  MAX_HERO_LEVEL,
+  REGENT_ATTRIBUTE_POINTS_PER_LEVEL,
+  HERO_ATTRIBUTE_POINTS_PER_LEVEL,
+  REGENT_INITIAL_ATTRIBUTE_POINTS,
+  HERO_INITIAL_ATTRIBUTE_POINTS,
+  TROOP_RECRUITMENT_BASE_COST,
+  TROOP_LEVELUP_COSTS,
+  MAX_TROOP_LEVEL,
+  TROOP_ATTRIBUTE_POINTS_PER_LEVEL,
+} from "../data/units";
+export {
+  TributeDecision,
+  CRISIS_METER_START,
+  CRISIS_METER_MAX,
+  CRISIS_METER_TRIGGERED_AT_TURN,
+} from "../data/crisis";
+export {
+  SkillCategory,
+  SkillCostTier,
+  RangeType,
+  COST_VALUES,
+  RANGE_VALUES,
+  SkillDefinition,
+} from "../data/skills-system";
+export {
+  ClassArchetype,
+  TroopCategory,
+  TROOP_RESOURCE_MAP,
+} from "../data/archetypes";

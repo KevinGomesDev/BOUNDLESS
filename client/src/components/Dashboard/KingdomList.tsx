@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useKingdom, useGameState } from "../../hooks/useGame";
-import type { Kingdom } from "../../types/game.types";
-import { CreateKingdomModal } from "../CreateKingdom";
+import { useKingdom } from "../../features/kingdom";
+import { useAuth } from "../../features/auth";
+import type { Kingdom } from "../../features/kingdom";
+import { CreateKingdomModal } from "../../features/kingdom";
 
 /**
- * Lista de Reinos do usuário no Dashboard
+ * Lista de Reinos - Estilo Cidadela de Pedra
+ * Os domínios do jogador exibidos como placas de pedra
  */
 export const KingdomList: React.FC = () => {
   const { kingdoms, loadKingdoms, isLoading, error } = useKingdom();
-  const { user } = useGameState();
+  const { user } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const hasLoadedRef = useRef(false);
 
@@ -26,62 +28,75 @@ export const KingdomList: React.FC = () => {
 
   return (
     <>
-      <div className="group relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        <div className="relative bg-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-amber-500/30 p-6 hover:border-amber-500/60 transition-all duration-300">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg sm:text-xl font-bold text-amber-300 flex items-center gap-2">
-              🏰 Seus Reinos
-            </h3>
+      <div className="space-y-4">
+        {/* Botão Criar Reino */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="group relative px-4 py-2 bg-gradient-to-b from-metal-bronze to-metal-copper 
+                       border-2 border-metal-iron rounded-lg shadow-stone-raised
+                       hover:from-metal-gold hover:to-metal-bronze
+                       active:animate-stone-press transition-all duration-200"
+          >
+            <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-metal-iron rounded-full"></div>
+            <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-metal-iron rounded-full"></div>
+            <span className="relative text-citadel-obsidian font-bold text-sm tracking-wide flex items-center gap-2">
+              <span>⚒️</span>
+              <span className="hidden sm:inline">Fundar Reino</span>
+              <span className="sm:hidden">+</span>
+            </span>
+          </button>
+        </div>
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="relative w-10 h-10">
+              <div className="absolute inset-0 border-3 border-metal-bronze rounded-full animate-spin border-t-transparent"></div>
+              <div
+                className="absolute inset-2 border-2 border-metal-gold rounded-full animate-spin border-b-transparent"
+                style={{ animationDirection: "reverse" }}
+              ></div>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-war-blood/20 border-2 border-war-crimson rounded-lg p-3">
+            <p className="text-war-ember text-sm flex items-center gap-2">
+              <span>⚠️</span> {error}
+            </p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && kingdoms.length === 0 && (
+          <div className="text-center py-8 bg-citadel-slate/30 rounded-xl border-2 border-dashed border-metal-iron/50">
+            <div className="text-5xl mb-4">🏰</div>
+            <p className="text-parchment-dark mb-4">
+              Nenhum domínio conquistado
+            </p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white text-sm font-semibold rounded-lg transition-all duration-300 hover:scale-105 flex items-center gap-1.5"
+              className="px-6 py-3 bg-gradient-to-b from-war-crimson to-war-blood 
+                         border-3 border-metal-iron rounded-lg shadow-forge-glow
+                         hover:from-war-ember hover:to-war-crimson
+                         text-parchment-light font-bold tracking-wide transition-all"
             >
-              <span>+</span>
-              <span className="hidden sm:inline">Criar Reino</span>
+              ⚔️ Conquistar Primeiro Reino
             </button>
           </div>
+        )}
 
-          {/* Loading State */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full"></div>
-            </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!isLoading && !error && kingdoms.length === 0 && (
-            <div className="text-center py-8">
-              <div className="text-5xl mb-4">🏰</div>
-              <p className="text-slate-400 mb-4">
-                Você ainda não possui reinos
-              </p>
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white font-semibold rounded-lg transition-all duration-300 hover:scale-105"
-              >
-                ✨ Criar seu Primeiro Reino
-              </button>
-            </div>
-          )}
-
-          {/* Kingdom List */}
-          {!isLoading && kingdoms.length > 0 && (
-            <div className="space-y-3">
-              {kingdoms.map((kingdom) => (
-                <KingdomCard key={kingdom.id} kingdom={kingdom} />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Kingdom List */}
+        {!isLoading && kingdoms.length > 0 && (
+          <div className="space-y-3">
+            {kingdoms.map((kingdom) => (
+              <KingdomCard key={kingdom.id} kingdom={kingdom} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Create Kingdom Modal */}
@@ -96,13 +111,22 @@ export const KingdomList: React.FC = () => {
 };
 
 /**
- * Card individual de um Reino
+ * Card de Reino - Placa de Pedra com Brasão
  */
 const KingdomCard: React.FC<{ kingdom: Kingdom }> = ({ kingdom }) => {
-  const alignmentColors: Record<string, string> = {
-    BOM: "text-green-400 bg-green-500/10 border-green-500/30",
-    NEUTRO: "text-slate-400 bg-slate-500/10 border-slate-500/30",
-    MAL: "text-red-400 bg-red-500/10 border-red-500/30",
+  const alignmentConfig: Record<string, { color: string; icon: string }> = {
+    BOM: {
+      color: "text-green-400 border-green-600/50 bg-green-900/20",
+      icon: "✨",
+    },
+    NEUTRO: {
+      color: "text-parchment-aged border-metal-iron/50 bg-citadel-slate/30",
+      icon: "⚖️",
+    },
+    MAL: {
+      color: "text-war-ember border-war-crimson/50 bg-war-blood/20",
+      icon: "💀",
+    },
   };
 
   const raceIcons: Record<string, string> = {
@@ -111,38 +135,64 @@ const KingdomCard: React.FC<{ kingdom: Kingdom }> = ({ kingdom }) => {
     CONSTRUTO: "🤖",
   };
 
+  const alignment =
+    alignmentConfig[kingdom.alignment] || alignmentConfig.NEUTRO;
+
   return (
-    <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4 hover:border-amber-500/40 transition-all duration-300 cursor-pointer group/card">
+    <div
+      className="group relative bg-gradient-to-b from-citadel-granite to-citadel-carved 
+                    border-2 border-metal-iron rounded-xl p-4 
+                    hover:border-metal-bronze hover:shadow-torch
+                    transition-all duration-300 cursor-pointer shadow-stone-raised"
+    >
+      {/* Rebites decorativos */}
+      <div className="absolute top-2 left-2 w-2 h-2 bg-metal-iron rounded-full border border-metal-rust/30"></div>
+      <div className="absolute top-2 right-2 w-2 h-2 bg-metal-iron rounded-full border border-metal-rust/30"></div>
+
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xl">{raceIcons[kingdom.race] || "🏰"}</span>
-            <h4 className="font-bold text-amber-200 group-hover/card:text-amber-100 transition-colors">
-              {kingdom.name}
-            </h4>
+          <div className="flex items-center gap-3 mb-2">
+            {/* Ícone da Raça em escudo */}
+            <div className="w-10 h-10 bg-citadel-slate border-2 border-metal-iron rounded-lg flex items-center justify-center shadow-stone-inset">
+              <span className="text-xl">{raceIcons[kingdom.race] || "🏰"}</span>
+            </div>
+            <div>
+              <h4
+                className="font-bold text-parchment-light group-hover:text-metal-gold transition-colors"
+                style={{ fontFamily: "'Cinzel', serif" }}
+              >
+                {kingdom.name}
+              </h4>
+              <p className="text-parchment-dark text-xs">
+                Capital:{" "}
+                <span className="text-parchment-aged">
+                  {kingdom.capitalName}
+                </span>
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-slate-400 mb-2">
-            Capital:{" "}
-            <span className="text-slate-300">{kingdom.capitalName}</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
+
+          {/* Tags de Alinhamento e Raça */}
+          <div className="flex flex-wrap gap-2 mt-3">
             <span
-              className={`text-xs px-2 py-0.5 rounded-full border ${
-                alignmentColors[kingdom.alignment] || alignmentColors.NEUTRO
-              }`}
+              className={`text-xs px-2 py-1 rounded border ${alignment.color} font-semibold`}
             >
-              {kingdom.alignment}
+              {alignment.icon} {kingdom.alignment}
             </span>
-            <span className="text-xs px-2 py-0.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-400">
+            <span className="text-xs px-2 py-1 rounded border border-metal-copper/50 bg-metal-copper/10 text-metal-bronze font-semibold">
               {kingdom.race}
             </span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-amber-400 font-bold">
-            💰 {kingdom.gold?.toLocaleString() || 0}
+
+        {/* Recursos */}
+        <div className="text-right space-y-1">
+          <div className="bg-citadel-slate/50 px-2 py-1 rounded border border-metal-gold/30">
+            <span className="text-metal-gold font-bold text-sm">
+              💰 {kingdom.gold?.toLocaleString() || 0}
+            </span>
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-parchment-dark text-xs">
             👥 {kingdom.population?.toLocaleString() || 0}
           </div>
         </div>

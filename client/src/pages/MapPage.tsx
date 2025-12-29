@@ -1,0 +1,159 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { useMatch } from "../features/match";
+import { MapCanvas, TopHUD, RightSidebar, TerritoryModal } from "../features/map";
+import type { Territory } from "../features/map";
+
+/**
+ * Map Page - Visualização principal do jogo
+ * Tela principal quando há partida ativa
+ */
+const MapPage: React.FC = () => {
+  const {
+    requestMapData,
+    matchMapData,
+    isLoading,
+    error,
+    currentMatch,
+    completeMatchState,
+    myPlayerId,
+    getPreparationData,
+  } = useMatch();
+  const [isLoadingMap, setIsLoadingMap] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  
+  // Estado do modal de território - este é o único jeito de construir
+  const [openTerritoryModal, setOpenTerritoryModal] = useState<Territory | null>(null);
+
+  const matchId = completeMatchState?.matchId || currentMatch?.id || "";
+  const inPreparation =
+    completeMatchState?.status === "PREPARATION" ||
+    currentMatch?.status === "PREPARATION";
+  const inAdministration = completeMatchState?.currentTurn === "ADMINISTRACAO";
+  const canBuild = inPreparation || inAdministration;
+
+  // Carregar mapa ao montar
+  useEffect(() => {
+    const loadMap = async () => {
+      setIsLoadingMap(true);
+      setLocalError(null);
+      try {
+        await requestMapData();
+      } catch (err: any) {
+        console.error("Erro ao carregar mapa:", err);
+        setLocalError(err.message || "Erro ao carregar mapa");
+      } finally {
+        setIsLoadingMap(false);
+      }
+    };
+
+    loadMap();
+  }, [requestMapData]);
+
+  // Clique em território - abre modal se for do jogador e puder construir
+  const handleTerritoryClick = useCallback((territory: Territory) => {
+    console.log("Território clicado:", territory);
+    
+    // Verifica se é um território do jogador atual
+    const isOwnTerritory = territory.ownerId === myPlayerId;
+    
+    if (isOwnTerritory && canBuild) {
+      setOpenTerritoryModal(territory);
+    } else if (!isOwnTerritory) {
+      // Pode exibir informações do território inimigo futuramente
+      console.log("Território não pertence ao jogador.");
+    }
+  }, [myPlayerId, canBuild]);
+
+  // Fecha modal de território
+  const handleCloseTerritory = useCallback(() => {
+    setOpenTerritoryModal(null);
+  }, []);
+
+  // Callback quando construção é bem-sucedida
+  const handleBuildSuccess = useCallback(() => {
+    // Atualiza dados de preparação para refletir nova construção
+    if (matchId) {
+      getPreparationData(matchId).catch(() => {});
+    }
+  }, [matchId, getPreparationData]);
+
+  const displayError = localError || error;
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-citadel-obsidian">
+      {/* Ambiente de Fundo Medieval */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-citadel-slate via-citadel-obsidian to-black"></div>
+        <div className="absolute inset-0 bg-torch-light opacity-20"></div>
+      </div>
+
+      {/* TopHUD - Barra Superior */}
+      <TopHUD />
+
+      {/* RightSidebar - Sidebar Direita com suporte a território selecionado */}
+      <RightSidebar 
+        selectedTerritory={openTerritoryModal}
+        onCloseTerritory={handleCloseTerritory}
+      />
+
+      {/* Error Display */}
+      {displayError && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-40 p-4 bg-war-blood/90 border-2 border-war-crimson rounded-lg shadow-forge-glow max-w-md pointer-events-auto">
+          <p className="text-parchment-light font-semibold">{displayError}</p>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {(isLoadingMap || isLoading) && !matchMapData && (
+        <div className="absolute inset-0 flex items-center justify-center z-30 bg-citadel-obsidian/80">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-war-crimson border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-parchment-aged text-lg">Loading map...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Map Canvas - Fullscreen, com padding para sidebar */}
+      {matchMapData && (
+        <div className="absolute inset-0 pt-16 flex items-center justify-center pr-80">
+          <MapCanvas
+            territories={matchMapData.territories}
+            players={matchMapData.players}
+            width={Math.min(1400, window.innerWidth - 400)}
+            height={Math.min(900, window.innerHeight - 100)}
+            onTerritoryClick={handleTerritoryClick}
+          />
+        </div>
+      )}
+
+      {/* Territory Modal - Sobrepõe apenas o mapa, não fullscreen */}
+      {openTerritoryModal && myPlayerId && matchId && (
+        <TerritoryModal
+          territory={openTerritoryModal}
+          playerId={myPlayerId}
+          matchId={matchId}
+          onClose={handleCloseTerritory}
+          onBuildSuccess={handleBuildSuccess}
+        />
+      )}
+
+      {/* Dica para o jogador durante preparação (quando nenhum território selecionado) */}
+      {canBuild && !openTerritoryModal && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none">
+          <div className="bg-citadel-carved/90 border-2 border-metal-iron rounded-lg px-6 py-3 shadow-stone-raised">
+            <p 
+              className="text-parchment-aged text-sm text-center"
+              style={{ fontFamily: "'Cinzel', serif" }}
+            >
+              {inPreparation 
+                ? "Clique em um de seus territórios para construir estruturas gratuitas."
+                : "Clique em um de seus territórios para administrar construções."}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MapPage;

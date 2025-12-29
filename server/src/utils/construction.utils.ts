@@ -88,7 +88,7 @@ export async function buildStructure(
 
   // Verifica se tem recursos suficientes (minério)
   try {
-    await spendResources(playerId, { minerio: cost } as any);
+    await spendResources(playerId, { ore: cost } as any);
   } catch (error) {
     return {
       success: false,
@@ -130,7 +130,7 @@ export async function buildStructure(
     },
   });
 
-  // Atualiza contadores do território
+  // Atualiza contadores do território (apenas pago, não incrementa free builds)
   const isFortaleza = structureType === "FORTRESS";
   await prisma.territory.update({
     where: { id: territoryId },
@@ -143,6 +143,84 @@ export async function buildStructure(
   return {
     success: true,
     message: `${structureDef.name} construída com sucesso! Custo: ${cost} Minério`,
+    structure,
+  };
+}
+
+/**
+ * Constrói uma estrutura gratuita durante a preparação (sem custo de minério)
+ */
+export async function buildStructureFree(
+  matchId: string,
+  playerId: string,
+  territoryId: string,
+  structureType: string
+): Promise<{ success: boolean; message: string; structure?: any }> {
+  // Verifica se pode construir no território
+  const validation = await canBuildInTerritory(
+    territoryId,
+    playerId,
+    structureType
+  );
+
+  if (!validation.canBuild) {
+    return {
+      success: false,
+      message: validation.reason || "Não pode construir",
+    };
+  }
+
+  // Busca definição e território
+  const structureDef = STRUCTURE_DEFINITIONS[structureType];
+  const territory = await prisma.territory.findUnique({
+    where: { id: territoryId },
+  });
+
+  const matchPlayer = await prisma.matchPlayer.findUnique({
+    where: { id: playerId },
+  });
+
+  if (!matchPlayer) {
+    return { success: false, message: "MatchPlayer não encontrado" };
+  }
+
+  // Cria a estrutura (sem cobrar recursos)
+  const structure = await prisma.structure.create({
+    data: {
+      kingdomId: matchPlayer.kingdomId,
+      matchId,
+      ownerId: playerId,
+      type: structureType,
+      maxHp: structureDef.maxHp,
+      currentHp: structureDef.maxHp,
+      resourceType: structureDef.resourceGenerated || null,
+      productionRate: structureDef.resourceGenerated ? 1 : 0,
+      locationIndex: territory!.mapIndex,
+    },
+  });
+
+  // Atualiza contadores do território e free builds do jogador
+  const isFortaleza = structureType === "FORTRESS";
+  await prisma.territory.update({
+    where: { id: territoryId },
+    data: {
+      constructionCount: { increment: 1 },
+      fortressCount: isFortaleza ? { increment: 1 } : undefined,
+    },
+  });
+
+  // Cast to any to update freeBuildingsUsed until Prisma client is regenerated
+  await (prisma as any).matchPlayer.update({
+    where: { id: playerId },
+    data: {
+      freeBuildingsUsed: { increment: 1 },
+      buildingCount: { increment: 1 },
+    } as any,
+  });
+
+  return {
+    success: true,
+    message: `${structureDef.name} construída gratuitamente na preparação!`,
     structure,
   };
 }

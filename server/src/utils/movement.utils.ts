@@ -93,11 +93,11 @@ export async function moveUnit(
   // Se o movimento for entre territórios, cobrar suprimento
   if (sourceTerritory !== destinationTerritory && cost > 0) {
     try {
-      await spendResources(playerId, { suprimentos: cost } as any);
+      await spendResources(playerId, { supplies: cost } as any);
     } catch (error) {
       return {
         success: false,
-        message: `Suprimentos insuficientes. Custo: ${cost}`,
+        message: `Supplies insufficient. Cost: ${cost}`,
       };
     }
   }
@@ -112,7 +112,7 @@ export async function moveUnit(
 
   return {
     success: true,
-    message: `Unidade movida para o território ${destinationTerritory}. Custo: ${cost} Suprimentos`,
+    message: `Unit moved to territory ${destinationTerritory}. Cost: ${cost} Supplies`,
     unit: movedUnit,
   };
 }

@@ -6,35 +6,48 @@ interface ConnectionStatusProps {
 }
 
 /**
- * Componente que exibe o status de conexão com o servidor
+ * Componente de Status - Estilo Cidadela de Pedra
+ * Mostra se as muralhas estão protegidas
  */
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   isConnected,
   error,
 }) => {
   return (
-    <div className="group relative">
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <div className="relative bg-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-blue-500/30 p-6 hover:border-blue-500/60 transition-all duration-300">
-        <h3 className="text-lg sm:text-xl font-bold text-blue-300 mb-4 flex items-center gap-2">
-          🌐 Status de Conexão
-        </h3>
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-3 h-3 rounded-full ${
-              isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
-            }`}
-          ></div>
-          <span
-            className={`font-semibold ${
-              isConnected ? "text-green-400" : "text-red-400"
+    <div className="space-y-3">
+      {/* Indicador de Conexão */}
+      <div className="flex items-center gap-3 p-3 bg-citadel-slate/50 rounded-lg border border-metal-iron/30">
+        <div
+          className={`relative w-4 h-4 rounded-full ${
+            isConnected ? "bg-green-500" : "bg-war-crimson"
+          }`}
+        >
+          {isConnected && (
+            <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-50"></div>
+          )}
+        </div>
+        <div>
+          <p
+            className={`font-semibold text-sm ${
+              isConnected ? "text-green-400" : "text-war-ember"
             }`}
           >
-            {isConnected ? "✅ Conectado" : "❌ Desconectado"}
-          </span>
+            {isConnected ? "Muralhas Seguras" : "Fortaleza Vulnerável"}
+          </p>
+          <p className="text-parchment-dark text-xs">
+            {isConnected ? "Conexão estabelecida" : "Reconectando..."}
+          </p>
         </div>
-        {error && <p className="text-red-400 mt-3 text-sm">{error}</p>}
       </div>
+
+      {/* Erro se houver */}
+      {error && (
+        <div className="p-3 bg-war-blood/20 border border-war-crimson rounded-lg">
+          <p className="text-war-ember text-sm flex items-center gap-2">
+            <span>⚠️</span> {error}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

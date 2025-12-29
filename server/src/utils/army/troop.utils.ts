@@ -66,13 +66,9 @@ export function validateTroopPassive(passiveId: string): boolean {
 export function validateTroopResource(
   resourceType: string
 ): resourceType is keyof PlayerResources {
-  return [
-    "minerio",
-    "suprimentos",
-    "arcana",
-    "experiencia",
-    "devocao",
-  ].includes(resourceType);
+  return ["ore", "supplies", "arcane", "experience", "devotion"].includes(
+    resourceType
+  );
 }
 
 // Criar os 5 templates de tropas para um reino
@@ -231,11 +227,11 @@ export async function recruitTroop(
       resources = JSON.parse(player.resources);
     } catch {
       resources = {
-        minerio: 0,
-        suprimentos: 0,
-        arcana: 0,
-        experiencia: 0,
-        devocao: 0,
+        ore: 0,
+        supplies: 0,
+        arcane: 0,
+        experience: 0,
+        devotion: 0,
       };
     }
 
@@ -432,23 +428,23 @@ export async function upgradeTroopCategory(
       resources = JSON.parse(player.resources);
     } catch {
       resources = {
-        minerio: 0,
-        suprimentos: 0,
-        arcana: 0,
-        experiencia: 0,
-        devocao: 0,
+        ore: 0,
+        supplies: 0,
+        arcane: 0,
+        experience: 0,
+        devotion: 0,
       };
     }
 
-    if (resources.experiencia < cost) {
+    if (resources.experience < cost) {
       return {
         success: false,
-        message: `Experiência insuficiente. Custo: ${cost}, disponível: ${resources.experiencia}`,
+        message: `Experiência insuficiente. Custo: ${cost}, disponível: ${resources.experience}`,
       };
     }
 
     // Deduzir recursos e aumentar nível
-    resources.experiencia -= cost;
+    resources.experience -= cost;
     troopLevels[String(troopSlotIndex)] = currentLevel + 1;
 
     await prisma.matchPlayer.update({

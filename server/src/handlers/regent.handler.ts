@@ -136,8 +136,21 @@ export const registerRegentHandlers = (io: Server, socket: Socket) => {
         );
 
         if (result.success) {
-          if (initialFeature && result.regent) {
-            await addHeroClassFeature(result.regent.id, initialFeature);
+          if (initialFeature && result.regent && matchId) {
+            // For regents, add to classFeatures array directly (not using addHeroClassFeature)
+            const currentFeatures = JSON.parse(
+              result.regent.classFeatures
+            ) as string[];
+            if (!currentFeatures.includes(initialFeature)) {
+              currentFeatures.push(initialFeature);
+              await prisma.unit.update({
+                where: { id: result.regent.id },
+                data: {
+                  classFeatures: JSON.stringify(currentFeatures),
+                },
+              });
+              result.regent.classFeatures = JSON.stringify(currentFeatures);
+            }
           }
 
           const player = matchId

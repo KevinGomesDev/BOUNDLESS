@@ -14,6 +14,64 @@ import {
   getTerritoryConstructionInfo,
 } from "../utils/construction.utils";
 
+/**
+ * Broadcast estado completo da partida para todos os jogadores
+ *
+ * @param io - Socket.io Server
+ * @param matchId - ID da partida
+ */
+async function broadcastMatchState(io: Server, matchId: string) {
+  try {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        players: { include: { user: true, kingdom: true } },
+      },
+    });
+
+    if (!match) return;
+
+    // Determinar quem deve agir agora
+    let activePlayerIds: string[] = [];
+    if (match.status === "ACTIVE") {
+      activePlayerIds = match.players
+        .filter((p) => {
+          if (match.currentTurn === "ADMINISTRACAO") {
+            return !p.hasFinishedAdminTurn;
+          }
+          return !p.hasPlayedTurn;
+        })
+        .map((p) => p.id);
+    }
+
+    const matchState = {
+      matchId: match.id,
+      status: match.status,
+      currentRound: match.currentRound,
+      currentTurn: match.currentTurn,
+      activePlayerIds,
+      players: match.players.map((p) => ({
+        id: p.id,
+        userId: p.userId,
+        username: p.user?.username,
+        kingdomName: p.kingdom?.name,
+        playerIndex: p.playerIndex,
+        playerColor: p.playerColor,
+        resources: p.resources ? JSON.parse(p.resources) : {},
+        hasFinishedCurrentTurn:
+          match.currentTurn === "ADMINISTRACAO"
+            ? p.hasFinishedAdminTurn
+            : p.hasPlayedTurn,
+      })),
+      updatedAt: new Date(),
+    };
+
+    io.to(matchId).emit("match:state_updated", matchState);
+  } catch (error) {
+    console.error("[TURN] Erro ao broadcast estado:", error);
+  }
+}
+
 export const registerTurnHandlers = (io: Server, socket: Socket) => {
   // --- INICIAR TURNO DE ADMINISTRAÇÃO ---
   // Este evento é chamado automaticamente quando a partida começa ou quando uma rodada termina
@@ -55,6 +113,9 @@ export const registerTurnHandlers = (io: Server, socket: Socket) => {
           resources,
         });
       }
+
+      // Broadcast estado completo
+      await broadcastMatchState(io, matchId);
     } catch (error) {
       console.error("[TURN] Erro ao iniciar turno de administração:", error);
       socket.emit("error", {
@@ -243,6 +304,9 @@ export const registerTurnHandlers = (io: Server, socket: Socket) => {
         turn: currentTurn,
       });
 
+      // Broadcast estado para todos verem quem falta terminar
+      await broadcastMatchState(io, matchId);
+
       // Verifica se todos os jogadores terminaram
       const allFinished = await checkAllPlayersFinished(matchId, currentTurn);
 
@@ -250,7 +314,7 @@ export const registerTurnHandlers = (io: Server, socket: Socket) => {
         // Avança para o próximo turno
         const { newRound, newTurn, roundAdvanced } = await advanceTurn(matchId);
 
-        // Notifica todos sobre a mudança de turno/rodada
+        // Notifica sobre a mudança (deprecated, mantido para compatibilidade)
         if (roundAdvanced) {
           io.to(matchId).emit("round:advanced", {
             round: newRound,
@@ -269,7 +333,6 @@ export const registerTurnHandlers = (io: Server, socket: Socket) => {
         if (newTurn === TurnType.ADMINISTRACAO) {
           await restoreAllPlayersResources(matchId);
 
-          // Envia recursos atualizados
           const players = await prisma.matchPlayer.findMany({
             where: { matchId },
           });
@@ -282,6 +345,9 @@ export const registerTurnHandlers = (io: Server, socket: Socket) => {
             });
           }
         }
+
+        // Broadcast estado completo com novo turno/rodada
+        await broadcastMatchState(io, matchId);
       }
     } catch (error) {
       console.error("[TURN] Erro ao finalizar turno:", error);

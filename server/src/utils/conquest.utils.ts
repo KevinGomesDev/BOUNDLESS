@@ -119,9 +119,9 @@ export function processConquestEvent(
 }
 
 // Calculate conquest cost (based on current territory count)
-// Cost = number of territories already owned (in minerio)
+// Cost = number of territories already owned (in ore)
 export function calculateConquestCost(currentTerritoryCount: number): number {
-  // Minimum 1 minerio, or current count
+  // Minimum 1 ore, or current count
   return Math.max(1, currentTerritoryCount);
 }
 
@@ -138,7 +138,7 @@ export interface ConquestValidation {
 export function validateConquestRequirements(
   unitCount: number,
   hasHeroOrRegent: boolean,
-  playerResources: { minerio: number },
+  playerResources: { ore: number },
   cost: number
 ): ConquestValidation {
   // Must have 3+ units in territory
@@ -163,11 +163,11 @@ export function validateConquestRequirements(
     };
   }
 
-  // Must have enough minerio
-  if (playerResources.minerio < cost) {
+  // Must have enough ore
+  if (playerResources.ore < cost) {
     return {
       valid: false,
-      reason: `Minério insuficiente. Custo: ${cost}, disponível: ${playerResources.minerio}.`,
+      reason: `Ore insufficient. Cost: ${cost}, available: ${playerResources.ore}.`,
       unitCount,
       hasLeader: hasHeroOrRegent,
       cost,

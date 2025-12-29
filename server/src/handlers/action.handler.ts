@@ -97,21 +97,21 @@ export const registerActionHandlers = (io: Server, socket: Socket) => {
 
         // 7. Parse recursos do jogador
         let resources: {
-          minerio: number;
-          suprimentos: number;
-          arcana: number;
-          experiencia: number;
-          devocao: number;
+          ore: number;
+          supplies: number;
+          arcane: number;
+          experience: number;
+          devotion: number;
         };
         try {
           resources = JSON.parse(player.resources);
         } catch {
           resources = {
-            minerio: 0,
-            suprimentos: 0,
-            arcana: 0,
-            experiencia: 0,
-            devocao: 0,
+            ore: 0,
+            supplies: 0,
+            arcane: 0,
+            experience: 0,
+            devotion: 0,
           };
         }
 
@@ -129,7 +129,7 @@ export const registerActionHandlers = (io: Server, socket: Socket) => {
         }
 
         // 9. Deduzir custo em minério
-        resources.minerio -= cost;
+        resources.ore -= cost;
 
         await prisma.matchPlayer.update({
           where: { id: playerId },

@@ -10,7 +10,8 @@ interface UserProfileProps {
 }
 
 /**
- * Componente que exibe o perfil do usuário autenticado
+ * Perfil do Comandante - Estilo Cidadela de Pedra
+ * Mostra informações do senhor do reino
  */
 export const UserProfile: React.FC<UserProfileProps> = ({ user }) => {
   if (!user) {
@@ -18,30 +19,37 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user }) => {
   }
 
   return (
-    <div className="group relative">
-      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <div className="relative bg-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-purple-500/30 p-6 hover:border-purple-500/60 transition-all duration-300">
-        <h3 className="text-lg sm:text-xl font-bold text-purple-300 mb-4 flex items-center gap-2">
-          👤 Seu Perfil
-        </h3>
-        <div className="space-y-3">
-          <div>
-            <p className="text-purple-400/60 text-xs uppercase tracking-widest font-semibold">
-              Nome de Guerreiro
-            </p>
-            <p className="text-lg font-bold text-purple-200 mt-1">
-              {user.username}
-            </p>
-          </div>
-          <div className="border-t border-slate-700/50 pt-3">
-            <p className="text-purple-400/60 text-xs uppercase tracking-widest font-semibold">
-              ID Único
-            </p>
-            <p className="text-purple-200 font-mono text-xs mt-1 break-all">
-              {user.id}
-            </p>
-          </div>
+    <div className="space-y-4">
+      {/* Avatar e Nome */}
+      <div className="flex items-center gap-4">
+        {/* Escudo do Comandante */}
+        <div className="relative w-14 h-14 bg-gradient-to-b from-metal-bronze to-metal-copper rounded-lg border-2 border-metal-iron flex items-center justify-center shadow-stone-raised">
+          <span className="text-2xl">👤</span>
+          {/* Borda decorativa */}
+          <div className="absolute -inset-0.5 border border-metal-gold/20 rounded-lg pointer-events-none"></div>
         </div>
+
+        <div className="flex-1">
+          <p
+            className="text-parchment-light font-bold text-lg"
+            style={{ fontFamily: "'Cinzel', serif" }}
+          >
+            {user.username}
+          </p>
+          <p className="text-parchment-dark text-xs tracking-wider uppercase">
+            Senhor da Guerra
+          </p>
+        </div>
+      </div>
+
+      {/* Placa de Identificação */}
+      <div className="bg-citadel-slate/50 rounded-lg border border-metal-iron/30 p-3">
+        <p className="text-parchment-dark text-xs uppercase tracking-widest mb-1">
+          Insígnia Única
+        </p>
+        <p className="text-metal-steel font-mono text-xs break-all">
+          {user.id}
+        </p>
       </div>
     </div>
   );

@@ -1,22 +1,62 @@
 import React from "react";
-import { useGameState } from "../../hooks/useGame";
+import { useAuth } from "../../features/auth";
+import { useKingdom } from "../../features/kingdom";
+import { useMatch } from "../../features/match";
+import { useConnection } from "../../core";
 
 /**
- * Componente de debug que exibe o estado completo do jogo
- * Útil para desenvolvimento e verificação de estado
+ * Pergaminhos de Debug - Estilo Cidadela de Pedra
+ * Exibe o estado completo do jogo em formato de tomo antigo
  */
 export const GameStateDebug: React.FC = () => {
-  const gameState = useGameState();
+  const {
+    user,
+    isAuthenticated,
+    isLoading: isAuthLoading,
+    error: authError,
+  } = useAuth();
+  const {
+    kingdoms,
+    currentKingdom,
+    isLoading: isKingdomLoading,
+    error: kingdomError,
+  } = useKingdom();
+  const {
+    currentMatch,
+    openMatches,
+    isLoading: isMatchLoading,
+    error: matchError,
+  } = useMatch();
+  const { isConnected, error: connectionError } = useConnection();
+
+  const gameState = {
+    connection: { isConnected, error: connectionError },
+    auth: { user, isAuthenticated, isLoading: isAuthLoading, error: authError },
+    kingdom: {
+      kingdoms,
+      currentKingdom,
+      isLoading: isKingdomLoading,
+      error: kingdomError,
+    },
+    match: {
+      currentMatch,
+      openMatches,
+      isLoading: isMatchLoading,
+      error: matchError,
+    },
+  };
 
   return (
-    <div className="group relative h-1/2">
-      <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <div className="relative bg-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-pink-500/30 p-6 hover:border-pink-500/60 transition-all duration-300">
-        <h3 className="text-lg sm:text-xl font-bold text-pink-300 mb-4 flex items-center gap-2">
-          ⚙️ Estado do Jogo
-        </h3>
-        <div className="bg-slate-900/50 rounded-lg p-4 overflow-auto max-h-96 border border-slate-700/50">
-          <pre className="text-xs sm:text-sm text-purple-300/80 font-mono whitespace-pre-wrap break-words">
+    <div className="space-y-2">
+      {/* Conteúdo do Pergaminho */}
+      <div className="bg-citadel-obsidian rounded-lg border border-metal-iron/50 overflow-hidden">
+        <div className="bg-gradient-to-r from-citadel-slate to-citadel-obsidian px-3 py-2 border-b border-metal-iron/30">
+          <span className="text-parchment-dark text-xs tracking-wide">
+            📜 Registros do Reino
+          </span>
+        </div>
+        <div className="p-3 overflow-auto max-h-64">
+          <pre className="text-xs text-metal-steel font-mono whitespace-pre-wrap break-words">
             {JSON.stringify(gameState, null, 2)}
           </pre>
         </div>

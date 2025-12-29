@@ -56,12 +56,12 @@ export const AsyncButton: React.FC<AsyncButtonProps> = ({
         onClick={handleClick}
         disabled={isDisabled}
         type={type}
-        className={`px-4 py-2 border-none rounded-md bg-blue-500 text-white cursor-pointer font-medium transition-all duration-300 hover:bg-blue-600 hover:not-disabled:hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed ${className}`}
+        className={`px-4 py-2 border-none rounded-md bg-medieval-red-700 text-white cursor-pointer font-medium transition-all duration-300 hover:bg-medieval-red-600 hover:not-disabled:hover:bg-medieval-red-600 disabled:opacity-60 disabled:cursor-not-allowed border-2 border-medieval-blood ${className}`}
       >
         {isLoading || loading ? "⏳ Carregando..." : children}
       </button>
       {displayError && (
-        <p className="text-red-600 text-sm m-0">{displayError}</p>
+        <p className="text-medieval-red-400 text-sm m-0">{displayError}</p>
       )}
     </div>
   );

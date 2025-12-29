@@ -106,6 +106,7 @@ model MatchPlayer {
   playerIndex    Int      @default(0)        // 0 = Host, 1 = Guest (define cor)
   playerColor    String   @default("#ff0000") // Vermelho padrão
   isReady        Boolean  @default(false)    // Pronto na fase de preparação
+  freeBuildingsUsed Int   @default(0)        // Construções gratuitas usadas na preparação (máx 3)
   capitalTerritoryId String?                 // Território inicial/capital
   troopLevels    String   @default("{}")
   troopTemplates String   @default("{}")

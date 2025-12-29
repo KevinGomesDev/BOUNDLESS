@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "../hooks/useGame";
+import { useAuth } from "../features/auth";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

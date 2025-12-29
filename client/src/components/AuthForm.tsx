@@ -83,12 +83,15 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
   return (
     <div className="w-full space-y-6">
-      {/* Form Title */}
+      {/* Form Title - Estilo Pergaminho Medieval */}
       <div className="text-center mb-8">
-        <h2 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+        <h2
+          className="text-3xl sm:text-4xl font-bold text-parchment-light drop-shadow-lg"
+          style={{ fontFamily: "'Cinzel', serif", letterSpacing: "0.1em" }}
+        >
           {title}
         </h2>
-        <div className="h-0.5 w-12 mx-auto bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+        <div className="h-1 w-20 mx-auto bg-gradient-to-r from-transparent via-metal-gold to-transparent mt-3 rounded-full"></div>
       </div>
 
       {showSuccess && (
@@ -115,7 +118,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         <div className="group">
           <label
             htmlFor="username"
-            className="block font-bold text-purple-300 text-sm mb-2 uppercase tracking-wide"
+            className="block font-semibold text-parchment-aged text-sm mb-2 uppercase tracking-widest"
           >
             👤 Usuário
           </label>
@@ -129,9 +132,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               disabled={isLoading}
               placeholder="Digite seu nome de guerreiro"
               autoComplete="username"
-              className="w-full px-4 py-3 bg-slate-700/50 border-2 border-purple-500/30 rounded-lg text-white placeholder-purple-300/50 text-sm transition-all duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-500/60"
+              className="w-full px-4 py-3 bg-citadel-slate border-2 border-metal-iron rounded-lg 
+                         text-parchment-light placeholder-parchment-dark/50 text-sm 
+                         transition-all duration-300 
+                         focus:outline-none focus:border-metal-bronze focus:ring-2 focus:ring-metal-bronze/20 
+                         disabled:opacity-50 disabled:cursor-not-allowed 
+                         hover:border-metal-steel shadow-stone-inset"
             />
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none"></div>
           </div>
         </div>
 
@@ -140,7 +147,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           <div className="group">
             <label
               htmlFor="email"
-              className="block font-bold text-purple-300 text-sm mb-2 uppercase tracking-wide"
+              className="block font-semibold text-parchment-aged text-sm mb-2 uppercase tracking-widest"
             >
               📧 Email
             </label>
@@ -154,9 +161,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 disabled={isLoading}
                 placeholder="seu.email@realm.com"
                 autoComplete="email"
-                className="w-full px-4 py-3 bg-slate-700/50 border-2 border-purple-500/30 rounded-lg text-white placeholder-purple-300/50 text-sm transition-all duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-500/60"
+                className="w-full px-4 py-3 bg-citadel-slate border-2 border-metal-iron rounded-lg 
+                           text-parchment-light placeholder-parchment-dark/50 text-sm 
+                           transition-all duration-300 
+                           focus:outline-none focus:border-metal-bronze focus:ring-2 focus:ring-metal-bronze/20 
+                           disabled:opacity-50 disabled:cursor-not-allowed 
+                           hover:border-metal-steel shadow-stone-inset"
               />
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none"></div>
             </div>
           </div>
         )}
@@ -165,7 +176,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         <div className="group">
           <label
             htmlFor="password"
-            className="block font-bold text-purple-300 text-sm mb-2 uppercase tracking-wide"
+            className="block font-semibold text-parchment-aged text-sm mb-2 uppercase tracking-widest"
           >
             🔐 Senha
           </label>
@@ -179,32 +190,47 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               disabled={isLoading}
               placeholder="Mínimo 6 caracteres"
               autoComplete={isLogin ? "current-password" : "new-password"}
-              className="w-full px-4 py-3 bg-slate-700/50 border-2 border-purple-500/30 rounded-lg text-white placeholder-purple-300/50 text-sm transition-all duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-500/60"
+              className="w-full px-4 py-3 bg-citadel-slate border-2 border-metal-iron rounded-lg 
+                         text-parchment-light placeholder-parchment-dark/50 text-sm 
+                         transition-all duration-300 
+                         focus:outline-none focus:border-metal-bronze focus:ring-2 focus:ring-metal-bronze/20 
+                         disabled:opacity-50 disabled:cursor-not-allowed 
+                         hover:border-metal-steel shadow-stone-inset"
             />
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none"></div>
           </div>
         </div>
 
         {/* Actions */}
         <div className="space-y-3 pt-4">
+          {/* Submit Button - Estilo Forja */}
           <button
             type="submit"
             disabled={isLoading}
-            className="group/submit w-full relative px-6 py-3 overflow-hidden rounded-lg transition-all duration-300 font-bold text-white uppercase tracking-wider"
+            className="group relative w-full px-6 py-4 bg-gradient-to-b from-war-crimson to-war-blood 
+                       border-3 border-metal-iron rounded-lg shadow-forge-glow
+                       hover:from-war-ember hover:to-war-crimson
+                       disabled:from-citadel-granite disabled:to-citadel-carved disabled:shadow-none
+                       active:animate-stone-press transition-all duration-200"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-300 group-hover/submit:scale-110"></div>
-            <div className="absolute inset-0 opacity-0 group-hover/submit:opacity-100 bg-white/10 transition-all duration-300"></div>
-            <span className="relative flex items-center justify-center gap-2">
+            {/* Rebites */}
+            <div className="absolute top-1 left-1 w-2 h-2 bg-metal-iron rounded-full"></div>
+            <div className="absolute top-1 right-1 w-2 h-2 bg-metal-iron rounded-full"></div>
+            <div className="absolute bottom-1 left-1 w-2 h-2 bg-metal-iron rounded-full"></div>
+            <div className="absolute bottom-1 right-1 w-2 h-2 bg-metal-iron rounded-full"></div>
+
+            <span
+              className="relative flex items-center justify-center gap-2 text-parchment-light font-bold tracking-wider"
+              style={{ fontFamily: "'Cinzel', serif" }}
+            >
               {isLoading ? (
                 <>
-                  <span className="inline-block animate-spin">⏳</span>
+                  <div className="animate-spin w-5 h-5 border-2 border-parchment-light border-t-transparent rounded-full"></div>
                   Carregando...
                 </>
               ) : (
-                <>⚔️ {buttonText}</>
+                <>⚔️ {buttonText.toUpperCase()}</>
               )}
             </span>
-            <div className="absolute inset-0 rounded-lg border border-white/20 group-hover/submit:border-white/50 transition-all duration-300"></div>
           </button>
 
           {onCancel && (
@@ -212,13 +238,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               type="button"
               onClick={onCancel}
               disabled={isLoading}
-              className="group/cancel w-full relative px-6 py-3 overflow-hidden rounded-lg transition-all duration-300 font-bold text-white uppercase tracking-wider"
+              className="w-full px-6 py-3 bg-gradient-to-b from-citadel-granite to-citadel-carved 
+                         border-2 border-metal-iron rounded-lg shadow-stone-raised
+                         hover:from-citadel-weathered hover:to-citadel-granite
+                         text-parchment-aged font-semibold transition-all duration-200"
             >
-              <div className="absolute inset-0 bg-slate-700/80 transition-all duration-300 group-hover/cancel:bg-slate-600"></div>
-              <span className="relative flex items-center justify-center gap-2">
-                ← Voltar
-              </span>
-              <div className="absolute inset-0 rounded-lg border border-purple-500/30 group-hover/cancel:border-purple-500/60 transition-all duration-300"></div>
+              ← Voltar
             </button>
           )}
         </div>

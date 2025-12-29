@@ -33,26 +33,26 @@ export async function calculatePlayerResources(
   });
 
   // Conta produtores por tipo
-  const minerioProducers = structures.filter(
-    (s) => s.resourceType === "MINERIO"
+  const oreProducers = structures.filter(
+    (s) => s.resourceType === "ORE"
   ).length;
-  const suprimentosProducers = structures.filter(
-    (s) => s.resourceType === "COMIDA"
+  const foodProducers = structures.filter(
+    (s) => s.resourceType === "FOOD"
   ).length;
-  const arcanaProducers = structures.filter(
-    (s) => s.resourceType === "ARCANA"
+  const arcaneProducers = structures.filter(
+    (s) => s.resourceType === "ARCANE"
   ).length;
-  const experienciaProducers = structures.filter(
-    (s) => s.resourceType === "EXPERIENCIA"
+  const experienceProducers = structures.filter(
+    (s) => s.resourceType === "EXPERIENCE"
   ).length;
 
   // Calcula recursos
   const resources: PlayerResources = {
-    minerio: capitalCount + territoryCount + minerioProducers,
-    suprimentos: capitalCount + territoryCount + suprimentosProducers,
-    arcana: capitalCount + territoryCount + arcanaProducers,
-    experiencia: capitalCount + territoryCount + experienciaProducers,
-    devocao: 0, // Devoção não é calculada automaticamente, acumula de outras formas
+    ore: capitalCount + territoryCount + oreProducers,
+    supplies: capitalCount + territoryCount + foodProducers,
+    arcane: capitalCount + territoryCount + arcaneProducers,
+    experience: capitalCount + territoryCount + experienceProducers,
+    devotion: 0, // Devocao nao eh calculada automaticamente, acumula de outras formas
   };
 
   return resources;
@@ -78,7 +78,7 @@ export async function restorePlayerResources(
   if (player) {
     const currentResources = JSON.parse(player.resources) as PlayerResources;
     // Preserva Devoção acumulada
-    newResources.devocao = currentResources.devocao || 0;
+    newResources.devotion = currentResources.devotion || 0;
   }
 
   // Atualiza no banco
@@ -212,11 +212,11 @@ export async function spendResources(
 
   // Deduz recursos
   const newResources: PlayerResources = {
-    minerio: currentResources.minerio - (costs.minerio || 0),
-    suprimentos: currentResources.suprimentos - (costs.suprimentos || 0),
-    arcana: currentResources.arcana - (costs.arcana || 0),
-    experiencia: currentResources.experiencia - (costs.experiencia || 0),
-    devocao: currentResources.devocao - (costs.devocao || 0),
+    ore: currentResources.ore - (costs.ore || 0),
+    supplies: currentResources.supplies - (costs.supplies || 0),
+    arcane: currentResources.arcane - (costs.arcane || 0),
+    experience: currentResources.experience - (costs.experience || 0),
+    devotion: currentResources.devotion - (costs.devotion || 0),
   };
 
   // Atualiza no banco
@@ -248,11 +248,11 @@ export async function addResources(
   const currentResources = JSON.parse(player.resources) as PlayerResources;
 
   const newResources: PlayerResources = {
-    minerio: currentResources.minerio + (gains.minerio || 0),
-    suprimentos: currentResources.suprimentos + (gains.suprimentos || 0),
-    arcana: currentResources.arcana + (gains.arcana || 0),
-    experiencia: currentResources.experiencia + (gains.experiencia || 0),
-    devocao: currentResources.devocao + (gains.devocao || 0),
+    ore: currentResources.ore + (gains.ore || 0),
+    supplies: currentResources.supplies + (gains.supplies || 0),
+    arcane: currentResources.arcane + (gains.arcane || 0),
+    experience: currentResources.experience + (gains.experience || 0),
+    devotion: currentResources.devotion + (gains.devotion || 0),
   };
 
   await prisma.matchPlayer.update({

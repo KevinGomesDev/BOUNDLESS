@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
-import { useConnection } from "./hooks/useGame";
-import { useAuth } from "./hooks/useGame";
+import { useConnection } from "./core";
+import { useAuth } from "./features/auth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ReconnectingOverlay } from "./components/ReconnectingOverlay";
 import HomePage from "./pages/HomePage";
 import DashboardPage from "./pages/DashboardPage";
 
 function App() {
   const { connect, isConnected } = useConnection();
-  const {
-    user,
-    isLoading: isAuthLoading,
-    restoreSessionFromStorage,
-  } = useAuth();
+  const { user, isLoading: isAuthLoading, restoreSession } = useAuth();
   const [isRestoring, setIsRestoring] = useState(true);
 
   // Inicializa conexão e restaura sessão
@@ -25,7 +22,7 @@ function App() {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // 3. Tenta restaurar sessão do localStorage
-        await restoreSessionFromStorage();
+        await restoreSession();
       } catch (error) {
         console.error("[App] ❌ Erro ao inicializar:", error);
       } finally {
@@ -34,7 +31,7 @@ function App() {
     };
 
     initApp();
-  }, [connect, restoreSessionFromStorage]);
+  }, [connect, restoreSession]);
 
   // Mostra loading enquanto:
   // - Conectando ao servidor
@@ -62,6 +59,7 @@ function App() {
   // HomePage é pública
   return (
     <>
+      <ReconnectingOverlay />
       {user ? (
         <ProtectedRoute>
           <DashboardPage />

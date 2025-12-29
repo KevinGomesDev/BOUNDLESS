@@ -1,1 +1,177 @@
 @import "tailwindcss";
+
+/* ========================================
+   A CIDADELA DE PEDRA - Tema Medieval
+   ======================================== */
+
+@theme {
+  /* === CORES DA CIDADELA === */
+
+  /* Pedras da Fortaleza */
+  --color-citadel-granite: #4a4a4a;
+  --color-citadel-slate: #1a1a1a;
+  --color-citadel-sandstone: #6b5c4d;
+  --color-citadel-obsidian: #0d0d0d;
+  --color-citadel-weathered: #5a5a5a;
+  --color-citadel-carved: #3d3d3d;
+
+  /* Metais Medievais */
+  --color-metal-iron: #4a4a50;
+  --color-metal-rust: #6b4423;
+  --color-metal-steel: #71797e;
+  --color-metal-bronze: #8b7355;
+  --color-metal-gold: #9c7a3c;
+  --color-metal-copper: #7c4a3a;
+
+  /* Cores de Guerra */
+  --color-war-crimson: #8b1a1a;
+  --color-war-blood: #6b0f0f;
+  --color-war-ember: #c44536;
+  --color-war-fire: #a33c1f;
+
+  /* Pergaminho */
+  --color-parchment-light: #d4c5a9;
+  --color-parchment-aged: #b8a88a;
+  --color-parchment-dark: #8b7d5c;
+
+  /* Tochas */
+  --color-torch-glow: #ff9500;
+  --color-torch-warm: #e8730e;
+  --color-torch-dim: #7a4a15;
+
+  /* Medieval Legacy */
+  --color-medieval-dark: rgb(50, 50, 50);
+  --color-medieval-darker: rgb(30, 30, 30);
+  --color-medieval-blood: #8b0000;
+  --color-medieval-stone: #323232;
+  --color-medieval-iron: #404040;
+
+  /* === FONTES MEDIEVAIS === */
+  --font-stone: "Cinzel", serif;
+  --font-medieval: "Cinzel Decorative", serif;
+  --font-scroll: "Palatino Linotype", "Book Antiqua", serif;
+
+  /* === ANIMAÇÕES === */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-flicker: flicker 2s ease-in-out infinite;
+  --animate-torch-glow: torchGlow 3s ease-in-out infinite;
+  --animate-stone-press: stonePress 0.15s ease-out;
+  --animate-rune-glow: runeGlow 2s ease-in-out infinite;
+  --animate-dust: dust 2s ease-out forwards;
+
+  /* === SOMBRAS === */
+  --shadow-stone-inset: inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.05);
+  --shadow-stone-raised: 0 4px 8px rgba(0, 0, 0, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-forge-glow: 0 0 20px rgba(196, 69, 54, 0.4),
+    0 0 40px rgba(139, 26, 26, 0.2);
+  --shadow-torch: 0 0 30px rgba(255, 149, 0, 0.3),
+    0 0 60px rgba(232, 115, 14, 0.15);
+}
+
+/* === KEYFRAMES === */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes torchGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(255, 149, 0, 0.3),
+      0 0 40px rgba(232, 115, 14, 0.2);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 149, 0, 0.5),
+      0 0 60px rgba(232, 115, 14, 0.3);
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes stonePress {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+  100% {
+    transform: translateY(1px);
+  }
+}
+
+@keyframes runeGlow {
+  0%,
+  100% {
+    text-shadow: 0 0 10px rgba(139, 26, 26, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(139, 26, 26, 0.8),
+      0 0 30px rgba(139, 26, 26, 0.4);
+  }
+}
+
+@keyframes dust {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.5);
+  }
+}
+
+/* === BACKGROUNDS CUSTOMIZADOS === */
+.bg-radial-glow {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(139, 0, 0, 0.15) 0%,
+    transparent 70%
+  );
+}
+
+.bg-stone-texture {
+  background: linear-gradient(
+    135deg,
+    #3d3d3d 0%,
+    #4a4a4a 25%,
+    #3a3a3a 50%,
+    #454545 75%,
+    #3d3d3d 100%
+  );
+}
+
+.bg-torch-light {
+  background: radial-gradient(
+    ellipse at top,
+    rgba(255, 149, 0, 0.15) 0%,
+    transparent 60%
+  );
+}
+
+.bg-metal-sheen {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.2) 100%
+  );
+}

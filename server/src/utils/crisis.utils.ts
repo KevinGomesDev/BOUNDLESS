@@ -137,11 +137,11 @@ export async function processTributePile(
  */
 export function selectRandomTributesResource(): ResourceType {
   const resources: ResourceType[] = [
-    "MINERIO",
-    "COMIDA",
-    "ARCANA",
-    "EXPERIENCIA",
-    "DEVOCAO",
+    "ORE",
+    "FOOD",
+    "ARCANE",
+    "EXPERIENCE",
+    "DEVOTION",
   ];
   return resources[Math.floor(Math.random() * resources.length)];
 }

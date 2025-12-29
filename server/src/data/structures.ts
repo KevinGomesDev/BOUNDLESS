@@ -29,7 +29,7 @@ export const STRUCTURE_DEFINITIONS: Record<string, StructureDefinition> = {
     icon: "Minério.png",
     color: 0x6c757d,
     maxHp: 30,
-    resourceGenerated: "MINERIO",
+    resourceGenerated: "ORE",
     resourceIcon: "Minério.png",
   },
   FARM: {
@@ -38,7 +38,7 @@ export const STRUCTURE_DEFINITIONS: Record<string, StructureDefinition> = {
     icon: "Suprimento.png",
     color: 0x7cb518,
     maxHp: 20,
-    resourceGenerated: "COMIDA",
+    resourceGenerated: "FOOD",
     resourceIcon: "Suprimento.png",
   },
   FORTRESS: {
@@ -55,7 +55,7 @@ export const STRUCTURE_DEFINITIONS: Record<string, StructureDefinition> = {
     icon: "Devocao.png",
     color: 0x9b59b6,
     maxHp: 25,
-    resourceGenerated: "DEVOCAO",
+    resourceGenerated: "DEVOTION",
     resourceIcon: "Devocao.png",
   },
   LIBRARY: {
@@ -64,7 +64,7 @@ export const STRUCTURE_DEFINITIONS: Record<string, StructureDefinition> = {
     icon: "Arcana.png",
     color: 0x3498db,
     maxHp: 20,
-    resourceGenerated: "ARCANA",
+    resourceGenerated: "ARCANE",
     resourceIcon: "Arcana.png",
   },
   ARENA: {
@@ -73,7 +73,7 @@ export const STRUCTURE_DEFINITIONS: Record<string, StructureDefinition> = {
     icon: "Experiencia.png",
     color: 0xe74c3c,
     maxHp: 40,
-    resourceGenerated: "EXPERIENCIA",
+    resourceGenerated: "EXPERIENCE",
     resourceIcon: "Experiencia.png",
   },
 };

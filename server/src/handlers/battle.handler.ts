@@ -1597,10 +1597,10 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         if (!player) return;
 
         const res = JSON.parse(player.resources);
-        if ((res.devocao || 0) < ransomPrice) {
-          return socket.emit("error", { message: "Devoção insuficiente" });
+        if ((res.devotion || 0) < ransomPrice) {
+          return socket.emit("error", { message: "Insufficient devotion" });
         }
-        res.devocao = (res.devocao || 0) - ransomPrice;
+        res.devotion = (res.devotion || 0) - ransomPrice;
         await prisma.matchPlayer.update({
           where: { id: playerId },
           data: { resources: JSON.stringify(res) },
