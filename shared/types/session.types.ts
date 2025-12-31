@@ -47,11 +47,12 @@ export interface ArenaLobbyData {
 
 /**
  * Dados da batalha de arena em memória (Backend)
+ * Campos mínimos necessários para verificação de sessão
  */
 export interface ArenaBattleData {
-  battleId: string;
+  id: string; // battleId
   lobbyId: string;
-  status: ArenaBattleStatus;
+  status: string; // "ACTIVE" | "ENDED"
   round: number;
   currentTurnIndex: number;
   gridWidth: number;
@@ -60,6 +61,17 @@ export interface ArenaBattleData {
   initiativeOrder: string[];
   actionOrder: string[];
   turnTimer: number;
+  // Campos opcionais que podem existir na implementação completa
+  isArena?: boolean;
+  matchId?: string;
+  hostUserId?: string;
+  guestUserId?: string;
+  hostKingdomId?: string;
+  guestKingdomId?: string;
+  logs?: any[];
+  createdAt?: Date;
+  ransomPrice?: number;
+  ransomResource?: string;
 }
 
 // ============================================

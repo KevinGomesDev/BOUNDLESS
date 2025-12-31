@@ -24,6 +24,7 @@ import type {
   UnitAttackedResponse,
   BattleEndedResponse,
   ArenaLobbyStatus,
+  ArenaUnit,
 } from "../types/arena.types";
 
 export const ArenaContext = createContext<ArenaContextType | null>(null);

@@ -31,19 +31,13 @@ import {
 } from "../logic/combat-actions";
 import { determineUnitActions } from "../logic/unit-actions";
 import { ARENA_CONFIG } from "../data/arena-config";
+import type {
+  ArenaLobbyData,
+  ArenaBattleData,
+} from "../../../shared/types/session.types";
 
-// Estrutura para gerenciar lobbies de Arena em memória
-interface BattleLobby {
-  id: string;
-  hostUserId: string;
-  hostSocketId: string;
-  hostKingdomId: string;
-  guestUserId?: string;
-  guestSocketId?: string;
-  guestKingdomId?: string;
-  status: "WAITING" | "READY" | "BATTLING" | "ENDED";
-  createdAt: Date;
-}
+// Usar tipos do shared para consistência
+type BattleLobby = ArenaLobbyData;
 
 interface Battle {
   id: string;
@@ -193,7 +187,7 @@ function startBattleTurnTimer(battle: Battle): void {
   if (!lobby || !ioRef) return;
 
   // Emitir timer inicial
-  ioRef.to(lobby.id).emit("battle:turn_timer", {
+  ioRef.to(lobby.lobbyId).emit("battle:turn_timer", {
     battleId: battle.id,
     timer: battle.turnTimer,
     currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
@@ -211,7 +205,7 @@ function startBattleTurnTimer(battle: Battle): void {
       // Emitir atualização do timer
       const currentLobby = battleLobbies.get(battle.lobbyId);
       if (currentLobby && ioRef) {
-        ioRef.to(currentLobby.id).emit("battle:turn_timer", {
+        ioRef.to(currentLobby.lobbyId).emit("battle:turn_timer", {
           battleId: battle.id,
           timer: battle.turnTimer,
           currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
@@ -310,7 +304,7 @@ async function handleTimerExpired(battle: Battle): Promise<void> {
     currentUnit.hasStartedAction = false;
 
     // Emitir estado atualizado da unidade
-    ioRef.to(lobby.id).emit("battle:unit_turn_ended", {
+    ioRef.to(lobby.lobbyId).emit("battle:unit_turn_ended", {
       battleId: battle.id,
       unitId: currentUnit.id,
       actionMarks: currentUnit.actionMarks,
@@ -327,7 +321,7 @@ async function handleTimerExpired(battle: Battle): Promise<void> {
   }
 
   // Emitir mudança de turno
-  ioRef.to(lobby.id).emit("battle:next_player", {
+  ioRef.to(lobby.lobbyId).emit("battle:next_player", {
     battleId: battle.id,
     currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
     index: battle.currentTurnIndex,
@@ -352,7 +346,7 @@ async function handleTimerExpired(battle: Battle): Promise<void> {
         u.actionMarks = 0;
       }
     }
-    ioRef.to(lobby.id).emit("battle:new_round", {
+    ioRef.to(lobby.lobbyId).emit("battle:new_round", {
       battleId: battle.id,
       round: battle.round,
     });
@@ -456,6 +450,116 @@ async function saveBattleToDB(battle: Battle): Promise<void> {
     console.log(`[ARENA] Batalha ${battle.id} salva no banco`);
   } catch (err) {
     console.error("[ARENA] Erro ao salvar batalha no banco:", err);
+  }
+}
+
+/**
+ * Salva um lobby de Arena no banco de dados
+ */
+async function saveLobbyToDB(lobby: BattleLobby): Promise<void> {
+  try {
+    // Buscar nomes do host
+    const hostKingdom = await prisma.kingdom.findUnique({
+      where: { id: lobby.hostKingdomId },
+      include: { owner: true },
+    });
+
+    // Buscar nomes do guest (se existir)
+    let guestKingdom = null;
+    if (lobby.guestKingdomId) {
+      guestKingdom = await prisma.kingdom.findUnique({
+        where: { id: lobby.guestKingdomId },
+        include: { owner: true },
+      });
+    }
+
+    await prisma.arenaLobby.upsert({
+      where: { id: lobby.lobbyId },
+      update: {
+        hostSocketId: lobby.hostSocketId,
+        guestUserId: lobby.guestUserId,
+        guestSocketId: lobby.guestSocketId || null,
+        guestKingdomId: lobby.guestKingdomId,
+        guestUsername: guestKingdom?.owner?.username,
+        guestKingdomName: guestKingdom?.name,
+        status: lobby.status,
+        updatedAt: new Date(),
+      },
+      create: {
+        id: lobby.lobbyId,
+        hostUserId: lobby.hostUserId,
+        hostSocketId: lobby.hostSocketId,
+        hostKingdomId: lobby.hostKingdomId,
+        hostUsername: hostKingdom?.owner?.username || "",
+        hostKingdomName: hostKingdom?.name || "",
+        guestUserId: lobby.guestUserId,
+        guestSocketId: lobby.guestSocketId,
+        guestKingdomId: lobby.guestKingdomId,
+        guestUsername: guestKingdom?.owner?.username,
+        guestKingdomName: guestKingdom?.name,
+        status: lobby.status,
+        createdAt: lobby.createdAt,
+      },
+    });
+    console.log(`[ARENA] Lobby ${lobby.lobbyId} salvo no banco`);
+  } catch (err) {
+    console.error("[ARENA] Erro ao salvar lobby no banco:", err);
+  }
+}
+
+/**
+ * Deleta um lobby de Arena do banco de dados
+ */
+async function deleteLobbyFromDB(lobbyId: string): Promise<void> {
+  try {
+    await prisma.arenaLobby.delete({
+      where: { id: lobbyId },
+    });
+    console.log(`[ARENA] Lobby ${lobbyId} deletado do banco`);
+  } catch (err) {
+    // Ignorar se não existir
+    if ((err as any).code !== "P2025") {
+      console.error("[ARENA] Erro ao deletar lobby do banco:", err);
+    }
+  }
+}
+
+/**
+ * Carrega lobbies ativos do banco de dados (para recuperação após restart)
+ */
+async function loadLobbiesFromDB(): Promise<void> {
+  try {
+    const dbLobbies = await prisma.arenaLobby.findMany({
+      where: {
+        status: { in: ["WAITING", "READY", "BATTLING"] },
+      },
+    });
+
+    for (const dbLobby of dbLobbies) {
+      const lobby: BattleLobby = {
+        lobbyId: dbLobby.id,
+        hostUserId: dbLobby.hostUserId,
+        hostSocketId: dbLobby.hostSocketId,
+        hostKingdomId: dbLobby.hostKingdomId,
+        guestUserId: dbLobby.guestUserId || undefined,
+        guestSocketId: dbLobby.guestSocketId || undefined,
+        guestKingdomId: dbLobby.guestKingdomId || undefined,
+        status: dbLobby.status as "WAITING" | "READY" | "BATTLING" | "ENDED",
+        createdAt: dbLobby.createdAt,
+      };
+
+      battleLobbies.set(lobby.lobbyId, lobby);
+
+      // Mapear usuários para o lobby
+      userToLobby.set(lobby.hostUserId, lobby.lobbyId);
+      if (lobby.guestUserId) {
+        userToLobby.set(lobby.guestUserId, lobby.lobbyId);
+      }
+    }
+
+    console.log(`[ARENA] ${dbLobbies.length} lobbies carregados do banco`);
+  } catch (err) {
+    console.error("[ARENA] Erro ao carregar lobbies do banco:", err);
   }
 }
 
@@ -601,7 +705,7 @@ async function loadBattlesFromDB(): Promise<void> {
         // Criar lobby se não existir
         if (!battleLobbies.has(lobbyId)) {
           const lobby: BattleLobby = {
-            id: lobbyId,
+            lobbyId: lobbyId,
             hostUserId: battle.hostUserId,
             hostSocketId: "", // Será atualizado quando reconectar
             hostKingdomId: battle.hostKingdomId,
@@ -689,7 +793,10 @@ async function cleanupDuplicateBattles(): Promise<void> {
 }
 
 // Limpar batalhas duplicadas e carregar ao inicializar
-cleanupDuplicateBattles().then(() => loadBattlesFromDB());
+cleanupDuplicateBattles().then(() => {
+  loadLobbiesFromDB();
+  loadBattlesFromDB();
+});
 
 function generateUnitId(): string {
   return `bunit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -747,7 +854,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       const lobbyId = generateId();
       const lobby: BattleLobby = {
-        id: lobbyId,
+        lobbyId: lobbyId,
         hostUserId: userId,
         hostSocketId: socket.id,
         hostKingdomId: kingdomId,
@@ -758,6 +865,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       battleLobbies.set(lobbyId, lobby);
       userToLobby.set(userId, lobbyId);
       socketToUser.set(socket.id, userId);
+
+      // Persistir lobby no banco
+      await saveLobbyToDB(lobby);
 
       socket.join(lobbyId);
 
@@ -895,6 +1005,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         status: "READY",
       });
 
+      // Persistir lobby atualizado no banco
+      await saveLobbyToDB(lobby);
+
       console.log(`[ARENA] ${guestUser?.username} entrou no lobby ${lobbyId}`);
     } catch (err) {
       console.error("[ARENA] join_lobby error:", err);
@@ -932,6 +1045,8 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           });
         }
         battleLobbies.delete(lobbyId);
+        // Deletar lobby do banco
+        await deleteLobbyFromDB(lobbyId);
         console.log(`[ARENA] Lobby ${lobbyId} fechado (host saiu)`);
       } else {
         // Guest saiu
@@ -945,6 +1060,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           userId: userId,
           status: "WAITING",
         });
+
+        // Atualizar lobby no banco
+        await saveLobbyToDB(lobby);
       }
     } catch (err) {
       console.error("[ARENA] leave_lobby error:", err);
@@ -1062,8 +1180,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       activeBattles.set(battleId, battle);
       lobby.status = "BATTLING";
 
-      // Persistir batalha no banco
+      // Persistir batalha e lobby no banco
       await saveBattleToDB(battle);
+      await saveLobbyToDB(lobby);
 
       io.to(lobbyId).emit("battle:battle_started", {
         battleId,
@@ -1260,7 +1379,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       const lobby = battleLobbies.get(battle.lobbyId);
       if (lobby) {
         // Emitir estado atualizado da unidade que finalizou
-        io.to(lobby.id).emit("battle:unit_turn_ended", {
+        io.to(lobby.lobbyId).emit("battle:unit_turn_ended", {
           battleId,
           unitId,
           actionMarks: unit.actionMarks,
@@ -1270,14 +1389,14 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         });
 
         // Emitir mudança de turno
-        io.to(lobby.id).emit("battle:next_player", {
+        io.to(lobby.lobbyId).emit("battle:next_player", {
           battleId,
           currentPlayerId: newPlayerId,
           index: battle.currentTurnIndex,
         });
 
         console.log(
-          `[ARENA] Evento battle:next_player emitido para lobby ${lobby.id}`
+          `[ARENA] Evento battle:next_player emitido para lobby ${lobby.lobbyId}`
         );
       } else {
         console.error(`[ARENA] Lobby não encontrado para batalha ${battleId}`);
@@ -1303,7 +1422,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           }
         }
         if (lobby) {
-          io.to(lobby.id).emit("battle:new_round", {
+          io.to(lobby.lobbyId).emit("battle:new_round", {
             battleId,
             round: battle.round,
           });
@@ -1360,7 +1479,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       const lobby = battleLobbies.get(battle.lobbyId);
       if (lobby) {
-        io.to(lobby.id).emit("battle:unit_moved", {
+        io.to(lobby.lobbyId).emit("battle:unit_moved", {
           battleId,
           unitId,
           fromX: result.fromX,
@@ -1432,7 +1551,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
         const lobby = battleLobbies.get(battle.lobbyId);
         if (lobby) {
-          io.to(lobby.id).emit("battle:unit_attacked", {
+          io.to(lobby.lobbyId).emit("battle:unit_attacked", {
             battleId,
             attackerUnitId,
             targetUnitId,
@@ -1446,7 +1565,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           });
 
           if (result.targetDefeated) {
-            io.to(lobby.id).emit("battle:unit_defeated", {
+            io.to(lobby.lobbyId).emit("battle:unit_defeated", {
               battleId,
               unitId: target.id,
             });
@@ -1468,7 +1587,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
                 (u) => u.ownerId === winnerId
               )?.ownerKingdomId;
 
-              io.to(lobby.id).emit("battle:battle_ended", {
+              io.to(lobby.lobbyId).emit("battle:battle_ended", {
                 battleId,
                 winnerId,
                 winnerKingdomId: winnerKingdom,
@@ -1492,6 +1611,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
               // Limpa lobby e deleta batalha do banco
               lobby.status = "ENDED";
               await deleteBattleFromDB(battleId);
+              await deleteLobbyFromDB(lobby.lobbyId);
               console.log(
                 `[ARENA] Batalha ${battleId} finalizada. Vencedor: ${winnerId}`
               );
@@ -1538,7 +1658,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       const lobby = battleLobbies.get(battle.lobbyId);
       if (lobby) {
-        io.to(lobby.id).emit("battle:unit_dashed", {
+        io.to(lobby.lobbyId).emit("battle:unit_dashed", {
           battleId,
           unitId,
           movesLeft: result.newMovesLeft,
@@ -1581,7 +1701,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       const lobby = battleLobbies.get(battle.lobbyId);
       if (lobby) {
-        io.to(lobby.id).emit("battle:unit_dodged", {
+        io.to(lobby.lobbyId).emit("battle:unit_dodged", {
           battleId,
           unitId,
           actionsLeft: unit.actionsLeft,
@@ -1648,11 +1768,14 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         userToLobby.delete(lobby.guestUserId);
       }
 
+      // Deletar lobby do banco
+      await deleteLobbyFromDB(lobby.lobbyId);
+
       const winnerKingdom = battle.units.find(
         (u) => u.ownerId === winnerId
       )?.ownerKingdomId;
 
-      io.to(lobby.id).emit("battle:battle_ended", {
+      io.to(lobby.lobbyId).emit("battle:battle_ended", {
         battleId,
         winnerId,
         winnerKingdomId: winnerKingdom,
@@ -1711,6 +1834,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       if (lobby.guestUserId) {
         userToLobby.delete(lobby.guestUserId);
       }
+
+      // Deletar lobby do banco
+      await deleteLobbyFromDB(lobby.lobbyId);
 
       // Notificar todos na sala
       io.to(battle.lobbyId).emit("battle:battle_ended", {
@@ -1909,6 +2035,10 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
           activeBattles.set(battleId, newBattle);
           lobby.status = "BATTLING";
+
+          // Persistir batalha e lobby no banco
+          await saveBattleToDB(newBattle);
+          await saveLobbyToDB(lobby);
 
           // Emitir evento de revanche iniciada
           io.to(lobbyId).emit("battle:rematch_started", {
