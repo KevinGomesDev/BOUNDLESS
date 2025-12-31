@@ -1,74 +1,32 @@
-export interface ConditionEffects {
-  // === BLOQUEIOS DE AÇÕES ===
-  blockMove?: boolean;
-  blockAttack?: boolean;
-  blockDash?: boolean;
-  blockDodge?: boolean;
-  blockAllActions?: boolean;
+// src/logic/conditions.ts
+// FONTE DE VERDADE para todas as definições de condições do jogo
 
-  // === MODIFICADORES DE CHANCE ===
-  dodgeChance?: number; // % chance de esquivar ataques
-  critChance?: number; // % chance de crítico
-  missChance?: number; // % chance de errar ataques
+import type {
+  ConditionEffects,
+  ConditionDefinition,
+  ConditionExpiry,
+  ConditionInfo,
+} from "../../../shared/types/conditions.types";
 
-  // === MODIFICADORES DE DANO ===
-  damageReduction?: number; // Redução de dano recebido (flat)
-  damageReductionPercent?: number; // Redução de dano recebido (%)
-  bonusDamage?: number; // Dano extra causado (flat)
-  bonusDamagePercent?: number; // Dano extra causado (%)
+// Re-exportar tipos para uso em outros arquivos do server
+export type {
+  ConditionEffects,
+  ConditionDefinition,
+  ConditionExpiry,
+  ConditionInfo,
+};
 
-  // === MODIFICADORES DE ATRIBUTOS ===
-  combatMod?: number; // Modifica Combat
-  acuityMod?: number; // Modifica Acuity
-  focusMod?: number; // Modifica Focus
-  armorMod?: number; // Modifica Armor
-  vitalityMod?: number; // Modifica Vitality
+// Alias para manter compatibilidade com código existente
+export type ConditionEffect = ConditionDefinition;
 
-  // === MODIFICADORES DE STATS DERIVADOS ===
-  movementMod?: number; // Modifica movimento total (flat)
-  movementReduction?: number; // Reduz movimento (flat)
-  movementMultiplier?: number; // Multiplica movimento (0.5 = metade)
-  maxHpMod?: number; // Modifica HP máximo
-  currentHpMod?: number; // Modifica HP atual (cura/dano direto)
-  protectionMod?: number; // Modifica proteção atual
-  actionsMod?: number; // Modifica ações por turno
-
-  // === EFEITOS DE TURNO ===
-  damagePerTurn?: number; // Dano no início do turno (burning, poison)
-  healPerTurn?: number; // Cura no início do turno (regeneration)
-
-  // === EFEITOS ESPECIAIS ===
-  immuneToConditions?: string[]; // Imune a certas condições
-  reflectDamagePercent?: number; // Reflete % do dano recebido
-  lifeStealPercent?: number; // % do dano causado vira cura
-  taunt?: boolean; // Força inimigos a atacar esta unidade
-  invisible?: boolean; // Não pode ser alvo de ataques
-  flying?: boolean; // Ignora terreno difícil
-  phasing?: boolean; // Pode atravessar unidades
-}
-
-export interface ConditionEffect {
-  id: string;
-  name: string;
-  description: string;
-  expiry:
-    | "end_of_turn"
-    | "next_turn"
-    | "on_action"
-    | "on_damage"
-    | "manual"
-    | "permanent";
-  stackable?: boolean; // Pode acumular múltiplas vezes
-  maxStacks?: number; // Máximo de stacks se stackable
-  effects: ConditionEffects;
-}
-
-export const CONDITIONS: Record<string, ConditionEffect> = {
+export const CONDITIONS: Record<string, ConditionDefinition> = {
   GRAPPLED: {
     id: "GRAPPLED",
     name: "Grappled",
     description: "Unit cannot move while grappled",
     expiry: "manual",
+    icon: "🤼",
+    color: "#845ef7",
     effects: {
       blockMove: true,
       blockDash: true,
@@ -81,6 +39,8 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     description:
       "Unit is in defensive stance. Attacks have 50% chance to miss.",
     expiry: "next_turn",
+    icon: "🌀",
+    color: "#60a5fa",
     effects: {
       dodgeChance: 50,
     },
@@ -91,6 +51,8 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     name: "Protected",
     description: "Next damage received is reduced by 5",
     expiry: "on_action",
+    icon: "🛡️",
+    color: "#60a5fa",
     effects: {
       damageReduction: 5,
     },
@@ -101,6 +63,8 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     name: "Stunned",
     description: "Unit has reduced movement",
     expiry: "end_of_turn",
+    icon: "💫",
+    color: "#ffd43b",
     effects: {
       movementReduction: 2,
     },
@@ -111,6 +75,8 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     name: "Frozen",
     description: "Unit cannot perform any actions",
     expiry: "end_of_turn",
+    icon: "❄️",
+    color: "#74c0fc",
     effects: {
       blockMove: true,
       blockAttack: true,
@@ -124,6 +90,8 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     name: "Burning",
     description: "Unit takes damage at the start of its turn",
     expiry: "end_of_turn",
+    icon: "🔥",
+    color: "#ff6b35",
     effects: {
       damagePerTurn: 3,
     },
@@ -134,11 +102,55 @@ export const CONDITIONS: Record<string, ConditionEffect> = {
     name: "Slowed",
     description: "Unit movement is halved",
     expiry: "end_of_turn",
+    icon: "🐌",
+    color: "#6b7280",
     effects: {
       movementMultiplier: 0.5,
     },
   },
 };
+
+// Helper para obter mapa de cores das condições (usado pelo arena-config)
+export function getConditionColorsMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const [key, value] of Object.entries(CONDITIONS)) {
+    if (value.color) {
+      map[key] = value.color;
+    }
+  }
+  return map;
+}
+
+/**
+ * Gera as informações visuais de todas as condições para o frontend
+ * Esta é a ÚNICA fonte de verdade para informações de condições
+ */
+export function getConditionsInfo(): Record<string, ConditionInfo> {
+  const info: Record<string, ConditionInfo> = {};
+  for (const [key, value] of Object.entries(CONDITIONS)) {
+    info[key] = {
+      icon: value.icon || "❓",
+      name: value.name,
+      description: value.description,
+      color: value.color || "#6b7280",
+    };
+  }
+  return info;
+}
+
+/**
+ * Obtém informação de uma condição específica
+ */
+export function getConditionInfo(conditionId: string): ConditionInfo | null {
+  const cond = CONDITIONS[conditionId];
+  if (!cond) return null;
+  return {
+    icon: cond.icon || "❓",
+    name: cond.name,
+    description: cond.description,
+    color: cond.color || "#6b7280",
+  };
+}
 
 export interface ConditionModifiers {
   // Chances

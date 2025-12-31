@@ -8,25 +8,41 @@ import {
   canJoinNewSession,
   setArenaRefs,
 } from "../utils/session.utils";
+import { resumeBattleTimer } from "./battle.handler";
+import { ARENA_CONFIG } from "../data/arena-config";
+import type {
+  ArenaLobbyData,
+  ArenaBattleData,
+} from "../../../shared/types/session.types";
+
+// ============================================
+// Types para os Maps em memória
+// ============================================
+
+type ArenaLobbiesMap = Map<string, ArenaLobbyData>;
+type ArenaBattlesMap = Map<string, ArenaBattleData>;
+type UserToLobbyMap = Map<string, string>;
+type DisconnectedPlayersMap = Map<string, string>;
+type SocketToUserMap = Map<string, string>;
 
 // Referências dos mapas de arena serão injetadas pelo arena.handler
-let arenaLobbiesRef: Map<string, any> | null = null;
-let arenaBattlesRef: Map<string, any> | null = null;
-let userToLobbyRef: Map<string, string> | null = null;
-let disconnectedPlayersRef: Map<string, string> | null = null;
-let socketToUserRef: Map<string, string> | null = null;
+let arenaLobbiesRef: ArenaLobbiesMap | null = null;
+let arenaBattlesRef: ArenaBattlesMap | null = null;
+let userToLobbyRef: UserToLobbyMap | null = null;
+let disconnectedPlayersRef: DisconnectedPlayersMap | null = null;
+let socketToUserRef: SocketToUserMap | null = null;
 
 /**
  * Injeta as referências dos mapas de arena no session handler
- * Chamado pelo arena.handler.ts ao inicializar
+ * Chamado pelo server.ts ao inicializar
  */
 export function injectArenaRefs(
-  lobbies: Map<string, any>,
-  battles: Map<string, any>,
-  userToLobby: Map<string, string>,
-  disconnectedPlayers?: Map<string, string>,
-  socketToUser?: Map<string, string>
-) {
+  lobbies: ArenaLobbiesMap,
+  battles: ArenaBattlesMap,
+  userToLobby: UserToLobbyMap,
+  disconnectedPlayers?: DisconnectedPlayersMap,
+  socketToUser?: SocketToUserMap
+): void {
   arenaLobbiesRef = lobbies;
   arenaBattlesRef = battles;
   userToLobbyRef = userToLobby;
@@ -36,7 +52,7 @@ export function injectArenaRefs(
   setArenaRefs(lobbies, battles, userToLobby);
 }
 
-export const registerSessionHandlers = (io: Server, socket: Socket) => {
+export const registerSessionHandlers = (io: Server, socket: Socket): void => {
   /**
    * Verifica se o usuário tem uma sessão ativa e retorna os dados para retomar
    * Deve ser chamado pelo frontend logo após autenticação
@@ -121,7 +137,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         const player = match.players.find((p) => p.userId === userId);
 
         socket.emit("session:active", {
-          type: "match",
+          type: "MATCH",
           matchId: session.matchId,
           matchStatus: match.status,
           currentRound: match.currentRound,
@@ -193,7 +209,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         });
 
         socket.emit("session:active", {
-          type: "arena_lobby",
+          type: "ARENA_LOBBY",
           lobbyId: session.lobbyId,
           lobbyStatus: lobby.status,
           isHost,
@@ -247,11 +263,12 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         socket.emit("battle:battle_restored", {
           battleId: session.battleId,
           lobbyId: session.lobbyId,
-          grid: { width: battle.gridWidth, height: battle.gridHeight },
+          config: ARENA_CONFIG, // Configuração visual completa
           round: battle.round,
           status: battle.status,
           currentTurnIndex: battle.currentTurnIndex,
           currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
+          turnTimer: battle.turnTimer, // Timer atual da batalha
           units: battle.units,
           initiativeOrder: battle.initiativeOrder,
           actionOrder: battle.actionOrder,
@@ -272,7 +289,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         });
 
         socket.emit("session:active", {
-          type: "arena_battle",
+          type: "ARENA_BATTLE",
           battleId: session.battleId,
           lobbyId: session.lobbyId,
           battleStatus: battle.status,
@@ -284,6 +301,11 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           gridWidth: battle.gridWidth,
           gridHeight: battle.gridHeight,
         });
+
+        // Retomar timer da batalha se estava pausado (após toda config da sessão)
+        if (wasDisconnected) {
+          resumeBattleTimer(session.battleId!);
+        }
 
         console.log(
           `[SESSION] Usuário ${userId} retomou batalha de Arena ${session.battleId}`

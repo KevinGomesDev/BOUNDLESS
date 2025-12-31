@@ -4,7 +4,7 @@ import { useAuth } from "../features/auth";
 import { useMatch } from "../features/match";
 import { useArena } from "../features/arena";
 import { KingdomList } from "../components/Dashboard/KingdomList";
-import { GameStateDebug } from "../components/Dashboard/GameStateDebug";
+import { Ranking } from "../components/Dashboard/Ranking";
 import { MatchList, MatchLobby } from "../features/match";
 import { ArenaList, ArenaLobbyView, ArenaBattleView } from "../features/arena";
 import { SessionGuard } from "../components/SessionGuard";
@@ -197,19 +197,8 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Debug (colapsável) */}
-              <details className="group">
-                <summary className="cursor-pointer list-none">
-                  <div className="relative bg-gradient-to-b from-citadel-carved to-citadel-slate border-2 border-metal-iron/50 rounded-lg px-4 py-2 shadow-stone-inset hover:border-metal-iron transition-colors">
-                    <span className="text-parchment-dark text-sm tracking-wide">
-                      📜 Pergaminhos de Debug
-                    </span>
-                  </div>
-                </summary>
-                <div className="mt-2 relative bg-gradient-to-b from-citadel-slate to-citadel-obsidian border-2 border-metal-iron/30 rounded-xl p-4">
-                  <GameStateDebug />
-                </div>
-              </details>
+              {/* Ranking de Vitórias */}
+              <Ranking />
             </div>
           )}
 

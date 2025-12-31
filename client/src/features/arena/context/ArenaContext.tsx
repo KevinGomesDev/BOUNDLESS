@@ -8,12 +8,14 @@ import React, {
 } from "react";
 import { socketService } from "../../../services/socket.service";
 import { useAuth } from "../../auth";
+import { useSession } from "../../../core";
+import { arenaReducer, initialArenaState } from "./arenaReducer";
+import { arenaLog, battleLog, lobbyLog } from "../utils";
 import type {
-  ArenaState,
-  ArenaAction,
   ArenaContextType,
   ArenaLobby,
   ArenaBattle,
+  ArenaConfig,
   LobbyCreatedResponse,
   LobbiesListResponse,
   PlayerJoinedResponse,
@@ -24,73 +26,6 @@ import type {
   ArenaLobbyStatus,
 } from "../types/arena.types";
 
-const initialState: ArenaState = {
-  lobbies: [],
-  currentLobby: null,
-  battle: null,
-  battleResult: null,
-  units: [],
-  logs: [],
-  isHost: false,
-  isLoading: false,
-  error: null,
-  rematchPending: false,
-  opponentWantsRematch: false,
-};
-
-function arenaReducer(state: ArenaState, action: ArenaAction): ArenaState {
-  switch (action.type) {
-    case "SET_LOBBIES":
-      return { ...state, lobbies: action.payload };
-    case "SET_CURRENT_LOBBY":
-      return { ...state, currentLobby: action.payload };
-    case "UPDATE_LOBBY_STATUS":
-      return {
-        ...state,
-        currentLobby:
-          state.currentLobby?.lobbyId === action.payload.lobbyId
-            ? { ...state.currentLobby, status: action.payload.status }
-            : state.currentLobby,
-        lobbies: state.lobbies.map((l) =>
-          l.lobbyId === action.payload.lobbyId
-            ? { ...l, status: action.payload.status }
-            : l
-        ),
-      };
-    case "SET_BATTLE":
-      return { ...state, battle: action.payload };
-    case "SET_BATTLE_RESULT":
-      return { ...state, battleResult: action.payload };
-    case "SET_UNITS":
-      return { ...state, units: action.payload };
-    case "UPDATE_UNIT":
-      return {
-        ...state,
-        units: state.units.map((u) =>
-          u.id === action.payload.id ? { ...u, ...action.payload } : u
-        ),
-      };
-    case "ADD_LOG":
-      return { ...state, logs: [...state.logs.slice(-19), action.payload] };
-    case "SET_LOGS":
-      return { ...state, logs: action.payload };
-    case "SET_IS_HOST":
-      return { ...state, isHost: action.payload };
-    case "SET_LOADING":
-      return { ...state, isLoading: action.payload };
-    case "SET_ERROR":
-      return { ...state, error: action.payload };
-    case "SET_REMATCH_PENDING":
-      return { ...state, rematchPending: action.payload };
-    case "SET_OPPONENT_WANTS_REMATCH":
-      return { ...state, opponentWantsRematch: action.payload };
-    case "RESET":
-      return initialState;
-    default:
-      return state;
-  }
-}
-
 export const ArenaContext = createContext<ArenaContextType | null>(null);
 
 interface ArenaProviderProps {
@@ -98,8 +33,9 @@ interface ArenaProviderProps {
 }
 
 export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
-  const [state, dispatch] = useReducer(arenaReducer, initialState);
+  const [state, dispatch] = useReducer(arenaReducer, initialArenaState);
   const { user } = useAuth();
+  const { clearSession } = useSession();
 
   // Ref para acessar valores atuais nos handlers sem causar re-render do useEffect
   // IMPORTANTE: Atualizar sincronamente durante render, NÃO em useEffect!
@@ -110,23 +46,15 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!user) return;
 
-    console.log(
-      "%c[Arena] 🎮 Inicializando Arena Provider",
-      "color: #f59e0b; font-weight: bold;",
-      { userId: user.id }
-    );
+    arenaLog("🎮", "Inicializando Arena Provider", { userId: user.id });
 
     const handleLobbyCreated = (data: LobbyCreatedResponse) => {
-      console.log(
-        "%c[Arena] ✅ LOBBY CRIADO",
-        "color: #22c55e; font-weight: bold; font-size: 12px;",
-        {
-          lobbyId: data.lobbyId,
-          hostUserId: data.hostUserId,
-          hostKingdomName: data.hostKingdomName,
-          status: data.status,
-        }
-      );
+      lobbyLog("✅", "LOBBY CRIADO", {
+        lobbyId: data.lobbyId,
+        hostUserId: data.hostUserId,
+        hostKingdomName: data.hostKingdomName,
+        status: data.status,
+      });
       const lobby: ArenaLobby = {
         lobbyId: data.lobbyId,
         hostUserId: data.hostUserId,
@@ -140,32 +68,24 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleLobbiesList = (data: LobbiesListResponse) => {
-      console.log(
-        "%c[Arena] 📋 LISTA DE LOBBIES",
-        "color: #3b82f6; font-weight: bold;",
-        {
-          count: data.lobbies.length,
-          lobbies: data.lobbies.map((l) => ({
-            id: l.lobbyId,
-            host: l.hostUsername,
-            status: l.status,
-          })),
-        }
-      );
+      lobbyLog("📋", "LISTA DE LOBBIES", {
+        count: data.lobbies.length,
+        lobbies: data.lobbies.map((l) => ({
+          id: l.lobbyId,
+          host: l.hostUsername,
+          status: l.status,
+        })),
+      });
       dispatch({ type: "SET_LOBBIES", payload: data.lobbies });
     };
 
     const handlePlayerJoined = (data: PlayerJoinedResponse) => {
-      console.log(
-        "%c[Arena] 👤 JOGADOR ENTROU NO LOBBY",
-        "color: #8b5cf6; font-weight: bold;",
-        {
-          guestUserId: data.guestUserId,
-          guestUsername: data.guestUsername,
-          guestKingdomName: data.guestKingdomName,
-          status: data.status,
-        }
-      );
+      lobbyLog("👤", "JOGADOR ENTROU NO LOBBY", {
+        guestUserId: data.guestUserId,
+        guestUsername: data.guestUsername,
+        guestKingdomName: data.guestKingdomName,
+        status: data.status,
+      });
       // Só atualiza se já estiver em um lobby (para o host)
       // O guest recebe arena:lobby_joined separadamente
       if (stateRef.current.currentLobby) {
@@ -183,28 +103,20 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleLobbyJoined = (data: ArenaLobby) => {
-      console.log(
-        "%c[Arena] 🚪 ENTROU NO LOBBY",
-        "color: #22c55e; font-weight: bold;",
-        {
-          lobbyId: data.lobbyId,
-          hostUsername: data.hostUsername,
-          hostKingdomName: data.hostKingdomName,
-        }
-      );
+      lobbyLog("🚪", "ENTROU NO LOBBY", {
+        lobbyId: data.lobbyId,
+        hostUsername: data.hostUsername,
+        hostKingdomName: data.hostKingdomName,
+      });
       dispatch({ type: "SET_CURRENT_LOBBY", payload: data });
       dispatch({ type: "SET_IS_HOST", payload: false });
     };
 
     const handleLobbyClosed = (data: { lobbyId: string; reason: string }) => {
-      console.log(
-        "%c[Arena] 🚫 LOBBY FECHADO",
-        "color: #ef4444; font-weight: bold;",
-        {
-          lobbyId: data.lobbyId,
-          reason: data.reason,
-        }
-      );
+      lobbyLog("🚫", "LOBBY FECHADO", {
+        lobbyId: data.lobbyId,
+        reason: data.reason,
+      });
       dispatch({ type: "SET_CURRENT_LOBBY", payload: null });
       dispatch({ type: "SET_IS_HOST", payload: false });
       dispatch({ type: "SET_ERROR", payload: data.reason });
@@ -215,15 +127,11 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       userId: string;
       status: ArenaLobbyStatus;
     }) => {
-      console.log(
-        "%c[Arena] 🚶 JOGADOR SAIU DO LOBBY",
-        "color: #f59e0b; font-weight: bold;",
-        {
-          lobbyId: data.lobbyId,
-          userId: data.userId,
-          status: data.status,
-        }
-      );
+      lobbyLog("🚶", "JOGADOR SAIU DO LOBBY", {
+        lobbyId: data.lobbyId,
+        userId: data.userId,
+        status: data.status,
+      });
       if (stateRef.current.currentLobby?.lobbyId === data.lobbyId) {
         dispatch({
           type: "SET_CURRENT_LOBBY",
@@ -239,22 +147,18 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleBattleStarted = (data: BattleStartedResponse) => {
-      console.log(
-        "%c[Arena] ⚔️ BATALHA INICIADA!",
-        "color: #ef4444; font-weight: bold; font-size: 14px;",
-        {
-          battleId: data.battleId,
-          gridSize: `${data.grid.width}x${data.grid.height}`,
-          unitsCount: data.units.length,
-          hostKingdom: data.hostKingdom.name,
-          guestKingdom: data.guestKingdom.name,
-          initiativeOrder: data.initiativeOrder,
-          actionOrder: data.actionOrder,
-        }
-      );
-      console.log(
-        "%c[Arena] 🎯 Unidades na batalha:",
-        "color: #8b5cf6;",
+      battleLog("⚔️", "BATALHA INICIADA!", {
+        battleId: data.battleId,
+        gridSize: `${data.config.grid.width}x${data.config.grid.height}`,
+        unitsCount: data.units.length,
+        hostKingdom: data.hostKingdom.name,
+        guestKingdom: data.guestKingdom.name,
+        initiativeOrder: data.initiativeOrder,
+        actionOrder: data.actionOrder,
+      });
+      battleLog(
+        "🎯",
+        "Unidades na batalha",
         data.units.map((u) => ({
           id: u.id,
           name: u.name,
@@ -265,7 +169,8 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       );
       const battle: ArenaBattle = {
         battleId: data.battleId,
-        grid: data.grid,
+        lobbyId: data.lobbyId, // Salvar lobbyId para revanche
+        config: data.config, // Configuração visual completa do servidor
         round: 1,
         status: "ACTIVE",
         currentTurnIndex: 0,
@@ -275,6 +180,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         units: data.units,
         hostKingdom: data.hostKingdom,
         guestKingdom: data.guestKingdom,
+        turnTimer: 30, // Timer inicial (será sincronizado pelo servidor)
       };
       dispatch({ type: "SET_BATTLE", payload: battle });
       dispatch({ type: "SET_UNITS", payload: data.units });
@@ -286,16 +192,12 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       movesLeft: number;
       actionsLeft: number;
     }) => {
-      console.log(
-        "%c[Arena] 🎬 AÇÃO INICIADA",
-        "color: #10b981; font-weight: bold;",
-        {
-          battleId: data.battleId,
-          unitId: data.unitId,
-          movesLeft: data.movesLeft,
-          actionsLeft: data.actionsLeft,
-        }
-      );
+      battleLog("🎬", "AÇÃO INICIADA", {
+        battleId: data.battleId,
+        unitId: data.unitId,
+        movesLeft: data.movesLeft,
+        actionsLeft: data.actionsLeft,
+      });
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -308,16 +210,12 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleUnitMoved = (data: UnitMovedResponse) => {
-      console.log(
-        "%c[Arena] 🚶 UNIDADE MOVEU",
-        "color: #06b6d4; font-weight: bold;",
-        {
-          unitId: data.unitId,
-          from: `(${data.fromX}, ${data.fromY})`,
-          to: `(${data.toX}, ${data.toY})`,
-          movesLeft: data.movesLeft,
-        }
-      );
+      battleLog("🚶", "UNIDADE MOVEU", {
+        unitId: data.unitId,
+        from: `(${data.fromX}, ${data.fromY})`,
+        to: `(${data.toX}, ${data.toY})`,
+        movesLeft: data.movesLeft,
+      });
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -330,21 +228,17 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleUnitAttacked = (data: UnitAttackedResponse) => {
-      console.log(
-        "%c[Arena] ⚔️ ATAQUE!",
-        "color: #dc2626; font-weight: bold; font-size: 12px;",
-        {
-          attackerUnitId: data.attackerUnitId,
-          targetUnitId: data.targetUnitId,
-          damage: data.damage,
-          targetHpAfter: data.targetHpAfter,
-          targetProtection: data.targetProtection,
-          damageType: data.damageType,
-          rolls: data.rolls,
-          diceCount: data.diceCount,
-          attackerActionsLeft: data.attackerActionsLeft,
-        }
-      );
+      battleLog("⚔️", "ATAQUE!", {
+        attackerUnitId: data.attackerUnitId,
+        targetUnitId: data.targetUnitId,
+        damage: data.damage,
+        targetHpAfter: data.targetHpAfter,
+        targetProtection: data.targetProtection,
+        damageType: data.damageType,
+        rolls: data.rolls,
+        diceCount: data.diceCount,
+        attackerActionsLeft: data.attackerActionsLeft,
+      });
       // Atualizar alvo (dano recebido)
       dispatch({
         type: "UPDATE_UNIT",
@@ -365,14 +259,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleUnitDefeated = (data: { battleId: string; unitId: string }) => {
-      console.log(
-        "%c[Arena] 💀 UNIDADE DERROTADA!",
-        "color: #7c3aed; font-weight: bold; font-size: 12px;",
-        {
-          battleId: data.battleId,
-          unitId: data.unitId,
-        }
-      );
+      battleLog("💀", "UNIDADE DERROTADA!", {
+        battleId: data.battleId,
+        unitId: data.unitId,
+      });
       dispatch({
         type: "UPDATE_UNIT",
         payload: { id: data.unitId, isAlive: false },
@@ -386,11 +276,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       movesLeft: number;
       actionsLeft: number;
     }) => {
-      console.log(
-        "%c[Arena] 💨 DISPARADA!",
-        "color: #f59e0b; font-weight: bold;",
-        data
-      );
+      battleLog("💨", "DISPARADA!", data);
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -417,11 +303,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       actionsLeft: number;
       conditions: string[];
     }) => {
-      console.log(
-        "%c[Arena] 🛡️ ESQUIVA!",
-        "color: #3b82f6; font-weight: bold;",
-        data
-      );
+      battleLog("🛡️", "ESQUIVA!", data);
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -446,14 +328,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       unitId: string;
       protection: number;
     }) => {
-      console.log(
-        "%c[Arena] 🛡️ PROTEÇÃO RECUPERADA",
-        "color: #0ea5e9; font-weight: bold;",
-        {
-          unitId: data.unitId,
-          protection: data.protection,
-        }
-      );
+      battleLog("🛡️", "PROTEÇÃO RECUPERADA", {
+        unitId: data.unitId,
+        protection: data.protection,
+      });
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -469,17 +347,13 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       currentPlayerId: string;
       index: number;
     }) => {
-      console.log(
-        "%c[Arena] 🔄 PRÓXIMO JOGADOR",
-        "color: #f59e0b; font-weight: bold;",
-        {
-          battleId: data.battleId,
-          currentPlayerId: data.currentPlayerId,
-          turnIndex: data.index,
-        }
-      );
+      battleLog("🔄", "PRÓXIMO JOGADOR", {
+        battleId: data.battleId,
+        currentPlayerId: data.currentPlayerId,
+        turnIndex: data.index,
+      });
       // Resetar hasStartedAction de todas as unidades quando muda de jogador
-      const updatedUnits = stateRef.current.units.map((u) => ({
+      const updatedUnits = stateRef.current.units.map((u: ArenaUnit) => ({
         ...u,
         hasStartedAction: false,
         movesLeft: 0,
@@ -498,6 +372,25 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       });
     };
 
+    // Handler para sincronizar timer do turno (compartilhado pelo servidor)
+    const handleTurnTimer = (data: {
+      battleId: string;
+      timer: number;
+      currentPlayerId: string;
+    }) => {
+      // Atualiza o timer no estado da batalha
+      dispatch({
+        type: "SET_BATTLE",
+        payload: stateRef.current.battle
+          ? {
+              ...stateRef.current.battle,
+              turnTimer: data.timer,
+              currentPlayerId: data.currentPlayerId,
+            }
+          : null,
+      });
+    };
+
     // Handler para quando a unidade finaliza o turno
     const handleUnitTurnEnded = (data: {
       battleId: string;
@@ -507,11 +400,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       isAlive: boolean;
       conditions: string[];
     }) => {
-      console.log(
-        "%c[Arena] ⏹️ TURNO FINALIZADO",
-        "color: #6b7280; font-weight: bold;",
-        data
-      );
+      battleLog("⏹️", "TURNO FINALIZADO", data);
       dispatch({
         type: "UPDATE_UNIT",
         payload: {
@@ -525,14 +414,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleNewRound = (data: { battleId: string; round: number }) => {
-      console.log(
-        "%c[Arena] 🔔 NOVA RODADA",
-        "color: #f59e0b; font-weight: bold; font-size: 14px;",
-        {
-          battleId: data.battleId,
-          round: data.round,
-        }
-      );
+      battleLog("🔔", "NOVA RODADA", {
+        battleId: data.battleId,
+        round: data.round,
+      });
       dispatch({
         type: "SET_BATTLE",
         payload: stateRef.current.battle
@@ -542,16 +427,12 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleBattleEnded = (data: BattleEndedResponse) => {
-      console.log(
-        "%c[Arena] 🏆 BATALHA FINALIZADA!",
-        "color: #22c55e; font-weight: bold; font-size: 16px;",
-        {
-          battleId: data.battleId,
-          winnerId: data.winnerId,
-          reason: data.reason,
-          finalUnitsCount: data.finalUnits?.length,
-        }
-      );
+      battleLog("🏆", "BATALHA FINALIZADA!", {
+        battleId: data.battleId,
+        winnerId: data.winnerId,
+        reason: data.reason,
+        finalUnitsCount: data.finalUnits?.length,
+      });
       // Salvar resultado com unidades finais (do servidor ou do state local)
       dispatch({
         type: "SET_BATTLE_RESULT",
@@ -578,11 +459,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     };
 
     const handleError = (data: { message: string }) => {
-      console.error(
-        "%c[Arena] ❌ ERRO",
-        "color: #ef4444; font-weight: bold;",
-        data.message
-      );
+      arenaLog("❌", "ERRO", data.message);
       dispatch({ type: "SET_ERROR", payload: data.message });
     };
 
@@ -591,14 +468,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       lobbyId: string;
       userId: string;
     }) => {
-      console.log(
-        "%c[Arena] ⚠️ OPONENTE DESCONECTOU",
-        "color: #f59e0b; font-weight: bold; font-size: 12px;",
-        {
-          lobbyId: data.lobbyId,
-          userId: data.userId,
-        }
-      );
+      lobbyLog("⚠️", "OPONENTE DESCONECTOU", {
+        lobbyId: data.lobbyId,
+        userId: data.userId,
+      });
       // Mostrar mensagem para o usuário
       dispatch({
         type: "SET_ERROR",
@@ -611,14 +484,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       lobbyId: string;
       userId: string;
     }) => {
-      console.log(
-        "%c[Arena] ✅ OPONENTE RECONECTOU",
-        "color: #22c55e; font-weight: bold; font-size: 12px;",
-        {
-          lobbyId: data.lobbyId,
-          userId: data.userId,
-        }
-      );
+      lobbyLog("✅", "OPONENTE RECONECTOU", {
+        lobbyId: data.lobbyId,
+        userId: data.userId,
+      });
       // Limpar mensagem de erro
       dispatch({ type: "SET_ERROR", payload: null });
     };
@@ -628,11 +497,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       lobbyId: string;
       userId: string;
     }) => {
-      console.log(
-        "%c[Arena] 🔄 OPONENTE QUER REVANCHE",
-        "color: #f59e0b; font-weight: bold; font-size: 12px;",
-        data
-      );
+      lobbyLog("🔄", "OPONENTE QUER REVANCHE", data);
       if (data.userId !== user.id) {
         dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: true });
       }
@@ -640,11 +505,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
     // Handler para quando revanche é aceita e nova batalha começa
     const handleRematchStarted = (data: BattleStartedResponse) => {
-      console.log(
-        "%c[Arena] ⚔️ REVANCHE INICIADA!",
-        "color: #22c55e; font-weight: bold; font-size: 16px;",
-        data
-      );
+      battleLog("⚔️", "REVANCHE INICIADA!", data);
       // Limpar resultado anterior
       dispatch({ type: "SET_BATTLE_RESULT", payload: null });
       dispatch({ type: "SET_REMATCH_PENDING", payload: false });
@@ -666,17 +527,13 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       isHost: boolean;
       createdAt: string;
     }) => {
-      console.log(
-        "%c[Arena] 🔄 SESSÃO RESTAURADA (LOBBY)",
-        "color: #22c55e; font-weight: bold; font-size: 14px;",
-        {
-          lobbyId: data.lobbyId,
-          isHost: data.isHost,
-          status: data.status,
-          hostUsername: data.hostUsername,
-          guestUsername: data.guestUsername,
-        }
-      );
+      lobbyLog("🔄", "SESSÃO RESTAURADA (LOBBY)", {
+        lobbyId: data.lobbyId,
+        isHost: data.isHost,
+        status: data.status,
+        hostUsername: data.hostUsername,
+        guestUsername: data.guestUsername,
+      });
       const lobby: ArenaLobby = {
         lobbyId: data.lobbyId,
         hostUserId: data.hostUserId,
@@ -695,31 +552,31 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     // Handler for battle restoration (reconnection during battle)
     const handleBattleRestored = (data: {
       battleId: string;
-      lobbyId?: string;
-      grid: { width: number; height: number };
+      lobbyId: string;
+      config: ArenaConfig;
       round: number;
       status: "ACTIVE" | "ENDED";
       currentTurnIndex: number;
       currentPlayerId: string;
+      turnTimer?: number;
       units: any[];
       initiativeOrder: string[];
       actionOrder: string[];
       hostKingdom: { id: string; name: string; ownerId: string } | null;
       guestKingdom: { id: string; name: string; ownerId: string } | null;
     }) => {
-      console.log(
-        "%c[Arena] 🔄 SESSÃO RESTAURADA (BATALHA)",
-        "color: #ef4444; font-weight: bold; font-size: 14px;",
-        {
-          battleId: data.battleId,
-          round: data.round,
-          status: data.status,
-          unitsCount: data.units.length,
-        }
-      );
+      battleLog("🔄", "SESSÃO RESTAURADA (BATALHA)", {
+        battleId: data.battleId,
+        lobbyId: data.lobbyId,
+        round: data.round,
+        status: data.status,
+        unitsCount: data.units.length,
+        turnTimer: data.turnTimer,
+      });
       const battle: ArenaBattle = {
         battleId: data.battleId,
-        grid: data.grid,
+        lobbyId: data.lobbyId, // Salvar lobbyId para revanche
+        config: data.config, // Configuração visual completa do servidor
         round: data.round,
         status: data.status,
         currentTurnIndex: data.currentTurnIndex,
@@ -737,6 +594,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
           name: "Unknown",
           ownerId: "",
         },
+        turnTimer: data.turnTimer ?? 30, // Usar timer do servidor ou 30 como fallback
       };
       dispatch({ type: "SET_BATTLE", payload: battle });
       dispatch({ type: "SET_UNITS", payload: data.units });
@@ -757,6 +615,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     socketService.on("battle:protection_recovered", handleProtectionRecovered);
     socketService.on("battle:unit_turn_ended", handleUnitTurnEnded);
     socketService.on("battle:next_player", handleNextPlayer);
+    socketService.on("battle:turn_timer", handleTurnTimer);
     socketService.on("battle:new_round", handleNewRound);
     socketService.on("battle:battle_ended", handleBattleEnded);
     socketService.on("battle:unit_dashed", handleUnitDashed);
@@ -787,6 +646,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       );
       socketService.off("battle:unit_turn_ended", handleUnitTurnEnded);
       socketService.off("battle:next_player", handleNextPlayer);
+      socketService.off("battle:turn_timer", handleTurnTimer);
       socketService.off("battle:new_round", handleNewRound);
       socketService.off("battle:battle_ended", handleBattleEnded);
       socketService.off("battle:unit_dashed", handleUnitDashed);
@@ -805,11 +665,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const createLobby = useCallback(
     (kingdomId: string) => {
       if (!user) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:create_lobby",
-        "color: #22c55e; font-weight: bold;",
-        { userId: user.id, kingdomId }
-      );
+      lobbyLog("⬆️", "EMIT: arena:create_lobby", {
+        userId: user.id,
+        kingdomId,
+      });
       dispatch({ type: "SET_LOADING", payload: true });
       socketService.emit("battle:create_lobby", { userId: user.id, kingdomId });
       dispatch({ type: "SET_LOADING", payload: false });
@@ -818,21 +677,18 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   );
 
   const listLobbies = useCallback(() => {
-    console.log(
-      "%c[Arena] ⬆️ EMIT: arena:list_lobbies",
-      "color: #22c55e; font-weight: bold;"
-    );
+    lobbyLog("⬆️", "EMIT: arena:list_lobbies");
     socketService.emit("battle:list_lobbies");
   }, []);
 
   const joinLobby = useCallback(
     (lobbyId: string, kingdomId: string) => {
       if (!user) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:join_lobby",
-        "color: #22c55e; font-weight: bold;",
-        { lobbyId, userId: user.id, kingdomId }
-      );
+      lobbyLog("⬆️", "EMIT: arena:join_lobby", {
+        lobbyId,
+        userId: user.id,
+        kingdomId,
+      });
       dispatch({ type: "SET_LOADING", payload: true });
       socketService.emit("battle:join_lobby", {
         lobbyId,
@@ -846,11 +702,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
   const leaveLobby = useCallback(() => {
     if (!user) return;
-    console.log(
-      "%c[Arena] ⬆️ EMIT: arena:leave_lobby",
-      "color: #f59e0b; font-weight: bold;",
-      { userId: user.id }
-    );
+    lobbyLog("⬆️", "EMIT: arena:leave_lobby", { userId: user.id });
     socketService.emit("battle:leave_lobby", { userId: user.id });
     dispatch({ type: "SET_CURRENT_LOBBY", payload: null });
     dispatch({ type: "SET_IS_HOST", payload: false });
@@ -858,14 +710,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
   const startBattle = useCallback(() => {
     if (!user || !state.currentLobby) return;
-    console.log(
-      "%c[Arena] ⬆️ EMIT: arena:start_battle",
-      "color: #ef4444; font-weight: bold; font-size: 12px;",
-      {
-        lobbyId: state.currentLobby.lobbyId,
-        userId: user.id,
-      }
-    );
+    battleLog("⬆️", "EMIT: arena:start_battle", {
+      lobbyId: state.currentLobby.lobbyId,
+      userId: user.id,
+    });
     socketService.emit("battle:start_battle", {
       lobbyId: state.currentLobby.lobbyId,
       userId: user.id,
@@ -875,15 +723,11 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const beginAction = useCallback(
     (unitId: string) => {
       if (!user || !state.battle) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:begin_action",
-        "color: #10b981; font-weight: bold;",
-        {
-          battleId: state.battle.battleId,
-          unitId,
-          userId: user.id,
-        }
-      );
+      battleLog("⬆️", "EMIT: arena:begin_action", {
+        battleId: state.battle.battleId,
+        unitId,
+        userId: user.id,
+      });
       socketService.emit("battle:begin_action", {
         battleId: state.battle.battleId,
         unitId,
@@ -896,16 +740,12 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const moveUnit = useCallback(
     (unitId: string, toX: number, toY: number) => {
       if (!state.battle) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:move",
-        "color: #06b6d4; font-weight: bold;",
-        {
-          battleId: state.battle.battleId,
-          unitId,
-          toX,
-          toY,
-        }
-      );
+      battleLog("⬆️", "EMIT: arena:move", {
+        battleId: state.battle.battleId,
+        unitId,
+        toX,
+        toY,
+      });
       socketService.emit("battle:move", {
         battleId: state.battle.battleId,
         unitId,
@@ -919,15 +759,11 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const attackUnit = useCallback(
     (attackerUnitId: string, targetUnitId: string) => {
       if (!state.battle) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:attack",
-        "color: #dc2626; font-weight: bold; font-size: 12px;",
-        {
-          battleId: state.battle.battleId,
-          attackerUnitId,
-          targetUnitId,
-        }
-      );
+      battleLog("⬆️", "EMIT: arena:attack", {
+        battleId: state.battle.battleId,
+        attackerUnitId,
+        targetUnitId,
+      });
       socketService.emit("battle:attack", {
         battleId: state.battle.battleId,
         attackerUnitId,
@@ -940,14 +776,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const endAction = useCallback(
     (unitId: string) => {
       if (!state.battle) return;
-      console.log(
-        "%c[Arena] ⬆️ EMIT: arena:end_unit_action",
-        "color: #f59e0b; font-weight: bold;",
-        {
-          battleId: state.battle.battleId,
-          unitId,
-        }
-      );
+      battleLog("⬆️", "EMIT: arena:end_unit_action", {
+        battleId: state.battle.battleId,
+        unitId,
+      });
       socketService.emit("battle:end_unit_action", {
         battleId: state.battle.battleId,
         unitId,
@@ -968,11 +800,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         ...params,
       };
 
-      console.log(
-        `%c[Arena] ⬆️ EMIT: ${eventName}`,
-        "color: #8b5cf6; font-weight: bold;",
-        payload
-      );
+      battleLog("⬆️", `EMIT: ${eventName}`, payload);
 
       socketService.emit(eventName, payload);
     },
@@ -981,14 +809,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
   const surrender = useCallback(() => {
     if (!user || !state.battle) return;
-    console.log(
-      "%c[Arena] ⬆️ EMIT: arena:surrender",
-      "color: #7c3aed; font-weight: bold; font-size: 12px;",
-      {
-        battleId: state.battle.battleId,
-        userId: user.id,
-      }
-    );
+    battleLog("⬆️", "EMIT: arena:surrender", {
+      battleId: state.battle.battleId,
+      userId: user.id,
+    });
     socketService.emit("battle:surrender", {
       battleId: state.battle.battleId,
       userId: user.id,
@@ -996,27 +820,34 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   }, [user, state.battle]);
 
   const requestRematch = useCallback(() => {
-    if (!user || !state.currentLobby) return;
-    console.log(
-      "%c[Arena] ⬆️ EMIT: arena:request_rematch",
-      "color: #f59e0b; font-weight: bold; font-size: 12px;",
-      {
-        lobbyId: state.currentLobby.lobbyId,
-        userId: user.id,
-      }
-    );
-    dispatch({ type: "SET_REMATCH_PENDING", payload: true });
-    socketService.emit("battle:request_rematch", {
-      lobbyId: state.currentLobby.lobbyId,
+    // Usar lobbyId do currentLobby ou do battle (para reconexão)
+    const lobbyId = state.currentLobby?.lobbyId || state.battle?.lobbyId;
+    if (!user || !lobbyId) {
+      lobbyLog(
+        "⚠️",
+        "Não foi possível solicitar revanche: user ou lobbyId não encontrados",
+        {
+          user: !!user,
+          currentLobby: !!state.currentLobby,
+          battle: !!state.battle,
+          lobbyId,
+        }
+      );
+      return;
+    }
+    lobbyLog("⬆️", "EMIT: arena:request_rematch", {
+      lobbyId,
       userId: user.id,
     });
-  }, [user, state.currentLobby]);
+    dispatch({ type: "SET_REMATCH_PENDING", payload: true });
+    socketService.emit("battle:request_rematch", {
+      lobbyId,
+      userId: user.id,
+    });
+  }, [user, state.currentLobby, state.battle]);
 
   const dismissBattleResult = useCallback(() => {
-    console.log(
-      "%c[Arena] 🚪 Fechando modal de resultado",
-      "color: #6b7280; font-weight: bold;"
-    );
+    arenaLog("🚪", "Fechando modal de resultado");
     dispatch({ type: "SET_BATTLE_RESULT", payload: null });
     dispatch({ type: "SET_BATTLE", payload: null });
     dispatch({ type: "SET_UNITS", payload: [] });
@@ -1024,7 +855,9 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     dispatch({ type: "SET_IS_HOST", payload: false });
     dispatch({ type: "SET_REMATCH_PENDING", payload: false });
     dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: false });
-  }, []);
+    // Limpar sessão ativa para evitar loop de restauração
+    clearSession();
+  }, [clearSession]);
 
   const clearError = useCallback(() => {
     dispatch({ type: "SET_ERROR", payload: null });

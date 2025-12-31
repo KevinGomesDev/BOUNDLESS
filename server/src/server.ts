@@ -2,7 +2,7 @@
 import express from "express";
 import http from "http";
 import { Server, Socket } from "socket.io";
-import { registerAuthHandlers } from "./handlers/auth.handler";
+import { registerAuthHandlers } from "./lib/auth";
 import { registerKingdomHandlers } from "./handlers/kingdom.handler";
 import { registerMatchHandlers } from "./handlers/match.handler";
 import { registerWorldMapHandlers } from "./worldmap/handlers/worldmap.handler";
@@ -24,6 +24,7 @@ import { registerMovementHandlers } from "./handlers/movement.handler";
 import { registerCrisisHandlers } from "./handlers/crisis.handler";
 import { registerSkillsHandlers } from "./handlers/skills.handler";
 import { registerActionHandlers } from "./handlers/action.handler";
+import { registerRankingHandlers } from "./handlers/ranking.handler";
 import {
   registerSessionHandlers,
   injectArenaRefs,
@@ -77,6 +78,7 @@ io.on("connection", (socket: Socket) => {
   registerCrisisHandlers(io, socket);
   registerSkillsHandlers(io, socket);
   registerActionHandlers(io, socket);
+  registerRankingHandlers(io, socket);
 
   socket.on("disconnect", () => {
     connectionCount--;

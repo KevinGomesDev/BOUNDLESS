@@ -1,11 +1,32 @@
-import React, { createContext, useReducer, useCallback } from "react";
+import React, {
+  createContext,
+  useReducer,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
 import type {
   SessionState,
-  SessionContextType,
   SessionAction,
-  ActiveSession,
-} from "../types/session.types";
+  ActiveSessionFrontend,
+  SessionType,
+} from "../../../../shared/types/session.types";
 import { socketService } from "../../services/socket.service";
+
+// ============================================
+// Types
+// ============================================
+
+export interface SessionContextType {
+  state: SessionState;
+  checkSession: (userId: string) => Promise<void>;
+  canJoinSession: (userId: string) => Promise<boolean>;
+  clearSession: () => void;
+}
+
+// ============================================
+// Initial State & Reducer
+// ============================================
 
 const initialState: SessionState = {
   activeSession: null,
@@ -36,12 +57,49 @@ function sessionReducer(
   }
 }
 
+// ============================================
+// Helpers
+// ============================================
+
+/**
+ * Normaliza o tipo de sessão do backend (UPPER_CASE) para frontend
+ */
+function normalizeSessionType(type: string): SessionType | null {
+  const typeMap: Record<string, SessionType> = {
+    MATCH: "MATCH",
+    ARENA_LOBBY: "ARENA_LOBBY",
+    ARENA_BATTLE: "ARENA_BATTLE",
+    match: "MATCH",
+    arena_lobby: "ARENA_LOBBY",
+    arena_battle: "ARENA_BATTLE",
+  };
+  return typeMap[type] || null;
+}
+
+// ============================================
+// Context
+// ============================================
+
 export const SessionContext = createContext<SessionContextType | undefined>(
   undefined
 );
 
+// ============================================
+// Provider
+// ============================================
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(sessionReducer, initialState);
+
+  // Ref para rastrear operações em andamento (evita memory leaks)
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup ao desmontar
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   /**
    * Verifica se há uma sessão ativa (partida/arena)
@@ -49,65 +107,55 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const checkSession = useCallback(async (userId: string) => {
     if (!userId) return;
 
+    // Abortar operação anterior se existir
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     dispatch({ type: "SET_CHECKING", payload: true });
 
     try {
-      const session = await new Promise<ActiveSession | null>(
-        (resolve, reject) => {
-          const activeHandler = (data: {
+      const result = await socketService.waitForMultipleResponses<{
+        hasSession: boolean;
+        session: ActiveSessionFrontend | null;
+      }>(
+        "session:check",
+        { userId },
+        {
+          "session:active": (data: {
             type: string;
             matchId?: string;
             battleId?: string;
             lobbyId?: string;
-            data?: any;
-          }) => {
-            socketService.off("session:active", activeHandler);
-            socketService.off("session:none", noneHandler);
-            socketService.off("error", errorHandler);
-            resolve({
-              type: data.type as any,
+          }) => ({
+            hasSession: true,
+            session: {
+              type: normalizeSessionType(data.type),
               matchId: data.matchId,
               battleId: data.battleId,
               lobbyId: data.lobbyId,
-              data: data.data,
-            });
-          };
-
-          const noneHandler = () => {
-            socketService.off("session:active", activeHandler);
-            socketService.off("session:none", noneHandler);
-            socketService.off("error", errorHandler);
-            resolve(null);
-          };
-
-          const errorHandler = (data: { message: string }) => {
-            socketService.off("session:active", activeHandler);
-            socketService.off("session:none", noneHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error(data.message));
-          };
-
-          socketService.on("session:active", activeHandler);
-          socketService.on("session:none", noneHandler);
-          socketService.on("error", errorHandler);
-
-          socketService.emit("session:check", { userId });
-
-          setTimeout(() => {
-            socketService.off("session:active", activeHandler);
-            socketService.off("session:none", noneHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error("Timeout ao verificar sessão"));
-          }, 5000);
-        }
+            },
+          }),
+          "session:none": () => ({
+            hasSession: false,
+            session: null,
+          }),
+        },
+        5000
       );
 
-      dispatch({ type: "SET_ACTIVE_SESSION", payload: session });
+      // Verificar se a operação foi abortada
+      if (signal.aborted) return;
+
+      dispatch({ type: "SET_ACTIVE_SESSION", payload: result.session });
     } catch (error) {
+      if (signal.aborted) return;
       console.error("[Session] Erro ao verificar sessão:", error);
       dispatch({ type: "SET_ACTIVE_SESSION", payload: null });
     } finally {
-      dispatch({ type: "SET_CHECKING", payload: false });
+      if (!signal.aborted) {
+        dispatch({ type: "SET_CHECKING", payload: false });
+      }
     }
   }, []);
 
@@ -119,43 +167,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (!userId) return false;
 
       try {
-        const result = await new Promise<{
+        const result = await socketService.waitForResponse<{
           canJoin: boolean;
-          reason: string | null;
-        }>((resolve, reject) => {
-          const resultHandler = (data: {
-            canJoin: boolean;
-            reason?: string;
-          }) => {
-            socketService.off("session:can_join_result", resultHandler);
-            socketService.off("error", errorHandler);
-            resolve({
-              canJoin: data.canJoin,
-              reason: data.reason || null,
-            });
-          };
-
-          const errorHandler = (data: { message: string }) => {
-            socketService.off("session:can_join_result", resultHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error(data.message));
-          };
-
-          socketService.on("session:can_join_result", resultHandler);
-          socketService.on("error", errorHandler);
-
-          socketService.emit("session:can_join", { userId });
-
-          setTimeout(() => {
-            socketService.off("session:can_join_result", resultHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error("Timeout ao verificar permissão"));
-          }, 5000);
-        });
+          reason?: string;
+        }>(
+          "session:can_join",
+          { userId },
+          "session:can_join_result",
+          "error",
+          5000
+        );
 
         dispatch({
           type: "SET_CAN_JOIN",
-          payload: { canJoin: result.canJoin, reason: result.reason },
+          payload: { canJoin: result.canJoin, reason: result.reason || null },
         });
 
         return result.canJoin;

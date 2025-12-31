@@ -3,10 +3,14 @@
 import { Socket, Server } from "socket.io";
 import { prisma } from "../lib/prisma";
 import {
-  rollInitiative,
   getMaxMarksByCategory,
   getEffectiveAcuityWithConditions,
 } from "../utils/battle.utils";
+import {
+  createBattleUnitsForSide,
+  sortByInitiative,
+  determineActionOrder,
+} from "../utils/battle-unit.factory";
 import { canJoinNewSession } from "../utils/session.utils";
 import {
   executeMoveAction,
@@ -26,6 +30,7 @@ import {
   calculateBaseMovement,
 } from "../logic/combat-actions";
 import { determineUnitActions } from "../logic/unit-actions";
+import { ARENA_CONFIG } from "../data/arena-config";
 
 // Estrutura para gerenciar lobbies de Arena em memória
 interface BattleLobby {
@@ -125,6 +130,9 @@ const disconnectedPlayers: Map<string, string> = new Map(); // odUsuerId -> lobb
 // Mapa para rastrear pedidos de revanche
 const rematchRequests: Map<string, Set<string>> = new Map(); // lobbyId -> Set of userIds who want rematch
 
+// Lock para evitar race condition em rematch
+const rematchLocks: Map<string, boolean> = new Map(); // lobbyId -> isProcessing
+
 // Mapa para intervalos de timer de batalha
 const battleTimerIntervals: Map<
   string,
@@ -151,11 +159,33 @@ function generateId(): string {
 let ioRef: Server | null = null;
 
 /**
+ * Verifica se há pelo menos um jogador conectado na batalha
+ */
+function hasConnectedPlayers(battle: Battle): boolean {
+  const lobby = battleLobbies.get(battle.lobbyId);
+  if (!lobby) return false;
+
+  // Se algum jogador não está na lista de desconectados, há alguém conectado
+  const hostDisconnected = disconnectedPlayers.has(battle.hostUserId);
+  const guestDisconnected = disconnectedPlayers.has(battle.guestUserId);
+
+  return !hostDisconnected || !guestDisconnected;
+}
+
+/**
  * Inicia/reinicia o timer compartilhado do turno
  */
 function startBattleTurnTimer(battle: Battle): void {
   // Limpar timer anterior se existir
   stopBattleTurnTimer(battle.id);
+
+  // Não iniciar timer se nenhum jogador está conectado
+  if (!hasConnectedPlayers(battle)) {
+    console.log(
+      `[ARENA] Timer não iniciado - nenhum jogador conectado na batalha ${battle.id}`
+    );
+    return;
+  }
 
   battle.turnTimer = TURN_TIMER_SECONDS;
 
@@ -201,6 +231,47 @@ function stopBattleTurnTimer(battleId: string): void {
   if (interval) {
     clearInterval(interval);
     battleTimerIntervals.delete(battleId);
+  }
+}
+
+/**
+ * Limpa todos os recursos de uma batalha (timer, mapa, etc.)
+ */
+function cleanupBattle(battleId: string): void {
+  stopBattleTurnTimer(battleId);
+  activeBattles.delete(battleId);
+}
+
+/**
+ * Pausa o timer de uma batalha quando todos os jogadores desconectam
+ * Exportada para uso no session.handler
+ */
+export function pauseBattleTimerIfNoPlayers(battleId: string): void {
+  const battle = activeBattles.get(battleId);
+  if (!battle) return;
+
+  if (!hasConnectedPlayers(battle)) {
+    console.log(
+      `[ARENA] Pausando timer - todos os jogadores desconectaram da batalha ${battleId}`
+    );
+    stopBattleTurnTimer(battleId);
+  }
+}
+
+/**
+ * Retoma o timer de uma batalha quando um jogador reconecta
+ * Exportada para uso no session.handler
+ */
+export function resumeBattleTimer(battleId: string): void {
+  const battle = activeBattles.get(battleId);
+  if (!battle) return;
+
+  // Só retomar se não houver timer ativo e houver jogadores conectados
+  if (!battleTimerIntervals.has(battleId) && hasConnectedPlayers(battle)) {
+    console.log(
+      `[ARENA] Retomando timer - jogador reconectou na batalha ${battleId}`
+    );
+    startBattleTurnTimer(battle);
   }
 }
 
@@ -404,6 +475,57 @@ async function deleteBattleFromDB(battleId: string): Promise<void> {
 }
 
 /**
+ * Atualiza estatísticas de vitórias/derrotas dos usuários
+ */
+async function updateUserStats(
+  winnerId: string | null | undefined,
+  loserId: string | null | undefined,
+  isArena: boolean
+): Promise<void> {
+  try {
+    // Proteção: não contar se winnerId e loserId forem iguais
+    if (winnerId && loserId && winnerId === loserId) {
+      console.error(
+        `[STATS] ❌ ERRO: winnerId e loserId são iguais! (${winnerId})`
+      );
+      return;
+    }
+
+    if (winnerId) {
+      if (isArena) {
+        await prisma.user.update({
+          where: { id: winnerId },
+          data: { arenaWins: { increment: 1 } },
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: winnerId },
+          data: { matchWins: { increment: 1 } },
+        });
+      }
+      console.log(`[STATS] ${winnerId} ganhou +1 vitória (arena=${isArena})`);
+    }
+
+    if (loserId) {
+      if (isArena) {
+        await prisma.user.update({
+          where: { id: loserId },
+          data: { arenaLosses: { increment: 1 } },
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: loserId },
+          data: { matchLosses: { increment: 1 } },
+        });
+      }
+      console.log(`[STATS] ${loserId} ganhou +1 derrota (arena=${isArena})`);
+    }
+  } catch (err) {
+    console.error("[STATS] Erro ao atualizar estatísticas:", err);
+  }
+}
+
+/**
  * Load active Arena activeBattles from database (for recovery after restart)
  */
 async function loadBattlesFromDB(): Promise<void> {
@@ -456,6 +578,7 @@ async function loadBattlesFromDB(): Promise<void> {
         round: dbBattle.round,
         currentTurnIndex: dbBattle.currentTurnIndex,
         status: dbBattle.status as "ACTIVE" | "ENDED",
+        turnTimer: TURN_TIMER_SECONDS,
         initiativeOrder: JSON.parse(dbBattle.initiativeOrder),
         actionOrder: JSON.parse(dbBattle.actionOrder),
         units,
@@ -469,17 +592,104 @@ async function loadBattlesFromDB(): Promise<void> {
       };
 
       activeBattles.set(battle.id, battle);
+
+      // IMPORTANTE: Recriar o lobby e o mapeamento userToLobby
+      // para que canJoinNewSession funcione corretamente
+      if (dbBattle.lobbyId) {
+        const lobbyId = dbBattle.lobbyId;
+
+        // Criar lobby se não existir
+        if (!battleLobbies.has(lobbyId)) {
+          const lobby: BattleLobby = {
+            id: lobbyId,
+            hostUserId: battle.hostUserId,
+            hostSocketId: "", // Será atualizado quando reconectar
+            hostKingdomId: battle.hostKingdomId,
+            guestUserId: battle.guestUserId,
+            guestSocketId: "", // Será atualizado quando reconectar
+            guestKingdomId: battle.guestKingdomId,
+            status: "BATTLING",
+            createdAt: battle.createdAt,
+          };
+          battleLobbies.set(lobbyId, lobby);
+        }
+
+        // Mapear usuários para o lobby
+        if (battle.hostUserId) {
+          userToLobby.set(battle.hostUserId, lobbyId);
+        }
+        if (battle.guestUserId) {
+          userToLobby.set(battle.guestUserId, lobbyId);
+        }
+      }
+
       console.log(`[ARENA] Batalha ${battle.id} carregada do banco`);
     }
 
     console.log(`[ARENA] ${activeBattles.size} batalhas carregadas do banco`);
+    console.log(`[ARENA] ${battleLobbies.size} lobbies recriados`);
+    console.log(`[ARENA] ${userToLobby.size} usuários mapeados para lobbies`);
   } catch (err) {
     console.error("[ARENA] Erro ao carregar batalhas do banco:", err);
   }
 }
 
-// Carregar batalhas ao inicializar
-loadBattlesFromDB();
+/**
+ * Limpa batalhas duplicadas/órfãs do banco de dados
+ * Mantém apenas a batalha mais recente por par de usuários
+ */
+async function cleanupDuplicateBattles(): Promise<void> {
+  try {
+    const activeBattlesDB = await prisma.battle.findMany({
+      where: { isArena: true, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Agrupar por par de usuários (ordenado para consistência)
+    const battlesByUserPair = new Map<string, typeof activeBattlesDB>();
+
+    for (const battle of activeBattlesDB) {
+      const users = [battle.hostUserId, battle.guestUserId]
+        .filter(Boolean)
+        .sort();
+      const key = users.join("_");
+
+      if (!battlesByUserPair.has(key)) {
+        battlesByUserPair.set(key, []);
+      }
+      battlesByUserPair.get(key)!.push(battle);
+    }
+
+    // Para cada par de usuários, manter apenas a batalha mais recente
+    let deletedCount = 0;
+    for (const [userPair, battles] of battlesByUserPair) {
+      if (battles.length > 1) {
+        // A primeira é a mais recente (ordenamos por createdAt desc)
+        const toDelete = battles.slice(1);
+
+        for (const battle of toDelete) {
+          console.log(
+            `[ARENA] Deletando batalha duplicada ${battle.id} (usuários: ${userPair})`
+          );
+          await prisma.battleUnit.deleteMany({
+            where: { battleId: battle.id },
+          });
+          await prisma.battle.delete({ where: { id: battle.id } });
+          deletedCount++;
+        }
+      }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`[ARENA] ${deletedCount} batalhas duplicadas removidas`);
+    }
+  } catch (err) {
+    console.error("[ARENA] Erro ao limpar batalhas duplicadas:", err);
+  }
+}
+
+// Limpar batalhas duplicadas e carregar ao inicializar
+cleanupDuplicateBattles().then(() => loadBattlesFromDB());
 
 function generateUnitId(): string {
   return `bunit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -782,125 +992,41 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         });
       }
 
-      const gridWidth = 20;
-      const gridHeight = 20;
+      const {
+        grid: { width: gridWidth, height: gridHeight },
+      } = ARENA_CONFIG;
+
       const battleId = generateId();
 
-      // Cria BattleUnits a partir dos Regentes
-      const BattleUnits: BattleUnit[] = [];
+      // Criar unidades usando o factory
+      const hostUnits = createBattleUnitsForSide(
+        hostKingdom.units,
+        lobby.hostUserId,
+        { id: hostKingdom.id, name: hostKingdom.name },
+        { x: 9, y: 1 },
+        "horizontal",
+        "arena"
+      );
 
-      // Host Regente(s) - posicionados no topo
-      let hostX = 9;
-      for (const regent of hostKingdom.units) {
-        // Determinar ações dinamicamente baseado nos stats
-        const unitActions = determineUnitActions(
-          {
-            combat: regent.combat,
-            acuity: regent.acuity,
-            focus: regent.focus,
-            armor: regent.armor,
-            vitality: regent.vitality,
-            category: regent.category,
-          },
-          { battleType: "arena" }
-        );
+      const guestUnits = createBattleUnitsForSide(
+        guestKingdom.units,
+        lobby.guestUserId,
+        { id: guestKingdom.id, name: guestKingdom.name },
+        { x: 9, y: gridHeight - 2 },
+        "horizontal",
+        "arena"
+      );
 
-        BattleUnits.push({
-          id: generateUnitId(),
-          sourceUnitId: regent.id,
-          ownerId: lobby.hostUserId,
-          ownerKingdomId: lobby.hostKingdomId,
-          name: regent.name || hostKingdom.name + " Regente",
-          category: regent.category,
-          troopSlot: regent.troopSlot ?? undefined,
-          level: regent.level,
-          classId: regent.classId ?? undefined,
-          classFeatures: JSON.parse(regent.classFeatures || "[]"),
-          equipment: JSON.parse(regent.equipment || "[]"),
-          combat: regent.combat,
-          acuity: regent.acuity,
-          focus: regent.focus,
-          armor: regent.armor,
-          vitality: regent.vitality,
-          damageReduction: regent.damageReduction || 0,
-          currentHp: regent.vitality * 2, // HP = 2x Vitality
-          maxHp: regent.vitality * 2,
-          posX: hostX++,
-          posY: 1,
-          initiative: Math.floor(Math.random() * 20) + 1 + regent.acuity,
-          movesLeft: 0,
-          actionsLeft: 1,
-          isAlive: true,
-          actionMarks: 0,
-          protection: (regent.armor || 0) * 2,
-          protectionBroken: false,
-          conditions: [],
-          hasStartedAction: false,
-          actions: unitActions,
-        });
-      }
+      // Combinar e ordenar por iniciativa
+      const allUnits = [...hostUnits, ...guestUnits];
+      const orderedUnits = sortByInitiative(allUnits);
 
-      // Guest Regente(s) - posicionados no fundo
-      let guestX = 9;
-      for (const regent of guestKingdom.units) {
-        // Determinar ações dinamicamente baseado nos stats
-        const unitActions = determineUnitActions(
-          {
-            combat: regent.combat,
-            acuity: regent.acuity,
-            focus: regent.focus,
-            armor: regent.armor,
-            vitality: regent.vitality,
-            category: regent.category,
-          },
-          { battleType: "arena" }
-        );
-
-        BattleUnits.push({
-          id: generateUnitId(),
-          sourceUnitId: regent.id,
-          ownerId: lobby.guestUserId,
-          ownerKingdomId: lobby.guestKingdomId,
-          name: regent.name || guestKingdom.name + " Regente",
-          category: regent.category,
-          troopSlot: regent.troopSlot ?? undefined,
-          level: regent.level,
-          classId: regent.classId ?? undefined,
-          classFeatures: JSON.parse(regent.classFeatures || "[]"),
-          equipment: JSON.parse(regent.equipment || "[]"),
-          combat: regent.combat,
-          acuity: regent.acuity,
-          focus: regent.focus,
-          armor: regent.armor,
-          vitality: regent.vitality,
-          damageReduction: regent.damageReduction || 0,
-          currentHp: regent.vitality * 2, // HP = 2x Vitality
-          maxHp: regent.vitality * 2,
-          posX: guestX++,
-          posY: gridHeight - 2,
-          initiative: Math.floor(Math.random() * 20) + 1 + regent.acuity,
-          movesLeft: 0,
-          actionsLeft: 1,
-          isAlive: true,
-          actionMarks: 0,
-          protection: (regent.armor || 0) * 2,
-          protectionBroken: false,
-          conditions: [],
-          hasStartedAction: false,
-          actions: unitActions,
-        });
-      }
-
-      // Ordena por iniciativa
-      const orderedUnits = rollInitiative(BattleUnits);
-
-      // ActionOrder baseado na iniciativa das unidades (não mais leilão)
-      // O jogador com a unidade de maior iniciativa joga primeiro
-      const firstUnit = orderedUnits[0];
-      const actionOrder =
-        firstUnit.ownerId === lobby.hostUserId
-          ? [lobby.hostUserId, lobby.guestUserId]
-          : [lobby.guestUserId, lobby.hostUserId];
+      // Determinar ordem de ação baseada em iniciativa
+      const actionOrder = determineActionOrder(
+        orderedUnits,
+        lobby.hostUserId,
+        lobby.guestUserId
+      );
 
       const battle: Battle = {
         id: battleId,
@@ -910,6 +1036,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         round: 1,
         currentTurnIndex: 0,
         status: "ACTIVE",
+        turnTimer: TURN_TIMER_SECONDS,
         initiativeOrder: orderedUnits.map((u) => u.id),
         actionOrder,
         units: orderedUnits,
@@ -940,7 +1067,8 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       io.to(lobbyId).emit("battle:battle_started", {
         battleId,
-        grid: { width: gridWidth, height: gridHeight },
+        lobbyId, // Incluir lobbyId para revanche
+        config: ARENA_CONFIG, // Configuração visual completa
         units: orderedUnits,
         initiativeOrder: orderedUnits.map((u) => u.id),
         actionOrder: battle.actionOrder,
@@ -955,6 +1083,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           ownerId: lobby.guestUserId,
         },
       });
+
+      // Iniciar timer compartilhado do turno
+      startBattleTurnTimer(battle);
 
       console.log(`[ARENA] Batalha iniciada: ${battleId}`);
     } catch (err) {
@@ -1067,10 +1198,33 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
   socket.on("battle:end_unit_action", async ({ battleId, unitId }) => {
     try {
       const battle = activeBattles.get(battleId);
-      if (!battle) return;
+      if (!battle) {
+        console.error(
+          `[ARENA] end_unit_action: Batalha ${battleId} não encontrada`
+        );
+        return;
+      }
 
       const unit = battle.units.find((u) => u.id === unitId);
-      if (!unit) return;
+      if (!unit) {
+        console.error(
+          `[ARENA] end_unit_action: Unidade ${unitId} não encontrada`
+        );
+        return;
+      }
+
+      // Verificar se é realmente o turno deste jogador
+      const currentPlayerId = battle.actionOrder[battle.currentTurnIndex];
+      if (unit.ownerId !== currentPlayerId) {
+        console.warn(
+          `[ARENA] end_unit_action: Não é o turno do jogador ${unit.ownerId} (turno atual: ${currentPlayerId})`
+        );
+        return socket.emit("battle:error", { message: "Não é seu turno" });
+      }
+
+      console.log(
+        `[ARENA] end_unit_action: ${unit.name} (${unitId}) finalizando turno`
+      );
 
       // Aplica queimando
       if (unit.conditions.includes("QUEIMANDO")) {
@@ -1092,10 +1246,16 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       unit.hasStartedAction = false; // Reset para próxima ação
 
       // Avança jogador
+      const oldTurnIndex = battle.currentTurnIndex;
       if (battle.actionOrder.length) {
         battle.currentTurnIndex =
           (battle.currentTurnIndex + 1) % battle.actionOrder.length;
       }
+
+      const newPlayerId = battle.actionOrder[battle.currentTurnIndex];
+      console.log(
+        `[ARENA] Turno avançado: index ${oldTurnIndex} -> ${battle.currentTurnIndex}, próximo jogador: ${newPlayerId}`
+      );
 
       const lobby = battleLobbies.get(battle.lobbyId);
       if (lobby) {
@@ -1112,9 +1272,15 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         // Emitir mudança de turno
         io.to(lobby.id).emit("battle:next_player", {
           battleId,
-          currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
+          currentPlayerId: newPlayerId,
           index: battle.currentTurnIndex,
         });
+
+        console.log(
+          `[ARENA] Evento battle:next_player emitido para lobby ${lobby.id}`
+        );
+      } else {
+        console.error(`[ARENA] Lobby não encontrado para batalha ${battleId}`);
       }
 
       // Checa fim da batalha
@@ -1143,6 +1309,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
           });
         }
       }
+
+      // Reiniciar timer compartilhado para o próximo turno
+      startBattleTurnTimer(battle);
 
       // Salvar estado da batalha no banco
       await saveBattleToDB(battle);
@@ -1293,6 +1462,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
             if (aliveBySide.size <= 1) {
               battle.status = "ENDED";
+              stopBattleTurnTimer(battle.id);
               const winnerId = aliveBySide.keys().next().value || null;
               const winnerKingdom = battle.units.find(
                 (u) => u.ownerId === winnerId
@@ -1305,6 +1475,19 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
                 reason: "Todas as unidades inimigas foram derrotadas",
                 finalUnits: battle.units,
               });
+
+              // Atualizar estatísticas de vitórias/derrotas
+              const loserId =
+                winnerId === lobby.hostUserId
+                  ? lobby.guestUserId
+                  : lobby.hostUserId;
+              await updateUserStats(winnerId, loserId, battle.isArena);
+
+              // Limpar referências de sessão
+              userToLobby.delete(lobby.hostUserId);
+              if (lobby.guestUserId) {
+                userToLobby.delete(lobby.guestUserId);
+              }
 
               // Limpa lobby e deleta batalha do banco
               lobby.status = "ENDED";
@@ -1425,7 +1608,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       socket.emit("battle:battle_state", {
         battleId,
-        grid: { width: battle.gridWidth, height: battle.gridHeight },
+        config: ARENA_CONFIG, // Configuração visual completa
         round: battle.round,
         status: battle.status,
         currentTurnIndex: battle.currentTurnIndex,
@@ -1457,6 +1640,13 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       battle.status = "ENDED";
       lobby.status = "ENDED";
+      stopBattleTurnTimer(battle.id);
+
+      // Limpar referências de sessão
+      userToLobby.delete(lobby.hostUserId);
+      if (lobby.guestUserId) {
+        userToLobby.delete(lobby.guestUserId);
+      }
 
       const winnerKingdom = battle.units.find(
         (u) => u.ownerId === winnerId
@@ -1470,6 +1660,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         surrenderedBy: userId,
         finalUnits: battle.units,
       });
+
+      // Atualizar estatísticas de vitórias/derrotas
+      await updateUserStats(winnerId, userId, battle.isArena);
 
       // Deletar batalha do banco
       await deleteBattleFromDB(battleId);
@@ -1486,9 +1679,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
   socket.on("battle:leave_battle", async ({ battleId, userId }) => {
     try {
       const battle = activeBattles.get(battleId);
-      if (!battle) {
+      if (!battle || battle.status !== "ACTIVE") {
         return socket.emit("battle:error", {
-          message: "Batalha não encontrada",
+          message: "Batalha não encontrada ou já finalizada",
         });
       }
 
@@ -1511,6 +1704,7 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
       // Finalizar batalha
       battle.status = "ENDED";
       lobby.status = "ENDED";
+      stopBattleTurnTimer(battle.id);
 
       // Limpar referências
       userToLobby.delete(lobby.hostUserId);
@@ -1526,6 +1720,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         abandonedBy: userId,
         finalUnits: battle.units,
       });
+
+      // Atualizar estatísticas de vitórias/derrotas
+      await updateUserStats(winnerId, userId, battle.isArena);
 
       // Deletar batalha do banco
       await deleteBattleFromDB(battleId);
@@ -1552,10 +1749,23 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
   socket.on("battle:request_rematch", async ({ lobbyId, userId }) => {
     try {
+      console.log(
+        `[ARENA] request_rematch recebido: lobbyId=${lobbyId}, userId=${userId}`
+      );
+
       const lobby = battleLobbies.get(lobbyId);
       if (!lobby) {
+        console.log(
+          `[ARENA] request_rematch ERRO: lobby não encontrado. Lobbies existentes: ${Array.from(
+            battleLobbies.keys()
+          ).join(", ")}`
+        );
         return socket.emit("battle:error", { message: "Lobby não encontrado" });
       }
+
+      console.log(
+        `[ARENA] request_rematch: lobby encontrado com status=${lobby.status}, host=${lobby.hostUserId}, guest=${lobby.guestUserId}`
+      );
 
       // Verificar se é participante
       if (lobby.hostUserId !== userId && lobby.guestUserId !== userId) {
@@ -1566,6 +1776,9 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
 
       // Verificar se a batalha acabou
       if (lobby.status !== "ENDED") {
+        console.log(
+          `[ARENA] request_rematch ERRO: batalha ainda não terminou (status=${lobby.status})`
+        );
         return socket.emit("battle:error", {
           message: "A batalha ainda não terminou",
         });
@@ -1593,220 +1806,135 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
         lobby.guestUserId &&
         requests.has(lobby.guestUserId)
       ) {
-        console.log(
-          `[ARENA] Ambos jogadores querem revanche! Iniciando nova batalha...`
-        );
-
-        // Limpar pedidos
-        rematchRequests.delete(lobbyId);
-
-        // Buscar os regentes de ambos os jogadores novamente (usando kingdomId do lobby)
-        const hostKingdom = await prisma.kingdom.findUnique({
-          where: { id: lobby.hostKingdomId },
-          include: { units: { where: { category: "REGENT" } } },
-        });
-
-        const guestKingdom = await prisma.kingdom.findUnique({
-          where: { id: lobby.guestKingdomId },
-          include: { units: { where: { category: "REGENT" } } },
-        });
-
-        if (!hostKingdom?.units[0] || !guestKingdom?.units[0]) {
-          io.to(lobbyId).emit("battle:error", {
-            message:
-              "Não foi possível iniciar revanche - regentes não encontrados",
-          });
+        // Proteção contra race condition - verificar se já está processando
+        if (rematchLocks.has(lobbyId)) {
+          console.log(
+            `[ARENA] Rematch já em processamento para lobby ${lobbyId}`
+          );
           return;
         }
+        rematchLocks.set(lobbyId, true);
 
-        // Resetar batalha antiga
-        const oldBattle = [...activeBattles.values()].find(
-          (b) => b.lobbyId === lobbyId
-        );
-        if (oldBattle) {
-          activeBattles.delete(oldBattle.id);
+        try {
+          console.log(
+            `[ARENA] Ambos jogadores querem revanche! Iniciando nova batalha...`
+          );
+
+          // Limpar pedidos
+          rematchRequests.delete(lobbyId);
+
+          // Buscar os regentes de ambos os jogadores novamente
+          const hostKingdom = await prisma.kingdom.findUnique({
+            where: { id: lobby.hostKingdomId },
+            include: { units: { where: { category: "REGENT" } } },
+          });
+
+          const guestKingdom = await prisma.kingdom.findUnique({
+            where: { id: lobby.guestKingdomId },
+            include: { units: { where: { category: "REGENT" } } },
+          });
+
+          if (!hostKingdom?.units[0] || !guestKingdom?.units[0]) {
+            io.to(lobbyId).emit("battle:error", {
+              message:
+                "Não foi possível iniciar revanche - regentes não encontrados",
+            });
+            return;
+          }
+
+          // Limpar batalha antiga
+          const oldBattle = [...activeBattles.values()].find(
+            (b) => b.lobbyId === lobbyId
+          );
+          if (oldBattle) {
+            cleanupBattle(oldBattle.id);
+          }
+
+          // Criar nova batalha usando factory
+          const battleId = generateId();
+          const {
+            grid: { width: gridWidth, height: gridHeight },
+          } = ARENA_CONFIG;
+
+          // Usar factory para criar unidades
+          const hostUnits = createBattleUnitsForSide(
+            hostKingdom.units,
+            lobby.hostUserId,
+            { id: hostKingdom.id, name: hostKingdom.name },
+            { x: 0, y: Math.floor(gridHeight / 2) },
+            "vertical",
+            "arena"
+          );
+
+          const guestUnits = createBattleUnitsForSide(
+            guestKingdom.units,
+            lobby.guestUserId,
+            { id: guestKingdom.id, name: guestKingdom.name },
+            { x: gridWidth - 1, y: Math.floor(gridHeight / 2) },
+            "vertical",
+            "arena"
+          );
+
+          // Combinar e ordenar por iniciativa
+          const allUnits = [...hostUnits, ...guestUnits];
+          const orderedUnits = sortByInitiative(allUnits);
+          const initiativeOrder = orderedUnits.map((u) => u.id);
+          const actionOrder = determineActionOrder(
+            orderedUnits,
+            lobby.hostUserId,
+            lobby.guestUserId
+          );
+
+          // Criar nova batalha
+          const newBattle: Battle = {
+            id: battleId,
+            lobbyId,
+            gridWidth,
+            gridHeight,
+            round: 1,
+            currentTurnIndex: 0,
+            status: "ACTIVE",
+            turnTimer: TURN_TIMER_SECONDS,
+            initiativeOrder,
+            actionOrder,
+            units: orderedUnits,
+            logs: [],
+            createdAt: new Date(),
+            hostUserId: lobby.hostUserId,
+            guestUserId: lobby.guestUserId as string,
+            hostKingdomId: hostKingdom.id,
+            guestKingdomId: guestKingdom.id,
+            isArena: true,
+          };
+
+          activeBattles.set(battleId, newBattle);
+          lobby.status = "BATTLING";
+
+          // Emitir evento de revanche iniciada
+          io.to(lobbyId).emit("battle:rematch_started", {
+            battleId,
+            lobbyId,
+            config: ARENA_CONFIG,
+            units: orderedUnits,
+            initiativeOrder,
+            actionOrder,
+            hostKingdom: {
+              id: hostKingdom.id,
+              name: hostKingdom.name,
+              ownerId: lobby.hostUserId,
+            },
+            guestKingdom: {
+              id: guestKingdom.id,
+              name: guestKingdom.name,
+              ownerId: lobby.guestUserId,
+            },
+          });
+
+          console.log(`[ARENA] Revanche iniciada! Nova batalha: ${battleId}`);
+        } finally {
+          // Sempre limpar o lock
+          rematchLocks.delete(lobbyId);
         }
-
-        // Criar nova batalha
-        const battleId = generateId();
-        const gridWidth = 20;
-        const gridHeight = 20;
-
-        const hostRegent = hostKingdom.units[0];
-        const guestRegent = guestKingdom.units[0];
-
-        // Criar unidades da arena
-        const hostActions = determineUnitActions(
-          {
-            combat: hostRegent.combat,
-            acuity: hostRegent.acuity,
-            focus: hostRegent.focus,
-            armor: hostRegent.armor,
-            vitality: hostRegent.vitality,
-            category: hostRegent.category,
-          },
-          { battleType: "arena" }
-        );
-
-        const hostUnit: BattleUnit = {
-          id: generateId(),
-          sourceUnitId: hostRegent.id,
-          ownerId: lobby.hostUserId,
-          ownerKingdomId: hostKingdom.id,
-          name: hostRegent.name || hostKingdom.name + " Regente",
-          category: hostRegent.category,
-          troopSlot: hostRegent.troopSlot ?? undefined,
-          level: hostRegent.level,
-          classId: hostRegent.classId ?? undefined,
-          classFeatures: JSON.parse(hostRegent.classFeatures || "[]"),
-          equipment: JSON.parse(hostRegent.equipment || "[]"),
-          combat: hostRegent.combat,
-          acuity: hostRegent.acuity,
-          focus: hostRegent.focus,
-          armor: hostRegent.armor,
-          vitality: hostRegent.vitality,
-          damageReduction: hostRegent.damageReduction || 0,
-          currentHp: hostRegent.vitality * 2,
-          maxHp: hostRegent.vitality * 2,
-          posX: 0,
-          posY: Math.floor(gridHeight / 2),
-          initiative: Math.floor(Math.random() * 20) + 1 + hostRegent.acuity,
-          movesLeft: 0,
-          actionsLeft: 1,
-          isAlive: true,
-          actionMarks: 0,
-          protection: hostRegent.armor * 2,
-          protectionBroken: false,
-          conditions: [],
-          hasStartedAction: false,
-          actions: hostActions,
-        };
-
-        const guestActions = determineUnitActions(
-          {
-            combat: guestRegent.combat,
-            acuity: guestRegent.acuity,
-            focus: guestRegent.focus,
-            armor: guestRegent.armor,
-            vitality: guestRegent.vitality,
-            category: guestRegent.category,
-          },
-          { battleType: "arena" }
-        );
-
-        const guestUnit: BattleUnit = {
-          id: generateId(),
-          sourceUnitId: guestRegent.id,
-          ownerId: lobby.guestUserId,
-          ownerKingdomId: guestKingdom.id,
-          name: guestRegent.name || guestKingdom.name + " Regente",
-          category: guestRegent.category,
-          troopSlot: guestRegent.troopSlot ?? undefined,
-          level: guestRegent.level,
-          classId: guestRegent.classId ?? undefined,
-          classFeatures: JSON.parse(guestRegent.classFeatures || "[]"),
-          equipment: JSON.parse(guestRegent.equipment || "[]"),
-          combat: guestRegent.combat,
-          acuity: guestRegent.acuity,
-          focus: guestRegent.focus,
-          armor: guestRegent.armor,
-          vitality: guestRegent.vitality,
-          damageReduction: guestRegent.damageReduction || 0,
-          currentHp: guestRegent.vitality * 2,
-          maxHp: guestRegent.vitality * 2,
-          posX: gridWidth - 1,
-          posY: Math.floor(gridHeight / 2),
-          initiative: Math.floor(Math.random() * 20) + 1 + guestRegent.acuity,
-          movesLeft: 0,
-          actionsLeft: 1,
-          isAlive: true,
-          actionMarks: 0,
-          protection: guestRegent.armor * 2,
-          protectionBroken: false,
-          conditions: [],
-          hasStartedAction: false,
-          actions: guestActions,
-        };
-
-        // Ordenar por iniciativa
-        const units = [hostUnit, guestUnit].sort(
-          (a, b) => b.initiative - a.initiative
-        );
-        const initiativeOrder = units.map((u) => u.id);
-        // ActionOrder baseado em iniciativa
-        const firstUnit = units[0];
-        const actionOrder =
-          firstUnit.ownerId === lobby.hostUserId
-            ? [lobby.hostUserId, lobby.guestUserId as string]
-            : [lobby.guestUserId as string, lobby.hostUserId];
-
-        // Criar nova batalha
-        const newBattle: Battle = {
-          id: battleId,
-          lobbyId,
-          gridWidth,
-          gridHeight,
-          round: 1,
-          currentTurnIndex: 0,
-          status: "ACTIVE",
-          initiativeOrder,
-          actionOrder,
-          units,
-          logs: [],
-          createdAt: new Date(),
-          hostUserId: lobby.hostUserId,
-          guestUserId: lobby.guestUserId as string,
-          hostKingdomId: hostKingdom.id,
-          guestKingdomId: guestKingdom.id,
-          isArena: true,
-        };
-
-        activeBattles.set(battleId, newBattle);
-        lobby.status = "BATTLING";
-
-        // Emitir evento de revanche iniciada
-        io.to(lobbyId).emit("battle:rematch_started", {
-          battleId,
-          grid: { width: gridWidth, height: gridHeight },
-          units: units.map((u) => ({
-            id: u.id,
-            dbId: u.sourceUnitId,
-            ownerId: u.ownerId,
-            ownerKingdomId: u.ownerKingdomId,
-            name: u.name,
-            category: u.category,
-            combat: u.combat,
-            acuity: u.acuity,
-            focus: u.focus,
-            armor: u.armor,
-            vitality: u.vitality,
-            currentHp: u.currentHp,
-            posX: u.posX,
-            posY: u.posY,
-            initiative: u.initiative,
-            movesLeft: u.movesLeft,
-            actionsLeft: u.actionsLeft,
-            isAlive: u.isAlive,
-            actionMarks: u.actionMarks,
-            protection: u.protection,
-            protectionBroken: u.protectionBroken,
-            conditions: u.conditions,
-          })),
-          initiativeOrder,
-          actionOrder,
-          hostKingdom: {
-            id: hostKingdom.id,
-            name: hostKingdom.name,
-            ownerId: lobby.hostUserId,
-          },
-          guestKingdom: {
-            id: guestKingdom.id,
-            name: guestKingdom.name,
-            ownerId: lobby.guestUserId,
-          },
-        });
-
-        console.log(`[ARENA] Revanche iniciada! Nova batalha: ${battleId}`);
       }
     } catch (err) {
       console.error("[ARENA] request_rematch error:", err);
@@ -1835,6 +1963,14 @@ export const registerBattleHandlers = (io: Server, socket: Socket) => {
             lobbyId,
             userId,
           });
+
+          // Verificar se ambos desconectaram para pausar o timer
+          const battle = Array.from(activeBattles.values()).find(
+            (b) => b.lobbyId === lobbyId && b.status === "ACTIVE"
+          );
+          if (battle) {
+            pauseBattleTimerIfNoPlayers(battle.id);
+          }
         } else if (lobby && lobby.status !== "BATTLING") {
           // Não está em batalha, limpar normalmente
           if (lobby.hostUserId === userId) {

@@ -8,4 +8,3 @@ export { ClassCard } from "./ClassCard";
 export { AttributeRow } from "./AttributeRow";
 export { TemplateSelection } from "./TemplateSelection";
 export type * from "./types";
-export type * from "./template.types";

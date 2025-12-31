@@ -1,61 +1,30 @@
-// Kingdom Creation Types - Local to components
+// CreateKingdom Component Types
+// Re-exports and component-specific types
 
-export interface Race {
-  id: string;
-  name: string;
-  description: string;
-  passiveName: string;
-  passiveEffect: string;
-  color: number;
-}
+// Re-export from central types
+export type {
+  RaceDefinition as Race,
+  AlignmentDefinition as Alignment,
+  GameClassDefinition as GameClass,
+  TroopPassiveDefinition as TroopPassive,
+  CreateTroopTemplateData as TroopTemplate,
+  KingdomTemplateSummary,
+  KingdomTemplateDetails,
+  BaseAttributes,
+} from "../../types/kingdom.types";
 
-export interface Alignment {
-  id: string;
-  name: string;
-  description: string;
-  passiveName: string;
-  passiveEffect: string;
-  color: number;
-}
-
-export interface GameClass {
-  id: string;
-  name: string;
-  archetype: string;
-  resourceUsed: string;
-  description: string;
-  skills: any[];
-}
-
-export interface TroopPassive {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface TroopTemplate {
-  slotIndex: number;
-  name: string;
-  passiveId: string;
-  resourceType: "ore" | "supplies" | "arcane" | "experience" | "devotion";
-  combat: number;
-  acuity: number;
-  focus: number;
-  armor: number;
-  vitality: number;
-}
-
+// Component-specific form types
 export interface KingdomFormData {
   name: string;
   capitalName: string;
   alignment: string;
   race: string;
-  raceMetadata: any;
+  raceMetadata?: string;
 }
 
 export interface RegentFormData {
   name: string;
-  class: string;
+  classCode: string;
   attributeDistribution: {
     combat: number;
     acuity: number;

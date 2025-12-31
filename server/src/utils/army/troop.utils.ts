@@ -1,5 +1,6 @@
 // src/utils/army/troop.utils.ts
 
+import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { TROOP_PASSIVES_MAP } from "../../data/troop-passives";
 import {
@@ -9,6 +10,13 @@ import {
   MAX_TROOP_LEVEL,
   PlayerResources,
 } from "../../types";
+
+// Tipo para transação Prisma
+type PrismaTransaction = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+type PrismaClientOrTransaction = PrismaClient | PrismaTransaction;
 
 // Interface para dados de criação de template de tropa
 export interface TroopTemplateData {
@@ -75,8 +83,10 @@ export function validateTroopResource(
 // Criar os 5 templates de tropas para um reino
 export async function createTroopTemplatesForKingdom(
   kingdomId: string,
-  templates: TroopTemplateData[]
+  templates: TroopTemplateData[],
+  tx?: PrismaClientOrTransaction
 ): Promise<{ success: boolean; message?: string }> {
+  const db = tx || prisma;
   // Validar quantidade
   if (templates.length !== 5) {
     return {
@@ -133,7 +143,7 @@ export async function createTroopTemplatesForKingdom(
 
   // Criar templates no banco
   try {
-    await prisma.troopTemplate.createMany({
+    await db.troopTemplate.createMany({
       data: templates.map((t) => ({
         kingdomId,
         slotIndex: t.slotIndex,

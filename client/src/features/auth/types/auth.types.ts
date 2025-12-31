@@ -4,6 +4,7 @@ export interface User {
   id: string;
   username: string;
   email?: string;
+  token?: string;
 }
 
 export interface AuthState {
@@ -19,8 +20,8 @@ export interface AuthContextType {
     username: string,
     email: string,
     password: string
-  ) => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
+  ) => Promise<User>;
+  login: (username: string, password: string) => Promise<User>;
   logout: () => void;
   restoreSession: () => Promise<boolean>;
 }

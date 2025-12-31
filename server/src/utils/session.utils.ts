@@ -2,38 +2,42 @@
 // Funções utilitárias para verificar sessão ativa do usuário (Partida ou Arena)
 
 import { prisma } from "../lib/prisma";
+import type {
+  SessionType,
+  ActiveSession,
+  ArenaLobbyData,
+  ArenaBattleData,
+} from "../../../shared/types/session.types";
+
+// ============================================
+// Types para os Maps em memória
+// ============================================
+
+type ArenaLobbiesMap = Map<string, ArenaLobbyData>;
+type ArenaBattlesMap = Map<string, ArenaBattleData>;
+type UserToLobbyMap = Map<string, string>;
 
 // Referência aos mapas de arena em memória (importados do handler)
 // Será injetado pelo handler para evitar dependência circular
-let arenaLobbiesRef: Map<string, any> | null = null;
-let arenaBattlesRef: Map<string, any> | null = null;
-let userToLobbyRef: Map<string, string> | null = null;
+let arenaLobbiesRef: ArenaLobbiesMap | null = null;
+let arenaBattlesRef: ArenaBattlesMap | null = null;
+let userToLobbyRef: UserToLobbyMap | null = null;
 
 /**
  * Injeta referências dos mapas de arena para uso nas funções de sessão
  */
 export function setArenaRefs(
-  lobbies: Map<string, any>,
-  battles: Map<string, any>,
-  userToLobby: Map<string, string>
-) {
+  lobbies: ArenaLobbiesMap,
+  battles: ArenaBattlesMap,
+  userToLobby: UserToLobbyMap
+): void {
   arenaLobbiesRef = lobbies;
   arenaBattlesRef = battles;
   userToLobbyRef = userToLobby;
 }
 
-export type SessionType = "MATCH" | "ARENA_LOBBY" | "ARENA_BATTLE" | null;
-
-export interface ActiveSession {
-  type: SessionType;
-  sessionId: string | null; // matchId ou lobbyId/battleId
-  matchId?: string;
-  lobbyId?: string;
-  battleId?: string;
-  matchStatus?: string;
-  arenaStatus?: string;
-  playerId?: string; // MatchPlayer id (para partidas)
-}
+// Re-export types para compatibilidade
+export type { SessionType, ActiveSession };
 
 /**
  * Verifica se o usuário está em uma sessão ativa (Partida ou Arena)
@@ -74,8 +78,14 @@ export async function getUserActiveSession(
         `[SESSION] Usuário ${userId} encontrado no lobby ${lobbyId}, status: ${lobby.status}`
       );
 
-      // Verificar se o lobby está em batalha
-      if (lobby.status === "BATTLING") {
+      // Se o lobby está encerrado, não é uma sessão ativa
+      if (lobby.status === "ENDED") {
+        console.log(
+          `[SESSION] Lobby ${lobbyId} está ENDED, limpando referência do usuário`
+        );
+        userToLobbyRef.delete(userId);
+        // Continuar para retornar sessão vazia (não fazer return aqui)
+      } else if (lobby.status === "BATTLING") {
         // Encontrar a batalha associada
         const battlesCount = arenaBattlesRef?.size ?? 0;
         console.log(
@@ -102,14 +112,15 @@ export async function getUserActiveSession(
         console.warn(
           `[SESSION] ⚠️ Lobby ${lobbyId} está BATTLING mas nenhuma batalha ativa foi encontrada!`
         );
+      } else {
+        // Lobby está em WAITING ou READY - retornar como sessão ativa
+        return {
+          type: "ARENA_LOBBY",
+          sessionId: lobbyId,
+          lobbyId,
+          arenaStatus: lobby.status,
+        };
       }
-
-      return {
-        type: "ARENA_LOBBY",
-        sessionId: lobbyId,
-        lobbyId,
-        arenaStatus: lobby.status,
-      };
     }
   }
 

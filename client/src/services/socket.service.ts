@@ -276,6 +276,118 @@ class SocketService {
   getSocket(): Socket | null {
     return this.socket;
   }
+
+  /**
+   * Emite um evento e aguarda resposta em eventos de sucesso/erro
+   * Lida automaticamente com cleanup de listeners e timeout
+   */
+  waitForResponse<T>(
+    emitEvent: string,
+    emitData: any,
+    successEvent: string,
+    errorEvent: string,
+    timeoutMs: number = 10000
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      let isResolved = false;
+
+      const cleanup = () => {
+        if (isResolved) return;
+        isResolved = true;
+        clearTimeout(timeoutId);
+        this.off(successEvent, successHandler);
+        this.off(errorEvent, errorHandler);
+      };
+
+      const successHandler = (data: T) => {
+        cleanup();
+        resolve(data);
+      };
+
+      const errorHandler = (data: { message: string; code?: string }) => {
+        cleanup();
+        reject(new Error(data.message));
+      };
+
+      this.on(successEvent, successHandler);
+      this.on(errorEvent, errorHandler);
+
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error("Timeout na operação"));
+      }, timeoutMs);
+
+      this.emit(emitEvent, emitData);
+    });
+  }
+
+  /**
+   * Emite um evento e aguarda resposta em múltiplos eventos possíveis
+   * Útil quando há vários eventos de resposta possíveis (ex: session:active | session:none)
+   *
+   * @param emitEvent - Evento a ser emitido
+   * @param emitData - Dados do evento
+   * @param responseEvents - Objeto com eventos e seus handlers de transformação
+   * @param timeoutMs - Timeout em milissegundos (default: 10000)
+   *
+   * @example
+   * const result = await socketService.waitForMultipleResponses(
+   *   "session:check",
+   *   { userId },
+   *   {
+   *     "session:active": (data) => ({ hasSession: true, session: data }),
+   *     "session:none": () => ({ hasSession: false, session: null }),
+   *   },
+   *   5000
+   * );
+   */
+  waitForMultipleResponses<T>(
+    emitEvent: string,
+    emitData: any,
+    responseEvents: Record<string, (data: any) => T>,
+    timeoutMs: number = 10000
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      let isResolved = false;
+      const handlers: Map<string, (data: any) => void> = new Map();
+
+      const cleanup = () => {
+        if (isResolved) return;
+        isResolved = true;
+        clearTimeout(timeoutId);
+        handlers.forEach((handler, event) => {
+          this.off(event, handler);
+        });
+        this.off("error", errorHandler);
+      };
+
+      const errorHandler = (data: { message: string; code?: string }) => {
+        cleanup();
+        reject(new Error(data.message));
+      };
+
+      // Registrar handlers para cada evento de resposta
+      Object.entries(responseEvents).forEach(([event, transformer]) => {
+        const handler = (data: any) => {
+          cleanup();
+          resolve(transformer(data));
+        };
+        handlers.set(event, handler);
+        this.on(event, handler);
+      });
+
+      this.on("error", errorHandler);
+
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error("Timeout na operação"));
+      }, timeoutMs);
+
+      this.emit(emitEvent, emitData);
+    });
+  }
 }
 
 // Singleton

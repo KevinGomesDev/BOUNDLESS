@@ -14,6 +14,14 @@ model User {
   password  String
   createdAt DateTime @default(now())
 
+  // Estatísticas de Arena
+  arenaWins   Int @default(0)
+  arenaLosses Int @default(0)
+
+  // Estatísticas de Partidas
+  matchWins   Int @default(0)
+  matchLosses Int @default(0)
+
   kingdoms  Kingdom[]
   matches   MatchPlayer[]
 }

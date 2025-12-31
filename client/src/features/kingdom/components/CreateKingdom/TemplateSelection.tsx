@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { socketService } from "../../../../services/socket.service";
-import type {
-  KingdomTemplateSummary,
-  KingdomTemplateDetails,
-} from "./template.types";
+import type { KingdomTemplateSummary, KingdomTemplateDetails } from "./types";
 
 interface TemplateCardProps {
   template: KingdomTemplateSummary;

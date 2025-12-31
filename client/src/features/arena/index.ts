@@ -1,11 +1,23 @@
 // Arena Feature - Public API
+
+// Context
 export { ArenaProvider, ArenaContext } from "./context/ArenaContext";
+export {
+  arenaReducer,
+  initialArenaState,
+  arenaActions,
+} from "./context/arenaReducer";
+
+// Hooks
 export {
   useArena,
   useArenaState,
   useArenaLobby,
   useArenaBattle,
 } from "./hooks/useArena";
+export { useBattleKeyboard } from "./hooks/useBattleKeyboard";
+
+// Components
 export {
   ArenaList,
   ArenaLobbyView,
@@ -13,6 +25,34 @@ export {
   ArenaBattleView,
   BattleResultModal,
 } from "./components";
+
+// Battle components
+export { BattleHeader, UnitPanel } from "./components/battle";
+
+// Shared components
+export {
+  CircularProgress,
+  MovementDots,
+  ActionSquares,
+  ScarMarks,
+  ConditionBadge,
+  AttributeTooltip,
+} from "./components/shared";
+
+// Utils
+export { arenaLog, battleLog, lobbyLog } from "./utils";
+
+// Constants
+export {
+  CONDITIONS_INFO,
+  getConditionInfo,
+  ACTIONS_INFO,
+  ATTRIBUTE_TOOLTIPS,
+  UI_COLORS,
+  TIMER_THRESHOLDS,
+} from "./constants";
+
+// Types
 export type {
   ArenaLobby,
   ArenaLobbyStatus,

@@ -1,12 +1,15 @@
-import React, { createContext, useReducer, useCallback } from "react";
+import React, { createContext, useReducer, useCallback, useMemo } from "react";
+import { kingdomApi } from "../api";
 import type {
   KingdomState,
   KingdomContextType,
   KingdomAction,
-  Kingdom,
+  KingdomWithRelations,
+  KingdomSummary,
   CreateKingdomData,
 } from "../types/kingdom.types";
-import { socketService } from "../../../services/socket.service";
+
+// ============ INITIAL STATE ============
 
 const initialState: KingdomState = {
   kingdom: null,
@@ -14,6 +17,8 @@ const initialState: KingdomState = {
   isLoading: false,
   error: null,
 };
+
+// ============ REDUCER ============
 
 function kingdomReducer(
   state: KingdomState,
@@ -35,126 +40,149 @@ function kingdomReducer(
   }
 }
 
+// ============ CONTEXT ============
+
 export const KingdomContext = createContext<KingdomContextType | undefined>(
   undefined
 );
 
+// ============ PROVIDER ============
+
 export function KingdomProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(kingdomReducer, initialState);
 
+  /**
+   * Cria um novo reino customizado
+   */
   const createKingdom = useCallback(
-    async (data: CreateKingdomData): Promise<Kingdom> => {
+    async (data: CreateKingdomData): Promise<KingdomWithRelations> => {
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
 
       try {
-        socketService.emit("kingdom:create", data);
+        const response = await kingdomApi.create(data);
 
-        const kingdom = await new Promise<Kingdom>((resolve, reject) => {
-          let timeoutId: ReturnType<typeof setTimeout>;
+        if (!response.success || !response.data) {
+          throw new Error(response.error || "Erro ao criar reino");
+        }
 
-          const successHandler = (kingdomData: Kingdom) => {
-            clearTimeout(timeoutId);
-            socketService.off("kingdom:created", successHandler);
-            socketService.off("error", errorHandler);
-            resolve(kingdomData);
-          };
+        dispatch({ type: "SET_KINGDOM", payload: response.data });
 
-          const errorHandler = (error: { message: string }) => {
-            clearTimeout(timeoutId);
-            socketService.off("kingdom:created", successHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error(error.message || "Erro ao criar reino"));
-          };
+        // Atualiza lista de reinos
+        const listResponse = await kingdomApi.list();
+        if (listResponse.success && listResponse.data) {
+          dispatch({ type: "SET_KINGDOMS", payload: listResponse.data });
+        }
 
-          socketService.on("kingdom:created", successHandler);
-          socketService.on("error", errorHandler);
-
-          timeoutId = setTimeout(() => {
-            socketService.off("kingdom:created", successHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error("Timeout ao criar reino"));
-          }, 10000);
-        });
-
-        dispatch({ type: "SET_KINGDOM", payload: kingdom });
-        dispatch({ type: "SET_LOADING", payload: false });
-        return kingdom;
-      } catch (error: any) {
-        dispatch({
-          type: "SET_ERROR",
-          payload: error?.message || "Erro ao criar reino",
-        });
-        dispatch({ type: "SET_LOADING", payload: false });
+        return response.data;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Erro ao criar reino";
+        dispatch({ type: "SET_ERROR", payload: message });
         throw error;
+      } finally {
+        dispatch({ type: "SET_LOADING", payload: false });
       }
     },
     []
   );
 
-  const loadKingdoms = useCallback(async (): Promise<Kingdom[]> => {
+  /**
+   * Cria um reino a partir de um template pré-definido
+   */
+  const createFromTemplate = useCallback(
+    async (templateId: string): Promise<KingdomWithRelations> => {
+      dispatch({ type: "SET_LOADING", payload: true });
+      dispatch({ type: "SET_ERROR", payload: null });
+
+      try {
+        const response = await kingdomApi.createFromTemplate(templateId);
+
+        if (!response.success || !response.data) {
+          throw new Error(response.error || "Erro ao criar reino do template");
+        }
+
+        dispatch({ type: "SET_KINGDOM", payload: response.data.kingdom });
+
+        // Atualiza lista de reinos
+        const listResponse = await kingdomApi.list();
+        if (listResponse.success && listResponse.data) {
+          dispatch({ type: "SET_KINGDOMS", payload: listResponse.data });
+        }
+
+        return response.data.kingdom;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Erro ao criar reino";
+        dispatch({ type: "SET_ERROR", payload: message });
+        throw error;
+      } finally {
+        dispatch({ type: "SET_LOADING", payload: false });
+      }
+    },
+    []
+  );
+
+  /**
+   * Carrega lista de reinos do usuário
+   */
+  const loadKingdoms = useCallback(async (): Promise<KingdomSummary[]> => {
     dispatch({ type: "SET_LOADING", payload: true });
+    dispatch({ type: "SET_ERROR", payload: null });
 
     try {
-      socketService.emit("kingdom:list");
+      const response = await kingdomApi.list();
 
-      const kingdoms = await new Promise<Kingdom[]>((resolve, reject) => {
-        let resolved = false;
+      if (!response.success) {
+        throw new Error(response.error || "Erro ao carregar reinos");
+      }
 
-        const cleanup = () => {
-          socketService.off("kingdom:list_success", successHandler);
-          socketService.off("error", errorHandler);
-          clearTimeout(timeoutId);
-        };
-
-        const successHandler = (data: Kingdom[] | { kingdoms: Kingdom[] }) => {
-          if (resolved) return;
-          resolved = true;
-          cleanup();
-          resolve(Array.isArray(data) ? data : data.kingdoms || []);
-        };
-
-        const errorHandler = (data: { message: string }) => {
-          if (resolved) return;
-          resolved = true;
-          cleanup();
-          reject(new Error(data.message));
-        };
-
-        socketService.on("kingdom:list_success", successHandler);
-        socketService.on("error", errorHandler);
-
-        const timeoutId = setTimeout(() => {
-          if (resolved) return;
-          resolved = true;
-          cleanup();
-          reject(new Error("Timeout ao carregar reinos"));
-        }, 10000);
-      });
-
+      const kingdoms = response.data || [];
       dispatch({ type: "SET_KINGDOMS", payload: kingdoms });
-      dispatch({ type: "SET_LOADING", payload: false });
       return kingdoms;
-    } catch (error: any) {
-      dispatch({
-        type: "SET_ERROR",
-        payload: error?.message || "Erro ao carregar reinos",
-      });
-      dispatch({ type: "SET_LOADING", payload: false });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro ao carregar reinos";
+      dispatch({ type: "SET_ERROR", payload: message });
       throw error;
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
     }
   }, []);
 
-  const selectKingdom = useCallback((kingdom: Kingdom | null) => {
+  /**
+   * Seleciona um reino como atual
+   */
+  const selectKingdom = useCallback((kingdom: KingdomWithRelations | null) => {
     dispatch({ type: "SET_KINGDOM", payload: kingdom });
   }, []);
 
-  const contextValue: KingdomContextType = {
-    state,
-    createKingdom,
-    loadKingdoms,
-    selectKingdom,
-  };
+  /**
+   * Limpa erro atual
+   */
+  const clearError = useCallback(() => {
+    dispatch({ type: "SET_ERROR", payload: null });
+  }, []);
+
+  // Memoiza o valor do contexto
+  const contextValue = useMemo<KingdomContextType>(
+    () => ({
+      state,
+      createKingdom,
+      createFromTemplate,
+      loadKingdoms,
+      selectKingdom,
+      clearError,
+    }),
+    [
+      state,
+      createKingdom,
+      createFromTemplate,
+      loadKingdoms,
+      selectKingdom,
+      clearError,
+    ]
+  );
 
   return (
     <KingdomContext.Provider value={contextValue}>

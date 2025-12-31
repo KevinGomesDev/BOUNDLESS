@@ -41,41 +41,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   const register = useCallback(
-    async (username: string, email: string, password: string) => {
+    async (
+      username: string,
+      email: string,
+      password: string
+    ): Promise<User> => {
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
 
       try {
-        socketService.emit("auth:register", { username, email, password });
-
-        const user = await new Promise<User>((resolve, reject) => {
-          const successHandler = (data: User) => {
-            socketService.off("auth:success", successHandler);
-            socketService.off("error", errorHandler);
-            resolve(data);
-          };
-
-          const errorHandler = (data: { message: string }) => {
-            socketService.off("auth:success", successHandler);
-            socketService.off("error", errorHandler);
-            reject(new Error(data.message));
-          };
-
-          socketService.on("auth:success", successHandler);
-          socketService.on("error", errorHandler);
-
-          setTimeout(() => reject(new Error("Timeout na autenticação")), 10000);
-        });
+        const user = await socketService.waitForResponse<User>(
+          "auth:register",
+          { username, email, password },
+          "auth:success",
+          "auth:error",
+          10000
+        );
 
         // Save token to localStorage
-        const token = (user as any).token || (user as any).accessToken;
-        if (token) {
-          localStorage.setItem("auth_token", token);
+        if (user.token) {
+          localStorage.setItem("auth_token", user.token);
         }
         localStorage.setItem("auth_user", JSON.stringify(user));
 
         dispatch({ type: "SET_USER", payload: user });
         dispatch({ type: "SET_LOADING", payload: false });
+
+        return user;
       } catch (error: any) {
         dispatch({
           type: "SET_ERROR",
@@ -88,53 +80,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const login = useCallback(async (username: string, password: string) => {
-    dispatch({ type: "SET_LOADING", payload: true });
-    dispatch({ type: "SET_ERROR", payload: null });
+  const login = useCallback(
+    async (username: string, password: string): Promise<User> => {
+      dispatch({ type: "SET_LOADING", payload: true });
+      dispatch({ type: "SET_ERROR", payload: null });
 
-    try {
-      socketService.emit("auth:login", { username, password });
+      try {
+        const user = await socketService.waitForResponse<User>(
+          "auth:login",
+          { username, password },
+          "auth:success",
+          "auth:error",
+          10000
+        );
 
-      const user = await new Promise<User>((resolve, reject) => {
-        const successHandler = (data: User) => {
-          socketService.off("auth:success", successHandler);
-          socketService.off("error", errorHandler);
-          resolve(data);
-        };
+        if (user.token) {
+          localStorage.setItem("auth_token", user.token);
+        }
+        localStorage.setItem("auth_user", JSON.stringify(user));
 
-        const errorHandler = (data: { message: string }) => {
-          socketService.off("auth:success", successHandler);
-          socketService.off("error", errorHandler);
-          reject(new Error(data.message));
-        };
+        dispatch({ type: "SET_USER", payload: user });
+        dispatch({ type: "SET_LOADING", payload: false });
 
-        socketService.on("auth:success", successHandler);
-        socketService.on("error", errorHandler);
-
-        setTimeout(() => reject(new Error("Timeout na autenticação")), 10000);
-      });
-
-      const token = (user as any).token || (user as any).accessToken;
-      if (token) {
-        localStorage.setItem("auth_token", token);
+        return user;
+      } catch (error: any) {
+        dispatch({
+          type: "SET_ERROR",
+          payload: error?.message || "Erro ao fazer login",
+        });
+        dispatch({ type: "SET_LOADING", payload: false });
+        throw error;
       }
-      localStorage.setItem("auth_user", JSON.stringify(user));
-
-      dispatch({ type: "SET_USER", payload: user });
-      dispatch({ type: "SET_LOADING", payload: false });
-
-      // Nota: A verificação de sessão será feita no DashboardPage após login
-
-      return user;
-    } catch (error: any) {
-      dispatch({
-        type: "SET_ERROR",
-        payload: error?.message || "Erro ao fazer login",
-      });
-      dispatch({ type: "SET_LOADING", payload: false });
-      throw error;
-    }
-  }, []);
+    },
+    []
+  );
 
   const logout = useCallback(() => {
     socketService.emit("auth:logout");
@@ -152,41 +131,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const user = JSON.parse(savedUser);
+      try {
+        const verifiedUser = await socketService.waitForResponse<User>(
+          "auth:verify",
+          { token: savedToken },
+          "auth:verified",
+          "auth:error",
+          5000
+        );
 
-      socketService.emit("auth:verify", { token: savedToken });
+        // Atualiza o token se o servidor enviou um novo (refresh)
+        if (verifiedUser.token) {
+          localStorage.setItem("auth_token", verifiedUser.token);
+        }
+        localStorage.setItem("auth_user", JSON.stringify(verifiedUser));
 
-      const isValid = await new Promise<boolean>((resolve) => {
-        let timeoutId: ReturnType<typeof setTimeout>;
-
-        const successHandler = () => {
-          clearTimeout(timeoutId);
-          socketService.off("auth:verified", successHandler);
-          socketService.off("error", errorHandler);
-          resolve(true);
-        };
-
-        const errorHandler = () => {
-          clearTimeout(timeoutId);
-          socketService.off("auth:verified", successHandler);
-          socketService.off("error", errorHandler);
-          resolve(false);
-        };
-
-        socketService.on("auth:verified", successHandler);
-        socketService.on("error", errorHandler);
-
-        timeoutId = setTimeout(() => {
-          socketService.off("auth:verified", successHandler);
-          socketService.off("error", errorHandler);
-          resolve(false);
-        }, 5000);
-      });
-
-      if (isValid) {
-        dispatch({ type: "SET_USER", payload: user });
+        dispatch({ type: "SET_USER", payload: verifiedUser });
         return true;
-      } else {
+      } catch {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
         return false;

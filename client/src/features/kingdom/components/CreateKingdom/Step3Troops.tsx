@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { TroopPassive, TroopTemplate } from "./types";
+import type { TroopPassive, TroopTemplate, BaseAttributes } from "./types";
 
 const RESOURCE_TYPES = [
   { id: "ore", name: "Ore", color: "text-amber-400" },
@@ -33,6 +33,15 @@ interface Step3TroopsProps {
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onBack: () => void;
+  // Optional hook-based props
+  activeSlot?: number;
+  setActiveSlot?: (slot: number) => void;
+  updateTemplate?: (slotIndex: number, updates: Partial<TroopTemplate>) => void;
+  updateAttribute?: (
+    slotIndex: number,
+    attr: keyof BaseAttributes,
+    value: number
+  ) => void;
 }
 
 export const Step3Troops: React.FC<Step3TroopsProps> = ({
@@ -43,26 +52,30 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
   isLoading,
   onSubmit,
   onBack,
+  activeSlot: externalActiveSlot,
+  setActiveSlot: externalSetActiveSlot,
+  updateTemplate: externalUpdateTemplate,
+  updateAttribute: externalUpdateAttribute,
 }) => {
-  const [activeSlot, setActiveSlot] = useState(0);
+  // Use external state if provided, otherwise use local state
+  const [localActiveSlot, setLocalActiveSlot] = useState(0);
+  const activeSlot = externalActiveSlot ?? localActiveSlot;
+  const setActiveSlot = externalSetActiveSlot ?? setLocalActiveSlot;
 
-  const updateTemplate = (
-    slotIndex: number,
-    updates: Partial<TroopTemplate>
-  ) => {
-    setTemplates((prev) =>
-      prev.map((t) => (t.slotIndex === slotIndex ? { ...t, ...updates } : t))
-    );
-  };
+  const updateTemplate =
+    externalUpdateTemplate ??
+    ((slotIndex: number, updates: Partial<TroopTemplate>) => {
+      setTemplates((prev) =>
+        prev.map((t) => (t.slotIndex === slotIndex ? { ...t, ...updates } : t))
+      );
+    });
 
-  const updateAttribute = (
-    slotIndex: number,
-    attr: "combat" | "acuity" | "focus" | "armor" | "vitality",
-    value: number
-  ) => {
-    const safeValue = Math.max(0, Math.min(10, value));
-    updateTemplate(slotIndex, { [attr]: safeValue });
-  };
+  const updateAttribute =
+    externalUpdateAttribute ??
+    ((slotIndex: number, attr: keyof BaseAttributes, value: number) => {
+      const safeValue = Math.max(0, Math.min(10, value));
+      updateTemplate(slotIndex, { [attr]: safeValue });
+    });
 
   const currentTemplate = templates[activeSlot];
   const currentTotal =

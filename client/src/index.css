@@ -190,3 +190,17 @@
     rgba(0, 0, 0, 0.2) 100%
   );
 }
+
+/* === LOADING BAR ANIMATION === */
+@keyframes loadingBar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-loading-bar {
+  animation: loadingBar 1.5s ease-in-out infinite;
+}

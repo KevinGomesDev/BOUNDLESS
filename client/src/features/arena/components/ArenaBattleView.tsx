@@ -3,71 +3,9 @@ import { useArena } from "../hooks/useArena";
 import { useAuth } from "../../auth";
 import { ArenaBattleCanvas } from "./ArenaBattleCanvas";
 import { BattleResultModal } from "./BattleResultModal";
+import { FullScreenLoading } from "@/components/FullScreenLoading";
+import { getConditionInfo } from "../constants";
 import type { ArenaUnit } from "../types/arena.types";
-
-// Definições de tooltips para CONDIÇÕES
-const CONDITIONS_INFO: Record<
-  string,
-  { icon: string; name: string; description: string }
-> = {
-  GRAPPLED: {
-    icon: "🤼",
-    name: "Agarrado",
-    description:
-      "A unidade não pode se mover ou usar disparada enquanto estiver agarrada.",
-  },
-  DODGING: {
-    icon: "🌀",
-    name: "Esquivando",
-    description:
-      "Postura defensiva. Ataques têm 50% de chance de errar esta unidade.",
-  },
-  PROTECTED: {
-    icon: "🛡️",
-    name: "Protegido",
-    description: "O próximo dano recebido é reduzido em 5 pontos.",
-  },
-  STUNNED: {
-    icon: "💫",
-    name: "Atordoado",
-    description: "Movimentação reduzida em 2 células neste turno.",
-  },
-  FROZEN: {
-    icon: "❄️",
-    name: "Congelado",
-    description: "A unidade não pode realizar nenhuma ação.",
-  },
-  BURNING: {
-    icon: "🔥",
-    name: "Queimando",
-    description: "Recebe 3 de dano no início de cada turno.",
-  },
-  SLOWED: {
-    icon: "🐌",
-    name: "Lentidão",
-    description: "Movimentação reduzida pela metade.",
-  },
-  HELP_NEXT: {
-    icon: "🤝",
-    name: "Assistência",
-    description: "Próximo ataque ou ação recebe bônus de aliado.",
-  },
-  DERRUBADA: {
-    icon: "⬇️",
-    name: "Derrubado",
-    description: "A unidade está no chão e tem Acuidade reduzida a 0.",
-  },
-  ELETRIFICADA: {
-    icon: "⚡",
-    name: "Eletrificado",
-    description: "Acuidade é dobrada enquanto durar o efeito.",
-  },
-  CONGELADA: {
-    icon: "🧊",
-    name: "Congelado (Acuidade)",
-    description: "Acuidade é reduzida ao mínimo (1).",
-  },
-};
 
 // Componente de Progresso Circular (HP e Proteção)
 const CircularProgress: React.FC<{
@@ -286,11 +224,7 @@ const ScarMarks: React.FC<{ current: number; max: number }> = ({
 // Componente de Badge de Condição
 const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
   const [showTooltip, setShowTooltip] = useState(false);
-  const info = CONDITIONS_INFO[condition] || {
-    icon: "❓",
-    name: condition,
-    description: "Condição desconhecida.",
-  };
+  const info = getConditionInfo(condition);
 
   return (
     <div
@@ -513,10 +447,11 @@ export const ArenaBattleView: React.FC = () => {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null); // Ação aguardando alvo
-  const [turnTimer, setTurnTimer] = useState<number>(30); // Timer de 30 segundos
   const logTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoEndTriggeredRef = useRef<boolean>(false); // Evita múltiplos auto-ends
+
+  // Timer é sincronizado pelo servidor via battle.turnTimer
+  const turnTimer = battle?.turnTimer ?? 30;
 
   // Auto-fechar log após 5 segundos sem interação
   const handleLogInteraction = useCallback(() => {
@@ -538,6 +473,11 @@ export const ArenaBattleView: React.FC = () => {
     };
   }, []);
 
+  // Resetar flag de auto-end quando muda de turno
+  useEffect(() => {
+    autoEndTriggeredRef.current = false;
+  }, [battle?.currentPlayerId, battle?.round]);
+
   // Auto-selecionar a unidade do turno atual quando muda de turno ou monta
   useEffect(() => {
     if (!battle || !user) return;
@@ -556,57 +496,6 @@ export const ArenaBattleView: React.FC = () => {
       }
     }
   }, [battle?.currentPlayerId, battle?.round, user?.id, units, beginAction]);
-
-  // Timer de 30 segundos para auto-skip turn
-  useEffect(() => {
-    if (!battle || !user) return;
-
-    const isMyTurnNow = battle.currentPlayerId === user.id;
-
-    // Resetar timer quando muda de turno
-    setTurnTimer(30);
-    autoEndTriggeredRef.current = false;
-
-    if (!isMyTurnNow) {
-      // Não é meu turno, limpar timer
-      if (turnTimerRef.current) {
-        clearInterval(turnTimerRef.current);
-        turnTimerRef.current = null;
-      }
-      return;
-    }
-
-    // Iniciar timer de 30 segundos
-    turnTimerRef.current = setInterval(() => {
-      setTurnTimer((prev) => {
-        if (prev <= 1) {
-          // Tempo acabou - auto-skip
-          if (!autoEndTriggeredRef.current) {
-            autoEndTriggeredRef.current = true;
-            const myUnit = units.find(
-              (u) => u.ownerId === user.id && u.isAlive
-            );
-            if (myUnit) {
-              console.log(
-                "%c[ArenaBattleView] ⏰ TEMPO ESGOTADO - Auto-skip turn",
-                "color: #f59e0b; font-weight: bold;"
-              );
-              endAction(myUnit.id);
-            }
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (turnTimerRef.current) {
-        clearInterval(turnTimerRef.current);
-        turnTimerRef.current = null;
-      }
-    };
-  }, [battle?.currentPlayerId, battle?.round, user?.id, units, endAction]);
 
   // Auto-encerrar turno quando movimentos E ações acabarem
   useEffect(() => {
@@ -657,11 +546,7 @@ export const ArenaBattleView: React.FC = () => {
   }
 
   if (!battle || !user) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <p className="text-parchment-dark">Carregando batalha...</p>
-      </div>
-    );
+    return <FullScreenLoading message="Preparando a arena de batalha..." />;
   }
 
   const isMyTurn = battle.currentPlayerId === user.id;
@@ -951,31 +836,29 @@ export const ArenaBattleView: React.FC = () => {
             </span>
           </div>
 
-          {/* Timer - Só quando é meu turno */}
-          {isMyTurn && (
-            <div
-              className={`px-3 py-1 rounded border ${
+          {/* Timer - Visível para todos os jogadores */}
+          <div
+            className={`px-3 py-1 rounded border ${
+              turnTimer <= 10
+                ? "bg-red-900/60 border-red-500 animate-pulse"
+                : turnTimer <= 20
+                ? "bg-amber-900/60 border-amber-500"
+                : "bg-citadel-obsidian/60 border-metal-iron"
+            }`}
+          >
+            <span className="text-parchment-aged text-xs">⏰</span>
+            <span
+              className={`font-bold text-lg ml-2 ${
                 turnTimer <= 10
-                  ? "bg-red-900/60 border-red-500 animate-pulse"
+                  ? "text-red-400"
                   : turnTimer <= 20
-                  ? "bg-amber-900/60 border-amber-500"
-                  : "bg-citadel-obsidian/60 border-metal-iron"
+                  ? "text-amber-400"
+                  : "text-parchment-light"
               }`}
             >
-              <span className="text-parchment-aged text-xs">⏰</span>
-              <span
-                className={`font-bold text-lg ml-2 ${
-                  turnTimer <= 10
-                    ? "text-red-400"
-                    : turnTimer <= 20
-                    ? "text-amber-400"
-                    : "text-parchment-light"
-                }`}
-              >
-                {turnTimer}s
-              </span>
-            </div>
-          )}
+              {turnTimer}s
+            </span>
+          </div>
 
           {/* Separador */}
           <p className="text-2xl font-bold text-war-crimson">⚔️</p>

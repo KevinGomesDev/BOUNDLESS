@@ -17,24 +17,14 @@ interface ArenaBattleCanvasProps {
   onUnitClick?: (unit: ArenaUnit) => void;
 }
 
-// === CONSTANTES FORA DO COMPONENTE ===
-const GRID_SIZE = 20;
+/**
+ * ArenaBattleCanvas - Grid de batalha otimizado
+ * Usa configuração recebida do servidor (battle.config)
+ */
 
-// Paleta de cores Pixel Art
-const COLORS = {
-  gridBackground: "#1a1a2e",
-  gridLine: "#16213e",
-  gridDot: "#0f3460",
-  cellLight: "#2d2d44",
-  cellDark: "#1f1f33",
-  cellHover: "#3d3d5c",
-  cellMovable: "#2a4a2a",
-  cellAttackable: "#4a2a2a",
-  hostPrimary: "#4a90d9",
-  hostSecondary: "#2d5a8a",
+// Cores locais para elementos de UI (não do mapa)
+const UI_COLORS = {
   hostHighlight: "#7ab8ff",
-  guestPrimary: "#d94a4a",
-  guestSecondary: "#8a2d2d",
   guestHighlight: "#ff7a7a",
   hpFull: "#4ade80",
   hpMedium: "#fbbf24",
@@ -43,19 +33,8 @@ const COLORS = {
   protectionBroken: "#6b7280",
   turnIndicator: "#ffd700",
   deadUnit: "#4a4a4a",
-} as const;
-
-const CONDITION_COLORS: Record<string, string> = {
-  QUEIMANDO: "#ff6b35",
-  CONGELADA: "#74c0fc",
-  ENVENENADA: "#51cf66",
-  ATORDOADA: "#ffd43b",
-  AGARRADA: "#845ef7",
 };
 
-/**
- * ArenaBattleCanvas - Grid de batalha 20x20 otimizado
- */
 export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
   ({
     battle,
@@ -65,6 +44,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
     onCellClick,
     onUnitClick,
   }) => {
+    // Extrair configuração do servidor (grid/mapa)
+    const { config } = battle;
+    const GRID_WIDTH = config.grid.width;
+    const GRID_HEIGHT = config.grid.height;
+    const GRID_COLORS = config.colors;
+    const CONDITION_COLORS = config.conditionColors;
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const animationFrameRef = useRef<number | null>(null);
@@ -76,8 +62,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
     } | null>(null);
     const [canvasSize, setCanvasSize] = useState(640);
 
-    // Calcular tamanho da célula baseado no canvas
-    const cellSize = canvasSize / GRID_SIZE;
+    // Calcular tamanho da célula baseado no canvas (usando a maior dimensão)
+    const cellSize = Math.min(
+      canvasSize / GRID_WIDTH,
+      canvasSize / GRID_HEIGHT
+    );
+    const canvasWidth = cellSize * GRID_WIDTH;
+    const canvasHeight = cellSize * GRID_HEIGHT;
 
     // === MEMOIZAÇÃO DE CÁLCULOS PESADOS ===
     const selectedUnit = useMemo(
@@ -108,7 +99,7 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           if (Math.abs(dx) + Math.abs(dy) <= range && (dx !== 0 || dy !== 0)) {
             const nx = selectedUnit.posX + dx;
             const ny = selectedUnit.posY + dy;
-            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+            if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
               const key = `${nx},${ny}`;
               if (!unitPositionMap.has(key)) {
                 movable.add(key);
@@ -151,18 +142,18 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       ) => {
         const colors = isOwned
           ? {
-              primary: COLORS.hostPrimary,
-              secondary: COLORS.hostSecondary,
-              highlight: COLORS.hostHighlight,
+              primary: GRID_COLORS.hostPrimary,
+              secondary: GRID_COLORS.hostSecondary,
+              highlight: UI_COLORS.hostHighlight,
             }
           : {
-              primary: COLORS.guestPrimary,
-              secondary: COLORS.guestSecondary,
-              highlight: COLORS.guestHighlight,
+              primary: GRID_COLORS.guestPrimary,
+              secondary: GRID_COLORS.guestSecondary,
+              highlight: UI_COLORS.guestHighlight,
             };
 
         if (!unit.isAlive) {
-          ctx.fillStyle = COLORS.deadUnit;
+          ctx.fillStyle = UI_COLORS.deadUnit;
           const cx = x + size / 2;
           const cy = y + size / 2;
           ctx.fillRect(cx - 6, cy - 2, 4, 4);
@@ -214,12 +205,12 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
 
         // Seleção
         if (unit.id === selectedUnitId) {
-          ctx.strokeStyle = COLORS.turnIndicator;
+          ctx.strokeStyle = UI_COLORS.turnIndicator;
           ctx.lineWidth = 2;
           ctx.strokeRect(x + 2, y + 2, size - 4, size - 4);
         }
       },
-      [selectedUnitId]
+      [selectedUnitId, GRID_COLORS]
     );
 
     // Função para barras de HP/Proteção
@@ -240,10 +231,10 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
         const hpPercent = unit.currentHp / unit.maxHp;
         const hpColor =
           hpPercent > 0.6
-            ? COLORS.hpFull
+            ? UI_COLORS.hpFull
             : hpPercent > 0.3
-            ? COLORS.hpMedium
-            : COLORS.hpLow;
+            ? UI_COLORS.hpMedium
+            : UI_COLORS.hpLow;
 
         ctx.fillStyle = "#1a1a1a";
         ctx.fillRect(barX, barY, barWidth, barHeight);
@@ -259,8 +250,8 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           ctx.fillStyle = "#1a1a1a";
           ctx.fillRect(barX, protY, barWidth, barHeight - 1);
           ctx.fillStyle = unit.protectionBroken
-            ? COLORS.protectionBroken
-            : COLORS.protection;
+            ? UI_COLORS.protectionBroken
+            : UI_COLORS.protection;
           ctx.fillRect(barX, protY, barWidth * protPercent, barHeight - 1);
         }
       },
@@ -280,7 +271,7 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           ctx.fillRect(x + 4 + i * 6, y + 2, 4, 4);
         });
       },
-      []
+      [CONDITION_COLORS]
     );
 
     // === FUNÇÃO DE DESENHO OTIMIZADA ===
@@ -294,30 +285,32 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       ctx.imageSmoothingEnabled = false;
 
       // Limpar canvas
-      ctx.fillStyle = COLORS.gridBackground;
-      ctx.fillRect(0, 0, canvasSize, canvasSize);
+      ctx.fillStyle = GRID_COLORS.gridBackground;
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
       // === DESENHAR GRID ===
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
           const cellX = x * cellSize;
           const cellY = y * cellSize;
           const cellKey = `${x},${y}`;
 
           // Padrão xadrez
           const isLight = (x + y) % 2 === 0;
-          let cellColor: string = isLight ? COLORS.cellLight : COLORS.cellDark;
+          let cellColor: string = isLight
+            ? GRID_COLORS.cellLight
+            : GRID_COLORS.cellDark;
 
           // Destacar células especiais
           if (attackableCells.has(cellKey)) {
-            cellColor = COLORS.cellAttackable;
+            cellColor = GRID_COLORS.cellAttackable;
           } else if (movableCells.has(cellKey)) {
-            cellColor = COLORS.cellMovable;
+            cellColor = GRID_COLORS.cellMovable;
           }
 
           // Hover
           if (hoveredCell?.x === x && hoveredCell?.y === y) {
-            cellColor = COLORS.cellHover;
+            cellColor = GRID_COLORS.cellHover;
           }
 
           // Desenhar célula
@@ -325,13 +318,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           ctx.fillRect(cellX, cellY, cellSize, cellSize);
 
           // Borda
-          ctx.strokeStyle = COLORS.gridLine;
+          ctx.strokeStyle = GRID_COLORS.gridLine;
           ctx.lineWidth = 1;
           ctx.strokeRect(cellX, cellY, cellSize, cellSize);
 
           // Ponto central decorativo
           if ((x + y) % 4 === 0) {
-            ctx.fillStyle = COLORS.gridDot;
+            ctx.fillStyle = GRID_COLORS.gridDot;
             ctx.fillRect(
               cellX + cellSize / 2 - 1,
               cellY + cellSize / 2 - 1,
@@ -343,11 +336,11 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       }
 
       // === SPAWN AREAS ===
-      ctx.strokeStyle = COLORS.hostSecondary;
+      ctx.strokeStyle = GRID_COLORS.hostSecondary;
       ctx.lineWidth = 2;
       ctx.strokeRect(8 * cellSize, 18 * cellSize, 4 * cellSize, 2 * cellSize);
 
-      ctx.strokeStyle = COLORS.guestSecondary;
+      ctx.strokeStyle = GRID_COLORS.guestSecondary;
       ctx.strokeRect(8 * cellSize, 0, 4 * cellSize, 2 * cellSize);
 
       // === DESENHAR UNIDADES ===
@@ -417,6 +410,11 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       drawUnit,
       drawUnitBars,
       drawConditions,
+      GRID_COLORS,
+      GRID_WIDTH,
+      GRID_HEIGHT,
+      canvasWidth,
+      canvasHeight,
     ]);
 
     // === MARCAR PARA REDESENHO ===
@@ -494,13 +492,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
 
         const rect = canvas.getBoundingClientRect();
         const x = Math.floor(
-          ((e.clientX - rect.left) / rect.width) * GRID_SIZE
+          ((e.clientX - rect.left) / rect.width) * GRID_WIDTH
         );
         const y = Math.floor(
-          ((e.clientY - rect.top) / rect.height) * GRID_SIZE
+          ((e.clientY - rect.top) / rect.height) * GRID_HEIGHT
         );
 
-        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
           setHoveredCell((prev) => {
             if (prev?.x === x && prev?.y === y) return prev;
             return { x, y };
@@ -509,7 +507,7 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           setHoveredCell(null);
         }
       },
-      []
+      [GRID_WIDTH, GRID_HEIGHT]
     );
 
     const handleMouseLeave = useCallback(() => {
@@ -523,13 +521,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
 
         const rect = canvas.getBoundingClientRect();
         const x = Math.floor(
-          ((e.clientX - rect.left) / rect.width) * GRID_SIZE
+          ((e.clientX - rect.left) / rect.width) * GRID_WIDTH
         );
         const y = Math.floor(
-          ((e.clientY - rect.top) / rect.height) * GRID_SIZE
+          ((e.clientY - rect.top) / rect.height) * GRID_HEIGHT
         );
 
-        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
           const clickedUnit = unitPositionMap.get(`${x},${y}`);
           if (clickedUnit) {
             onUnitClick?.(clickedUnit);
@@ -538,7 +536,7 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           }
         }
       },
-      [unitPositionMap, onCellClick, onUnitClick]
+      [unitPositionMap, onCellClick, onUnitClick, GRID_WIDTH, GRID_HEIGHT]
     );
 
     return (
@@ -548,11 +546,11 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       >
         <canvas
           ref={canvasRef}
-          width={canvasSize}
-          height={canvasSize}
+          width={canvasWidth}
+          height={canvasHeight}
           style={{
-            width: canvasSize,
-            height: canvasSize,
+            width: canvasWidth,
+            height: canvasHeight,
             imageRendering: "pixelated",
             cursor: "pointer",
           }}
