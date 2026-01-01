@@ -900,11 +900,17 @@ export const ArenaBattleCanvas = memo(
             height={canvasHeight}
             style={{
               imageRendering: "pixelated",
-              cursor: "pointer",
+              cursor: hoveredCell
+                ? movableCells.has(`${hoveredCell.x},${hoveredCell.y}`)
+                  ? "var(--cursor-action)"
+                  : attackableCells.has(`${hoveredCell.x},${hoveredCell.y}`)
+                  ? "var(--cursor-skill)"
+                  : "var(--cursor-target)"
+                : "var(--cursor-default)",
               filter: WEATHER_CSS_FILTER || undefined,
-              transition: "filter 0.5s ease-in-out",
+              transition: "filter 0.5s ease-in-out, cursor 0.1s ease",
             }}
-            className="border-4 border-metal-iron rounded-lg shadow-2xl"
+            className="border-4 border-metal-iron rounded-lg shadow-2xl arena"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
             onClick={handleClick}

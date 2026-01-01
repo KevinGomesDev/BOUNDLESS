@@ -683,6 +683,14 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
                               ? `${color.normal} cursor-pointer`
                               : "bg-gray-800/40 border-gray-600/30 opacity-50 cursor-not-allowed"
                           }`}
+                          style={{
+                            cursor:
+                              selectedUnit.actionsLeft > 0
+                                ? isTargetAction
+                                  ? "var(--cursor-target)"
+                                  : "var(--cursor-action)"
+                                : "var(--cursor-not-allowed)",
+                          }}
                         >
                           <span className="text-lg block">
                             {actionInfo.icon}

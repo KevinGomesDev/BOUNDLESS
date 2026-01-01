@@ -1,0 +1,51 @@
+﻿[Arrow]
+Path=1 cursor.cur
+
+[Help]
+Path=2 cursor.cur
+
+[AppStarting]
+Path=3 cursor.cur
+
+[Wait]
+Path=4 cursor.cur
+
+[Crosshair]
+Path=5 cursor.cur
+
+[IBeam]
+Path=6 cursor.cur
+
+[NWPen]
+Path=7 cursor.cur
+
+[No]
+Path=8 cursor.cur
+
+[SizeNS]
+Path=9 cursor.cur
+
+[SizeWE]
+Path=10 cursor.cur
+
+[SizeNWSE]
+Path=11 cursor.cur
+
+[SizeNESW]
+Path=12 cursor.cur
+
+[SizeAll]
+Path=17 cursor.cur
+
+[UpArrow]
+Path=13 cursor.cur
+
+[Hand]
+Path=14 cursor.cur
+
+[Pin]
+Path=15 cursor.cur
+
+[Person]
+Path=16 cursor.cur
+
