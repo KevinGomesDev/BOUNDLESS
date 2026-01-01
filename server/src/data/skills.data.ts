@@ -249,6 +249,58 @@ export const WIZARD_SKILLS: SkillDefinition[] = [
 ];
 
 // =============================================================================
+// TROPAS - Passivas selecionáveis em templates
+// =============================================================================
+
+export const TROOP_SKILLS: SkillDefinition[] = [
+  {
+    code: "ESCUDO_PROTETOR",
+    name: "Escudo Protetor",
+    description:
+      "A tropa pode usar sua Reação para absorver parte do dano de um aliado adjacente, reduzindo o dano em 2.",
+    category: "PASSIVE",
+    availableForTroops: true,
+    conditionApplied: "ESCUDO_PROTETOR",
+  },
+  {
+    code: "INVESTIDA",
+    name: "Investida",
+    description:
+      "Ao se mover em linha reta por pelo menos 2 casas antes de atacar, causa +2 de dano.",
+    category: "PASSIVE",
+    availableForTroops: true,
+    conditionApplied: "INVESTIDA",
+  },
+  {
+    code: "EMBOSCADA",
+    name: "Emboscada",
+    description:
+      "Caso ataque uma unidade que ainda não agiu neste turno, causa +3 de dano.",
+    category: "PASSIVE",
+    availableForTroops: true,
+    conditionApplied: "EMBOSCADA",
+  },
+  {
+    code: "FURTIVIDADE",
+    name: "Furtividade",
+    description:
+      "Não pode ser alvo de ataques à distância enquanto estiver adjacente a outra unidade aliada.",
+    category: "PASSIVE",
+    availableForTroops: true,
+    conditionApplied: "FURTIVIDADE",
+  },
+  {
+    code: "TIRO_RAPIDO",
+    name: "Tiro Rápido",
+    description:
+      "Pode realizar dois ataques à distância por turno, mas cada ataque causa -1 de dano.",
+    category: "PASSIVE",
+    availableForTroops: true,
+    conditionApplied: "TIRO_RAPIDO",
+  },
+];
+
+// =============================================================================
 // TODAS AS SKILLS (para busca rápida) - Apenas 3 classes
 // =============================================================================
 
@@ -256,7 +308,13 @@ export const ALL_SKILLS: SkillDefinition[] = [
   ...WARRIOR_SKILLS,
   ...CLERIC_SKILLS,
   ...WIZARD_SKILLS,
+  ...TROOP_SKILLS,
 ];
+
+export const TROOP_SKILLS_MAP: Record<string, SkillDefinition> = {};
+for (const skill of TROOP_SKILLS) {
+  TROOP_SKILLS_MAP[skill.code] = skill;
+}
 
 /**
  * Busca uma skill pelo código
@@ -277,4 +335,11 @@ export function getPassiveSkills(): SkillDefinition[] {
  */
 export function getActiveSkills(): SkillDefinition[] {
   return ALL_SKILLS.filter((s) => s.category === "ACTIVE");
+}
+
+/**
+ * Lista skills liberadas para tropas (templates)
+ */
+export function getTroopSkills(): SkillDefinition[] {
+  return TROOP_SKILLS;
 }

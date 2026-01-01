@@ -2,7 +2,7 @@
 
 import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { TROOP_PASSIVES_MAP } from "../../data/troop-passives";
+import { TROOP_SKILLS_MAP } from "../../data/skills.data";
 import {
   TROOP_RECRUITMENT_BASE_COST,
   TROOP_LEVELUP_COSTS,
@@ -68,7 +68,7 @@ export function validateTroopAttributes(data: TroopTemplateData): {
 
 // Validar passiva
 export function validateTroopPassive(passiveId: string): boolean {
-  return TROOP_PASSIVES_MAP[passiveId] !== undefined;
+  return TROOP_SKILLS_MAP[passiveId] !== undefined;
 }
 
 // Validar recurso

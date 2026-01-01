@@ -1,15 +1,33 @@
 // Canvas Utilities (exported first to avoid circular imports)
 export {
-  SPRITE_SHEETS,
-  getSpriteConfig,
-  DEFAULT_SPRITE,
-  SPRITE_IDS,
-  TOTAL_SPRITES,
-  isValidSpriteId,
-  getRandomSpriteId,
+  HERO_IDS,
+  TOTAL_HEROES,
+  ANIMATION_CONFIGS,
+  FRAME_SIZE,
+  getHeroSpriteConfig,
+  getAnimationPath,
+  getHeroThumbnailPath,
+  parseAvatarToHeroId,
+  heroIdToAvatarString,
+  getRandomHeroId,
+  isValidHeroId,
+  getHeroIdForUnit,
+  CLASS_CODE_TO_HERO_ID,
+  COMBAT_STATE_TO_ANIMATION,
 } from "./sprite.config";
-export type { SpriteConfig, SpriteDirection } from "./sprite.config";
-export { useSprites } from "./useSprites";
+export type {
+  SpriteAnimation,
+  CombatAnimationState,
+  SpriteDirection,
+  HeroSpriteConfig,
+  AnimationConfig,
+} from "./sprite.config";
+export {
+  useSprites,
+  useUnitAnimationStates,
+  updateSpriteFrame,
+} from "./useSprites";
+export type { UnitAnimationState } from "./useSprites";
 export { useUnitAnimations } from "./useUnitAnimations";
 export { UI_COLORS, UNIT_RENDER_CONFIG } from "./canvas.constants";
 

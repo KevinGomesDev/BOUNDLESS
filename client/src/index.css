@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Default pointer cursor for clickable buttons */
+button {
+  cursor: pointer;
+}
+
 /* ========================================
    A CIDADELA DE PEDRA - Tema Medieval
    ======================================== */

@@ -1,141 +1,220 @@
 /**
- * Configuração de sprites disponíveis para unidades no grid de batalha
- * Cada sprite é um sheet 192x192 (6x6 grid de frames 32x32)
- * Todos os sprites seguem o padrão de ID: [1].png, [2].png, etc.
+ * Configuração de sprites para personagens no sistema de batalha e seleção de avatar.
+ *
+ * ESTRUTURA DE PASTAS:
+ * /sprites/Characters/{heroId}/Hero_{heroId}_{animation}.png
+ *
+ * Exemplo: /sprites/Characters/7/Hero_007_Walk.png
+ *
+ * Cada sprite é um sheet horizontal com frames 32x32.
  */
 
-export interface SpriteConfig {
-  src: string;
-  frameWidth: number;
-  frameHeight: number;
-  columns: number;
-  rows: number;
-  idleFrames: number;
-  idleRow: number;
-  frameSpeed: number;
-}
+/** Animações disponíveis para cada personagem */
+export type SpriteAnimation =
+  | "Idle"
+  | "Walk"
+  | "Sword_1"
+  | "Sword_2"
+  | "Bow"
+  | "Staff"
+  | "Damage"
+  | "Dead"
+  | "Jump"
+  | "Fall"
+  | "Pull"
+  | "Push";
 
-// Total de sprites disponíveis (contagem de arquivos [n].png na pasta Characters)
-export const TOTAL_SPRITES = 46;
+/** Estados de animação para o sistema de combate */
+export type CombatAnimationState =
+  | "idle"
+  | "walking"
+  | "attacking"
+  | "damaged"
+  | "dead";
 
-// IDs de sprites que são personagens humanoides (para uso em avatares)
-// Exclui: [1] Anvil, [4] Bear, [5] Bird, [7] Boar, [8] Bunny, [11] Deer1, [12] Deer2, [14] Fox, [45] Wolf
-export const CHARACTER_SPRITE_IDS: string[] = [
-  "[2].png", // ArcherMan
-  "[3].png", // ArchMage
-  "[6].png", // Blacksmith
-  "[9].png", // CavalierMan
-  "[10].png", // CrossBowMan
-  "[13].png", // EarthWarrior
-  "[15].png", // Gatherer
-  "[16].png", // GraveDigger
-  "[17].png", // HalberdMan
-  "[18].png", // HorseMan
-  "[19].png", // Hunter
-  "[20].png", // IceSwordswoman
-  "[21].png", // KingMan
-  "[22].png", // LightningWarrior
-  "[23].png", // Lumberjack
-  "[24].png", // Mage
-  "[25].png", // Merchant
-  "[26].png", // Miner
-  "[27].png", // NobleMan
-  "[28].png", // NobleWoman
-  "[29].png", // Nun
-  "[30].png", // OldMan
-  "[31].png", // OldWoman
-  "[32].png", // Peasant
-  "[33].png", // PrinceMan
-  "[34].png", // Princess
-  "[35].png", // Queen
-  "[36].png", // ShieldMan
-  "[37].png", // SpearMan
-  "[38].png", // SuspiciousMerchant
-  "[39].png", // SwordMan
-  "[40].png", // Thief
-  "[41].png", // VillagerMan
-  "[42].png", // VillagerWoman
-  "[43].png", // WaterSpearwoman
-  "[44].png", // WindWarrior
-  "[46].png", // Worker
-];
+/** Total de personagens disponíveis (pastas 1-15) */
+export const TOTAL_HEROES = 15;
 
-// Lista de todos os IDs de sprites disponíveis (incluindo animais/itens)
-export const SPRITE_IDS: string[] = Array.from(
-  { length: TOTAL_SPRITES },
-  (_, i) => `[${i + 1}].png`
+/** Lista de IDs de heróis disponíveis (1 a 15) */
+export const HERO_IDS: number[] = Array.from(
+  { length: TOTAL_HEROES },
+  (_, i) => i + 1
 );
 
-// Configuração padrão para todos os sprites (mesmo layout 192x192)
-const DEFAULT_SPRITE_CONFIG: Omit<SpriteConfig, "src"> = {
-  frameWidth: 32,
-  frameHeight: 32,
-  columns: 6,
-  rows: 6,
-  idleFrames: 4,
-  idleRow: 0,
-  frameSpeed: 200,
+/** Mapeamento de estado de combate para animação de sprite */
+export const COMBAT_STATE_TO_ANIMATION: Record<
+  CombatAnimationState,
+  SpriteAnimation
+> = {
+  idle: "Idle",
+  walking: "Walk",
+  attacking: "Sword_1", // Default melee attack
+  damaged: "Damage",
+  dead: "Dead",
 };
 
-// Gerar SPRITE_SHEETS dinamicamente para todos os IDs
-export const SPRITE_SHEETS: Record<string, SpriteConfig> = SPRITE_IDS.reduce(
-  (acc, id) => {
-    acc[id] = {
-      ...DEFAULT_SPRITE_CONFIG,
-      src: `/sprites/Characters/${id}`,
-    };
-    return acc;
+/** Configuração de cada animação (frames e duração) */
+export interface AnimationConfig {
+  /** Nome do arquivo (sem extensão) */
+  fileName: SpriteAnimation;
+  /** Número de frames na animação */
+  frameCount: number;
+  /** Duração de cada frame em ms */
+  frameDuration: number;
+  /** Se a animação deve repetir (loop) */
+  loop: boolean;
+}
+
+/** Configurações de todas as animações */
+export const ANIMATION_CONFIGS: Record<SpriteAnimation, AnimationConfig> = {
+  // Ritmo levemente mais lento para leitura clara das animações
+  Idle: { fileName: "Idle", frameCount: 4, frameDuration: 500, loop: true },
+  Walk: { fileName: "Walk", frameCount: 6, frameDuration: 140, loop: true },
+  Sword_1: {
+    fileName: "Sword_1",
+    frameCount: 6,
+    frameDuration: 120,
+    loop: false,
   },
-  {} as Record<string, SpriteConfig>
-);
+  Sword_2: {
+    fileName: "Sword_2",
+    frameCount: 6,
+    frameDuration: 120,
+    loop: false,
+  },
+  Bow: { fileName: "Bow", frameCount: 6, frameDuration: 130, loop: false },
+  Staff: { fileName: "Staff", frameCount: 6, frameDuration: 130, loop: false },
+  Damage: {
+    fileName: "Damage",
+    frameCount: 3,
+    frameDuration: 200,
+    loop: false,
+  },
+  Dead: { fileName: "Dead", frameCount: 3, frameDuration: 260, loop: false },
+  Jump: { fileName: "Jump", frameCount: 4, frameDuration: 130, loop: false },
+  Fall: { fileName: "Fall", frameCount: 2, frameDuration: 130, loop: false },
+  Pull: { fileName: "Pull", frameCount: 4, frameDuration: 130, loop: false },
+  Push: { fileName: "Push", frameCount: 4, frameDuration: 130, loop: false },
+};
 
-// Sprite padrão quando o tipo não é encontrado (primeiro sprite)
-export const DEFAULT_SPRITE: SpriteConfig = SPRITE_SHEETS["[1].png"];
+/** Tamanho de cada frame no sprite sheet */
+export const FRAME_SIZE = 32;
 
-// Mapeamento de classCode para ID de sprite
-const CLASS_CODE_TO_SPRITE: Record<string, string> = {
-  WARRIOR: "[3].png",
-  CLERIC: "[1].png",
-  WIZARD: "[9].png",
+/** Direções possíveis para o sprite */
+export type SpriteDirection = "left" | "right";
+
+/**
+ * Interface de configuração completa de um sprite de herói
+ */
+export interface HeroSpriteConfig {
+  /** ID do herói (1-15) */
+  heroId: number;
+  /** Caminho base para os sprites */
+  basePath: string;
+  /** Prefixo do arquivo (ex: "Hero_001") */
+  filePrefix: string;
+}
+
+/**
+ * Gera a configuração de sprite para um herói
+ */
+export function getHeroSpriteConfig(heroId: number): HeroSpriteConfig {
+  const paddedId = String(heroId).padStart(3, "0");
+  return {
+    heroId,
+    basePath: `/sprites/Characters/${heroId}`,
+    filePrefix: `Hero_${paddedId}`,
+  };
+}
+
+/**
+ * Gera o caminho completo para um arquivo de animação
+ */
+export function getAnimationPath(
+  heroId: number,
+  animation: SpriteAnimation
+): string {
+  const config = getHeroSpriteConfig(heroId);
+  return `${config.basePath}/${config.filePrefix}_${animation}.png`;
+}
+
+/**
+ * Gera o caminho para o sprite estático (thumbnail)
+ */
+export function getHeroThumbnailPath(heroId: number): string {
+  const config = getHeroSpriteConfig(heroId);
+  return `${config.basePath}/${config.filePrefix}.png`;
+}
+
+/**
+ * Converte um avatar string antigo ("[n].png") para novo formato (heroId number)
+ * ou retorna um ID aleatório se inválido
+ */
+export function parseAvatarToHeroId(avatar?: string): number {
+  if (!avatar) return 1;
+
+  // Novo formato: já é um número como string
+  const numericId = parseInt(avatar, 10);
+  if (!isNaN(numericId) && numericId >= 1 && numericId <= TOTAL_HEROES) {
+    return numericId;
+  }
+
+  // Formato antigo: "[n].png" - mapear para 1-15
+  const match = avatar.match(/\[(\d+)\]\.png/);
+  if (match) {
+    const oldId = parseInt(match[1], 10);
+    // Mapear IDs antigos para novos (mod 15 + 1 para ficar entre 1-15)
+    return ((oldId - 1) % TOTAL_HEROES) + 1;
+  }
+
+  // Default
+  return 1;
+}
+
+/**
+ * Converte heroId para string de avatar (para salvar no banco)
+ */
+export function heroIdToAvatarString(heroId: number): string {
+  return String(heroId);
+}
+
+/**
+ * Obtém um heroId aleatório
+ */
+export function getRandomHeroId(): number {
+  return Math.floor(Math.random() * TOTAL_HEROES) + 1;
+}
+
+/**
+ * Verifica se um heroId é válido
+ */
+export function isValidHeroId(id: number): boolean {
+  return Number.isInteger(id) && id >= 1 && id <= TOTAL_HEROES;
+}
+
+/**
+ * Mapeamento de classCode para heroId preferido
+ */
+export const CLASS_CODE_TO_HERO_ID: Record<string, number> = {
+  WARRIOR: 1,
+  CLERIC: 5,
+  WIZARD: 10,
 };
 
 /**
- * Obtém a configuração de sprite para um avatar ou classCode
- * @param spriteIdentifier - ID do sprite (ex: "[1].png") ou classCode (ex: "WARRIOR")
- * @returns Configuração do sprite ou sprite padrão
+ * Obtém heroId baseado em classCode ou avatar
  */
-export function getSpriteConfig(spriteIdentifier?: string): SpriteConfig {
-  if (!spriteIdentifier) return DEFAULT_SPRITE;
-
-  // Se é um ID de sprite válido ([n].png)
-  if (SPRITE_SHEETS[spriteIdentifier]) {
-    return SPRITE_SHEETS[spriteIdentifier];
+export function getHeroIdForUnit(avatar?: string, classCode?: string): number {
+  // Prioridade 1: avatar direto
+  if (avatar) {
+    return parseAvatarToHeroId(avatar);
   }
 
-  // Se é um classCode, converte para sprite ID
-  if (CLASS_CODE_TO_SPRITE[spriteIdentifier]) {
-    const spriteId = CLASS_CODE_TO_SPRITE[spriteIdentifier];
-    return SPRITE_SHEETS[spriteId] || DEFAULT_SPRITE;
+  // Prioridade 2: classCode
+  if (classCode && CLASS_CODE_TO_HERO_ID[classCode]) {
+    return CLASS_CODE_TO_HERO_ID[classCode];
   }
 
-  return DEFAULT_SPRITE;
+  // Default
+  return 1;
 }
-
-/**
- * Verifica se um ID de sprite é válido
- */
-export function isValidSpriteId(id?: string): boolean {
-  if (!id) return false;
-  return SPRITE_IDS.includes(id);
-}
-
-/**
- * Obtém um sprite ID aleatório
- */
-export function getRandomSpriteId(): string {
-  const index = Math.floor(Math.random() * SPRITE_IDS.length);
-  return SPRITE_IDS[index];
-}
-
-// Direções possíveis para o sprite (baseado no movimento)
-export type SpriteDirection = "right" | "left" | "up" | "down";

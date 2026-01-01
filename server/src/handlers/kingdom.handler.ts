@@ -12,7 +12,7 @@ import {
 } from "../lib/validation/kingdom.schemas";
 import { RACE_DEFINITIONS } from "../data/races";
 import { ALIGNMENT_DEFINITIONS } from "../data/alignments";
-import { TROOP_PASSIVES } from "../data/troop-passives";
+import { getTroopSkills } from "../data/skills.data";
 import {
   createTroopTemplatesForKingdom,
   TroopTemplateData,
@@ -456,7 +456,7 @@ export const registerKingdomHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("kingdom:get_troop_passives", () => {
-    socket.emit("kingdom:troop_passives_data", TROOP_PASSIVES);
+    socket.emit("kingdom:troop_passives_data", getTroopSkills());
   });
 
   // ============================================

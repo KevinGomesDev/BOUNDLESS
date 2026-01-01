@@ -1,10 +1,18 @@
 import React from "react";
+import { ChoiceCard } from "./ChoiceCard";
+import type { Race, Alignment } from "./types";
 
 interface Step1KingdomInfoProps {
   kingdomName: string;
   setKingdomName: (value: string) => void;
   description: string;
   setDescription: (value: string) => void;
+  selectedRace: string;
+  setSelectedRace: (value: string) => void;
+  selectedAlignment: string;
+  setSelectedAlignment: (value: string) => void;
+  races: Race[];
+  alignments: Alignment[];
   error: string | null;
   isLoading: boolean;
   onNext: (e: React.FormEvent) => void;
@@ -16,25 +24,34 @@ export const Step1KingdomInfo: React.FC<Step1KingdomInfoProps> = ({
   setKingdomName,
   description,
   setDescription,
+  selectedRace,
+  setSelectedRace,
+  selectedAlignment,
+  setSelectedAlignment,
+  races,
+  alignments,
   error,
   isLoading,
   onNext,
   onCancel,
 }) => {
-  const isFormValid = kingdomName.length >= 3;
+  const isFormValid =
+    kingdomName.length >= 3 && selectedRace.length > 0 && selectedAlignment;
+
+  const raceIcon: Record<string, string> = {
+    HUMANOIDE: "👤",
+    ABERRACAO: "👁️",
+    CONSTRUTO: "🤖",
+  };
+
+  const alignmentTone: Record<string, "emerald" | "slate" | "rose"> = {
+    BOM: "emerald",
+    NEUTRO: "slate",
+    MAL: "rose",
+  };
 
   return (
-    <form onSubmit={onNext} className="space-y-6">
-      {/* Título da Etapa */}
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-amber-400">
-          🏰 Identidade do Reino
-        </h2>
-        <p className="text-slate-400 mt-2">
-          Dê um nome ao seu reino e conte sua história
-        </p>
-      </div>
-
+    <form onSubmit={onNext} className="space-y-4">
       {/* Nome do Reino */}
       <div>
         <label className="block text-sm font-semibold text-white mb-2">
@@ -55,6 +72,56 @@ export const Step1KingdomInfo: React.FC<Step1KingdomInfoProps> = ({
         <p className="text-xs text-slate-500 mt-1">Mínimo de 3 caracteres</p>
       </div>
 
+      {/* Raça */}
+      <div className="space-y-3">
+        <label className="block text-sm font-semibold text-white">
+          Escolha sua Raça <span className="text-red-400">*</span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {races.map((race) => (
+            <ChoiceCard
+              key={race.id}
+              title={race.name}
+              description={race.description}
+              note={`${race.passiveName}: ${race.passiveEffect}`}
+              badge="Raça"
+              icon={raceIcon[race.id] || "🏰"}
+              tone="amber"
+              isSelected={selectedRace === race.id}
+              onSelect={() => setSelectedRace(race.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Alinhamento */}
+      <div className="space-y-3">
+        <label className="block text-sm font-semibold text-white">
+          Escolha seu Alinhamento <span className="text-red-400">*</span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {alignments.map((alignment) => (
+            <ChoiceCard
+              key={alignment.id}
+              title={alignment.name}
+              description={alignment.description}
+              note={`${alignment.passiveName}: ${alignment.passiveEffect}`}
+              badge={`Alinhamento • ${alignment.id}`}
+              icon={
+                alignment.id === "BOM"
+                  ? "✨"
+                  : alignment.id === "MAL"
+                  ? "💀"
+                  : "⚖️"
+              }
+              tone={alignmentTone[alignment.id] || "slate"}
+              isSelected={selectedAlignment === alignment.id}
+              onSelect={() => setSelectedAlignment(alignment.id)}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Descrição (Opcional) */}
       <div>
         <label className="block text-sm font-semibold text-white mb-2">
@@ -66,7 +133,7 @@ export const Step1KingdomInfo: React.FC<Step1KingdomInfoProps> = ({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Conte a história do seu reino, suas origens, cultura, tradições..."
           rows={4}
-          className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-lg 
+          className="w-full h-[80px] px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-lg 
                      text-white placeholder:text-slate-500 
                      focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30
                      resize-none transition-all"

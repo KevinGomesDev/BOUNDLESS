@@ -1,83 +1,63 @@
 import React, { useEffect, useRef } from "react";
+import {
+  HERO_IDS,
+  TOTAL_HEROES,
+  ANIMATION_CONFIGS,
+  FRAME_SIZE,
+  getAnimationPath,
+  parseAvatarToHeroId,
+  heroIdToAvatarString,
+  type SpriteAnimation,
+  type SpriteDirection,
+} from "../../../arena/components/canvas";
 
-// Total de sprites disponíveis (contagem de arquivos [n].png na pasta Characters)
-export const TOTAL_SPRITES = 46;
-
-// IDs de sprites que são personagens humanoides (para uso em avatares)
-// Exclui: [1] Anvil, [4] Bear, [5] Bird, [7] Boar, [8] Bunny, [11] Deer1, [12] Deer2, [14] Fox, [45] Wolf
-export const CHARACTER_SPRITE_IDS: string[] = [
-  "[2].png", // ArcherMan
-  "[3].png", // ArchMage
-  "[6].png", // Blacksmith
-  "[9].png", // CavalierMan
-  "[10].png", // CrossBowMan
-  "[13].png", // EarthWarrior
-  "[15].png", // Gatherer
-  "[16].png", // GraveDigger
-  "[17].png", // HalberdMan
-  "[18].png", // HorseMan
-  "[19].png", // Hunter
-  "[20].png", // IceSwordswoman
-  "[21].png", // KingMan
-  "[22].png", // LightningWarrior
-  "[23].png", // Lumberjack
-  "[24].png", // Mage
-  "[25].png", // Merchant
-  "[26].png", // Miner
-  "[27].png", // NobleMan
-  "[28].png", // NobleWoman
-  "[29].png", // Nun
-  "[30].png", // OldMan
-  "[31].png", // OldWoman
-  "[32].png", // Peasant
-  "[33].png", // PrinceMan
-  "[34].png", // Princess
-  "[35].png", // Queen
-  "[36].png", // ShieldMan
-  "[37].png", // SpearMan
-  "[38].png", // SuspiciousMerchant
-  "[39].png", // SwordMan
-  "[40].png", // Thief
-  "[41].png", // VillagerMan
-  "[42].png", // VillagerWoman
-  "[43].png", // WaterSpearwoman
-  "[44].png", // WindWarrior
-  "[46].png", // Worker
-];
-
-// Lista de todos os IDs de sprites (incluindo animais/itens)
-export const SPRITE_IDS: string[] = Array.from(
-  { length: TOTAL_SPRITES },
-  (_, i) => `[${i + 1}].png`
-);
+// Re-export para uso externo
+export { HERO_IDS, TOTAL_HEROES, parseAvatarToHeroId, heroIdToAvatarString };
+export type { SpriteAnimation, SpriteDirection };
 
 interface AnimatedCharacterSpriteProps {
-  /** ID do arquivo sprite (ex: "[1].png") */
-  spriteId: string;
+  /** ID do herói (1-15) */
+  heroId: number;
   /** Tamanho do sprite em pixels */
   size?: number;
-  /** Animação: 0=idle, 1=walk, 2=attack */
-  animation?: 0 | 1 | 2;
+  /** Animação a exibir */
+  animation?: SpriteAnimation;
+  /** Direção do sprite (left = espelhado) */
+  direction?: SpriteDirection;
   /** Classes CSS adicionais */
   className?: string;
+  /** Callback quando animação não-loop termina */
+  onAnimationEnd?: () => void;
 }
 
 /**
- * Componente de sprite animado genérico para personagens
- * Todos os sprites seguem o mesmo layout: 192x192 (6 colunas x 6 linhas de 32x32)
+ * Componente unificado para exibir sprites de personagens animados.
+ * ÚNICO componente responsável por renderizar personagens em toda a aplicação.
+ *
+ * Usado em:
+ * - Seletor de avatar (criação de reino/tropas)
+ * - Canvas de batalha
+ * - Qualquer outro lugar que precise exibir personagens
  */
 export const AnimatedCharacterSprite: React.FC<
   AnimatedCharacterSpriteProps
-> = ({ spriteId, size = 64, animation = 0, className = "" }) => {
+> = ({
+  heroId,
+  size = 64,
+  animation = "Idle",
+  direction = "right",
+  className = "",
+  onAnimationEnd,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef(0);
   const imageRef = useRef<HTMLImageElement | null>(null);
-  const loadedSpriteRef = useRef<string>("");
+  const loadedPathRef = useRef<string>("");
+  const lastFrameTimeRef = useRef(0);
+  const animationEndCalledRef = useRef(false);
 
-  const FRAME_WIDTH = 32;
-  const FRAME_HEIGHT = 32;
-  const FRAME_COUNT = animation === 0 ? 4 : 6;
-  const FRAME_DURATION = animation === 0 ? 200 : 120;
+  const config = ANIMATION_CONFIGS[animation];
+  const { frameCount, frameDuration, loop } = config;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -86,20 +66,23 @@ export const AnimatedCharacterSprite: React.FC<
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Calcular caminho do sprite
+    const spritePath = getAnimationPath(heroId, animation);
+
     // Recarregar se mudou o sprite
-    if (loadedSpriteRef.current !== spriteId) {
+    if (loadedPathRef.current !== spritePath) {
       const img = new Image();
-      img.src = `/sprites/Characters/${spriteId}`;
+      img.src = spritePath;
       imageRef.current = img;
-      loadedSpriteRef.current = spriteId;
+      loadedPathRef.current = spritePath;
       frameRef.current = 0;
+      animationEndCalledRef.current = false;
     }
 
     const img = imageRef.current;
     if (!img) return;
 
     let animationId: number;
-    let lastTime = 0;
 
     const draw = (timestamp: number) => {
       if (!ctx || !img.complete) {
@@ -107,29 +90,48 @@ export const AnimatedCharacterSprite: React.FC<
         return;
       }
 
-      if (timestamp - lastTime >= FRAME_DURATION) {
-        frameRef.current = (frameRef.current + 1) % FRAME_COUNT;
-        lastTime = timestamp;
+      // Atualizar frame baseado no tempo
+      if (timestamp - lastFrameTimeRef.current >= frameDuration) {
+        const nextFrame = frameRef.current + 1;
+
+        if (nextFrame >= frameCount) {
+          if (loop) {
+            frameRef.current = 0;
+          } else {
+            // Manter no último frame
+            frameRef.current = frameCount - 1;
+            // Chamar callback de fim de animação
+            if (!animationEndCalledRef.current) {
+              animationEndCalledRef.current = true;
+              onAnimationEnd?.();
+            }
+          }
+        } else {
+          frameRef.current = nextFrame;
+        }
+
+        lastFrameTimeRef.current = timestamp;
       }
 
+      // Limpar canvas
       ctx.clearRect(0, 0, size, size);
 
-      const srcX = frameRef.current * FRAME_WIDTH;
-      const srcY = animation * FRAME_HEIGHT;
+      // Calcular posição no sprite sheet (frames horizontais)
+      const srcX = frameRef.current * FRAME_SIZE;
+      const srcY = 0;
 
+      ctx.save();
       ctx.imageSmoothingEnabled = false;
 
-      ctx.drawImage(
-        img,
-        srcX,
-        srcY,
-        FRAME_WIDTH,
-        FRAME_HEIGHT,
-        0,
-        0,
-        size,
-        size
-      );
+      // Aplicar flip se direção é esquerda
+      if (direction === "left") {
+        ctx.translate(size, 0);
+        ctx.scale(-1, 1);
+      }
+
+      ctx.drawImage(img, srcX, srcY, FRAME_SIZE, FRAME_SIZE, 0, 0, size, size);
+
+      ctx.restore();
 
       animationId = requestAnimationFrame(draw);
     };
@@ -139,7 +141,16 @@ export const AnimatedCharacterSprite: React.FC<
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [spriteId, size, animation, FRAME_COUNT, FRAME_DURATION]);
+  }, [
+    heroId,
+    size,
+    animation,
+    direction,
+    frameCount,
+    frameDuration,
+    loop,
+    onAnimationEnd,
+  ]);
 
   return (
     <canvas
@@ -153,7 +164,7 @@ export const AnimatedCharacterSprite: React.FC<
 };
 
 interface AvatarSelectorProps {
-  /** Avatar selecionado atualmente (ID como "[1].png") */
+  /** Avatar selecionado atualmente (heroId como string "1"-"15") */
   selectedAvatar: string;
   /** Callback quando avatar muda */
   onSelectAvatar: (avatarId: string) => void;
@@ -165,7 +176,7 @@ interface AvatarSelectorProps {
 
 /**
  * Seletor de avatar genérico com setas para navegar entre sprites animados
- * Usa apenas sprites de personagens humanoides (CHARACTER_SPRITE_IDS)
+ * Usa os novos sprites Hero_001 a Hero_015
  */
 export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
   selectedAvatar,
@@ -173,21 +184,19 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
   spriteSize = 128,
   title = "Aparência",
 }) => {
-  const currentIndex = CHARACTER_SPRITE_IDS.findIndex(
-    (id) => id === selectedAvatar
-  );
+  // Converter avatar para heroId
+  const currentHeroId = parseAvatarToHeroId(selectedAvatar);
+  const currentIndex = HERO_IDS.indexOf(currentHeroId);
   const validIndex = currentIndex >= 0 ? currentIndex : 0;
 
   const goToPrev = () => {
-    const newIndex =
-      (validIndex - 1 + CHARACTER_SPRITE_IDS.length) %
-      CHARACTER_SPRITE_IDS.length;
-    onSelectAvatar(CHARACTER_SPRITE_IDS[newIndex]);
+    const newIndex = (validIndex - 1 + HERO_IDS.length) % HERO_IDS.length;
+    onSelectAvatar(heroIdToAvatarString(HERO_IDS[newIndex]));
   };
 
   const goToNext = () => {
-    const newIndex = (validIndex + 1) % CHARACTER_SPRITE_IDS.length;
-    onSelectAvatar(CHARACTER_SPRITE_IDS[newIndex]);
+    const newIndex = (validIndex + 1) % HERO_IDS.length;
+    onSelectAvatar(heroIdToAvatarString(HERO_IDS[newIndex]));
   };
 
   return (
@@ -226,9 +235,9 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         >
           <div className="absolute inset-0 flex items-center justify-center">
             <AnimatedCharacterSprite
-              spriteId={CHARACTER_SPRITE_IDS[validIndex]}
+              heroId={HERO_IDS[validIndex]}
               size={spriteSize}
-              animation={0}
+              animation="Idle"
             />
           </div>
         </div>
@@ -258,7 +267,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
 
       {/* Contador */}
       <p className="text-xs text-slate-400">
-        {validIndex + 1} / {CHARACTER_SPRITE_IDS.length}
+        {validIndex + 1} / {HERO_IDS.length}
       </p>
     </div>
   );
@@ -281,26 +290,32 @@ interface AvatarGridSelectorProps {
 export const AvatarGridSelector: React.FC<AvatarGridSelectorProps> = ({
   selectedAvatar,
   onSelectAvatar,
-  columns = 8,
-  thumbnailSize = 40,
+  columns = 5,
+  thumbnailSize = 48,
 }) => {
+  const currentHeroId = parseAvatarToHeroId(selectedAvatar);
+
   return (
     <div
-      className="grid gap-1"
+      className="grid gap-2"
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
-      {SPRITE_IDS.map((id) => (
+      {HERO_IDS.map((heroId) => (
         <button
-          key={id}
+          key={heroId}
           type="button"
-          onClick={() => onSelectAvatar(id)}
+          onClick={() => onSelectAvatar(heroIdToAvatarString(heroId))}
           className={`p-1 rounded border-2 transition-all ${
-            selectedAvatar === id
-              ? "border-blue-500 bg-blue-500/20"
+            currentHeroId === heroId
+              ? "border-amber-500 bg-amber-500/20"
               : "border-slate-600 hover:border-slate-500"
           }`}
         >
-          <AnimatedCharacterSprite spriteId={id} size={thumbnailSize} />
+          <AnimatedCharacterSprite
+            heroId={heroId}
+            size={thumbnailSize}
+            animation="Idle"
+          />
         </button>
       ))}
     </div>

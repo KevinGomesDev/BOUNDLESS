@@ -1,6 +1,6 @@
 // src/utils/army/summon.utils.ts
 import { prisma } from "../../lib/prisma";
-import { TROOP_PASSIVES } from "../../data/troop-passives";
+import { TROOP_SKILLS } from "../../data/skills.data";
 import { HERO_CLASSES, getSkillsForClass } from "../../data/classes.data";
 import { rollExplodingD6Once } from "../dice";
 
@@ -43,7 +43,7 @@ export async function createSummonedCreature(params: {
     }
 
     // Random passive from troop passives (since creatures don't belong to a kingdom's template)
-    const randomPassive = pickRandom(TROOP_PASSIVES);
+    const randomPassive = pickRandom(TROOP_SKILLS);
 
     // Random class feature a partir dos dados estáticos
     const randomClass = pickRandom(HERO_CLASSES);
@@ -62,7 +62,7 @@ export async function createSummonedCreature(params: {
         name: params.name || null,
         classCode: null, // Summons não têm classe
         classFeatures: JSON.stringify(
-          [randomPassive.id, randomSkill ? randomSkill.code : null].filter(
+          [randomPassive.code, randomSkill ? randomSkill.code : null].filter(
             Boolean
           )
         ),

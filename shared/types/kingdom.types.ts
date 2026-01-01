@@ -1,3 +1,5 @@
+import type { SkillDefinition } from "./skills.types";
+
 // ===========================================
 // KINGDOM TYPES - Shared between Client/Server
 // ===========================================
@@ -268,11 +270,9 @@ export interface AlignmentDefinition {
   color: number;
 }
 
-export interface TroopPassiveDefinition {
-  id: string;
-  name: string;
-  description: string;
-}
+export type TroopPassiveDefinition = SkillDefinition & {
+  availableForTroops: true;
+};
 
 export interface GameClassDefinition {
   id: string;

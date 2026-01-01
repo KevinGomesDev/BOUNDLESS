@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useKingdom, useKingdomStaticData } from "../../hooks/useKingdom";
 import {
   useKingdomForm,
@@ -6,8 +6,7 @@ import {
   useTroopsForm,
 } from "../../hooks/useKingdomForm";
 import { Step1KingdomInfo } from "./Step1KingdomInfo";
-import { Step2Alignment } from "./Step2Alignment";
-import { Step3RegentSheet } from "./Step3RegentSheet";
+import { Step2RegentSheet } from "./Step2RegentSheet";
 import { Step3Troops } from "./Step3Troops";
 import { TemplateSelection } from "./TemplateSelection";
 import { LoadingSpinner, StepIndicator } from "../ui";
@@ -17,7 +16,7 @@ interface CreateKingdomModalProps {
   onSuccess: () => void;
 }
 
-type WizardStep = "info" | "alignment" | "regent" | "troops";
+type WizardStep = "info" | "regent" | "troops";
 
 export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   onClose,
@@ -47,7 +46,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   useEffect(() => {
     staticData.loadAll().then((data) => {
       if (data && data.passives.length > 0) {
-        troopsForm.setPassiveIds(data.passives.map((p) => p.id));
+        troopsForm.setPassiveIds(data.passives.map((p) => p.code));
       }
     });
   }, []);
@@ -57,7 +56,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   const goToTemplates = () => setView("templates");
 
   const nextStep = () => {
-    const steps: WizardStep[] = ["info", "alignment", "regent", "troops"];
+    const steps: WizardStep[] = ["info", "regent", "troops"];
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex < steps.length - 1) {
       setCurrentStep(steps[currentIndex + 1]);
@@ -65,7 +64,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   };
 
   const prevStep = () => {
-    const steps: WizardStep[] = ["info", "alignment", "regent", "troops"];
+    const steps: WizardStep[] = ["info", "regent", "troops"];
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1]);
@@ -77,14 +76,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   // Step handlers
   const handleNextFromInfo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (kingdomForm.data.name.length >= 3) {
-      nextStep();
-    }
-  };
-
-  const handleNextFromAlignment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (kingdomForm.data.alignment) {
+    if (kingdomForm.isValid) {
       nextStep();
     }
   };
@@ -144,18 +136,59 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
   const currentError = submitError || kingdomError;
   const isLoading = isSubmitting || isCreatingKingdom;
 
+  const skillOptions = useMemo(() => {
+    const getClassColor = (archetype?: string) => {
+      switch (archetype) {
+        case "PHYSICAL":
+          return "text-red-400";
+        case "SPIRITUAL":
+          return "text-yellow-300";
+        case "ARCANE":
+          return "text-blue-300";
+        default:
+          return "text-slate-300";
+      }
+    };
+
+    const classSkills = (staticData.classes || []).flatMap((cls: any) => {
+      const skills = Array.isArray(cls.skills) ? cls.skills : [];
+      return skills.map((skill: any) => ({
+        code: skill.code || skill.id,
+        name: skill.name,
+        description: skill.description || "",
+        category: skill.category || "PASSIVE",
+        costTier: skill.costTier,
+        range: skill.range,
+        rangeValue: skill.rangeValue,
+        targetType: skill.targetType,
+        availableForTroops: skill.availableForTroops,
+        metadata: skill.metadata,
+        className: cls.name,
+        classColor: getClassColor(cls.archetype),
+      }));
+    });
+
+    const troopSkills = (staticData.passives || []).map((p) => ({
+      ...p,
+      className: "Tropa",
+      classColor: "text-green-300",
+    }));
+
+    return [...classSkills, ...troopSkills];
+  }, [staticData.classes, staticData.passives]);
+
   const getStepNumber = () => {
-    const steps: WizardStep[] = ["info", "alignment", "regent", "troops"];
+    const steps: WizardStep[] = ["info", "regent", "troops"];
     return steps.indexOf(currentStep);
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto
+                 p-4 sm:p-6 lg:p-8 pt-24 pb-12"
+    >
       {/* Backdrop com efeito de sombra/névoa */}
-      <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div onClick={onClose} />
 
       {/* Efeitos de sombra nas bordas - fade effect como se fosse feito de sombras */}
       <div className="absolute inset-0 pointer-events-none">
@@ -168,9 +201,9 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
         <div className="absolute bottom-0 right-0 w-1/4 h-1/4 bg-gradient-to-tl from-black to-transparent opacity-80" />
       </div>
 
-      {/* Modal Container - mais largo (max-w-6xl) */}
+      {/* Modal Container - largura controlada e afastado do header */}
       <div
-        className="relative w-full max-w-6xl max-h-[90vh] overflow-hidden
+        className="relative w-full overflow-hidden mt-16
                    bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900
                    rounded-2xl shadow-2xl shadow-black/50"
       >
@@ -205,14 +238,14 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
         {view === "custom" && (
           <div className="px-6 pt-4">
             <StepIndicator
-              steps={["Reino", "Alinhamento", "Regente", "Tropas"]}
+              steps={["Reino", "Regente", "Tropas"]}
               currentStep={getStepNumber()}
             />
           </div>
         )}
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)]">
           {view === "templates" && (
             <TemplateSelection
               onSelectTemplate={handleTemplateSuccess}
@@ -234,6 +267,14 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
                       setDescription={(v) =>
                         kingdomForm.update({ description: v })
                       }
+                      selectedRace={kingdomForm.data.race}
+                      setSelectedRace={(v) => kingdomForm.update({ race: v })}
+                      selectedAlignment={kingdomForm.data.alignment}
+                      setSelectedAlignment={(v) =>
+                        kingdomForm.update({ alignment: v })
+                      }
+                      races={staticData.races}
+                      alignments={staticData.alignments}
                       error={currentError}
                       isLoading={isLoading}
                       onNext={handleNextFromInfo}
@@ -241,22 +282,8 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
                     />
                   )}
 
-                  {currentStep === "alignment" && (
-                    <Step2Alignment
-                      selectedAlignment={kingdomForm.data.alignment}
-                      setSelectedAlignment={(v) =>
-                        kingdomForm.update({ alignment: v })
-                      }
-                      alignments={staticData.alignments}
-                      error={currentError}
-                      isLoading={isLoading}
-                      onNext={handleNextFromAlignment}
-                      onBack={prevStep}
-                    />
-                  )}
-
                   {currentStep === "regent" && (
-                    <Step3RegentSheet
+                    <Step2RegentSheet
                       regentName={regentForm.data.name}
                       setRegentName={(v) => regentForm.update({ name: v })}
                       regentDescription=""
@@ -276,6 +303,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
                       isLoading={isLoading}
                       onSubmit={handleNextFromRegent}
                       onBack={prevStep}
+                      skills={skillOptions}
                     />
                   )}
 
@@ -308,8 +336,6 @@ function getStepTitle(step: WizardStep): string {
   switch (step) {
     case "info":
       return "🏰 Identidade do Reino";
-    case "alignment":
-      return "⚖️ Alinhamento";
     case "regent":
       return "👑 Criar Regente";
     case "troops":

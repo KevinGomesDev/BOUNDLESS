@@ -11,8 +11,11 @@ import type { BattleObstacle } from "../../../../../shared/types/battle.types";
 import {
   useSprites,
   useUnitAnimations,
+  useUnitAnimationStates,
   UI_COLORS,
   UNIT_RENDER_CONFIG,
+  FRAME_SIZE,
+  ANIMATION_CONFIGS,
   type SpriteDirection,
 } from "./canvas";
 
@@ -67,8 +70,13 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
     } | null>(null);
     const [canvasSize, setCanvasSize] = useState(640);
 
-    // Hook de sprites
-    const { getSprite, allLoaded: spritesLoaded, frameIndexRef } = useSprites();
+    // Hook de sprites (novo sistema com heroId)
+    const {
+      getImage,
+      getHeroId,
+      allLoaded: spritesLoaded,
+      frameIndexRef,
+    } = useSprites();
 
     // Hook de animações de movimento
     const {
@@ -77,6 +85,18 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
       hasActiveAnimations,
       updateAnimations,
     } = useUnitAnimations();
+
+    // Hook de estados de animação de combate (attack, damage, etc)
+    // TODO: Integrar com eventos de combate para disparar animações
+    const {
+      setAnimation: _setCombatAnimation,
+      updateAnimations: _updateCombatAnimations,
+      getState: getCombatState,
+    } = useUnitAnimationStates();
+
+    // Expor funções de animação para uso externo (via ref ou prop)
+    void _setCombatAnimation;
+    void _updateCombatAnimations;
 
     // Rastrear posições anteriores para detectar movimento
     const prevPositionsRef = useRef<Map<string, { x: number; y: number }>>(
@@ -240,31 +260,26 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
         unit: ArenaUnit,
         isOwned: boolean
       ) => {
-        // Unidade morta - desenha X simples
-        if (!unit.isAlive) {
-          ctx.fillStyle = UI_COLORS.deadUnit;
-          const cx = x + size / 2;
-          const cy = y + size / 2;
-          ctx.fillRect(cx - 6, cy - 2, 4, 4);
-          ctx.fillRect(cx + 2, cy - 2, 4, 4);
-          ctx.fillRect(cx - 2, cy + 2, 4, 4);
-          return;
-        }
+        // Obter heroId baseado no avatar ou classCode
+        const heroId = getHeroId(unit.avatar, unit.classCode);
 
-        // Obter sprite baseado no avatar, classCode ou fallback
-        const spriteType =
-          unit.avatar || unit.classCode || (isOwned ? "swordman" : "mage");
-        const loadedSprite = getSprite(spriteType);
+        // Obter estado de animação de combate (ou usar idle)
+        const combatState = getCombatState(unit.id);
+        const animation = combatState?.currentAnimation || "Idle";
+        const frameIndex = combatState?.frameIndex ?? frameIndexRef.current;
+
+        // Obter configuração da animação atual
+        const animConfig = ANIMATION_CONFIGS[animation];
+        const currentFrame = frameIndex % animConfig.frameCount;
+
+        // Obter imagem do sprite
+        const sprite = getImage(heroId, animation);
 
         // Se o sprite está carregado, usa ele
-        if (loadedSprite && spritesLoaded) {
-          const { image: sprite, config } = loadedSprite;
-          const { frameWidth, frameHeight, idleFrames, idleRow } = config;
-          const currentFrame = frameIndexRef.current % idleFrames;
-
-          // Calcular posição no sprite sheet
-          const srcX = currentFrame * frameWidth;
-          const srcY = idleRow * frameHeight;
+        if (sprite && spritesLoaded) {
+          // Calcular posição no sprite sheet (frames horizontais)
+          const srcX = currentFrame * FRAME_SIZE;
+          const srcY = 0;
 
           // Sprite maior, centralizado verticalmente
           const destSize = size * UNIT_RENDER_CONFIG.spriteScale;
@@ -287,8 +302,8 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
               sprite,
               srcX,
               srcY,
-              frameWidth,
-              frameHeight,
+              FRAME_SIZE,
+              FRAME_SIZE,
               offsetX,
               offsetY,
               destSize,
@@ -299,8 +314,8 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
               sprite,
               srcX,
               srcY,
-              frameWidth,
-              frameHeight,
+              FRAME_SIZE,
+              FRAME_SIZE,
               x + offsetX,
               y + offsetY,
               destSize,
@@ -372,7 +387,15 @@ export const ArenaBattleCanvas: React.FC<ArenaBattleCanvasProps> = memo(
           ctx.strokeRect(x + 2, y + 2, size - 4, size - 4);
         }
       },
-      [selectedUnitId, GRID_COLORS, spritesLoaded, getSprite, frameIndexRef]
+      [
+        selectedUnitId,
+        GRID_COLORS,
+        spritesLoaded,
+        getImage,
+        getHeroId,
+        frameIndexRef,
+        getCombatState,
+      ]
     );
 
     // Função para barras de HP/Proteção (não usada atualmente, mas mantida para referência)

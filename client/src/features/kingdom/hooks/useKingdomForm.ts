@@ -37,7 +37,7 @@ const DEFAULT_KINGDOM: KingdomFormData = {
 
 const DEFAULT_REGENT: RegentFormData = {
   name: "",
-  avatar: "[21].png",
+  avatar: "1",
   attributes: {
     combat: 0,
     acuity: 0,
@@ -56,13 +56,13 @@ const RESOURCE_ORDER: ResourceType[] = [
   "devotion",
 ];
 
-// IDs de avatar padrão para cada slot de tropa (apenas personagens humanoides)
+// IDs de avatar padrão para cada slot de tropa (heroId 1-15)
 const DEFAULT_AVATARS = [
-  "[39].png", // Slot 0 - SwordMan
-  "[36].png", // Slot 1 - ShieldMan
-  "[2].png", // Slot 2 - ArcherMan
-  "[24].png", // Slot 3 - Mage
-  "[37].png", // Slot 4 - SpearMan
+  "1", // Slot 0 - Hero 1
+  "2", // Slot 1 - Hero 2
+  "3", // Slot 2 - Hero 3
+  "4", // Slot 3 - Hero 4
+  "5", // Slot 4 - Hero 5
 ];
 
 const createDefaultTroopTemplate = (
@@ -124,8 +124,9 @@ export function useRegentForm() {
   }, []);
 
   const totalPoints = Object.values(data.attributes).reduce((a, b) => a + b, 0);
-  // Regentes não precisam de classe, apenas nome e 30 pontos distribuídos
-  const isValid = data.name.length >= 2 && totalPoints === 30;
+  // Regentes precisam de skill inicial, nome e 30 pontos distribuídos
+  const isValid =
+    data.name.length >= 2 && totalPoints === 30 && !!data.initialSkillId;
 
   return { data, update, updateAttribute, reset, totalPoints, isValid };
 }

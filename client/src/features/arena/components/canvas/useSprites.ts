@@ -1,122 +1,176 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  SPRITE_SHEETS,
-  type SpriteConfig,
-  getSpriteConfig,
+  HERO_IDS,
+  ANIMATION_CONFIGS,
+  FRAME_SIZE,
+  getAnimationPath,
+  getHeroIdForUnit,
+  type SpriteAnimation,
+  type CombatAnimationState,
+  COMBAT_STATE_TO_ANIMATION,
 } from "./sprite.config";
 
-interface LoadedSprite {
+/** Imagem carregada com metadados */
+interface LoadedImage {
   image: HTMLImageElement;
-  config: SpriteConfig;
+  loaded: boolean;
 }
 
+/** Estado de animação de uma unidade */
+export interface UnitAnimationState {
+  heroId: number;
+  currentAnimation: SpriteAnimation;
+  frameIndex: number;
+  lastFrameTime: number;
+  /** Callback quando animação não-loop termina */
+  onComplete?: () => void;
+}
+
+/** Cache de imagens carregadas: heroId -> animation -> LoadedImage */
+type ImageCache = Map<number, Map<SpriteAnimation, LoadedImage>>;
+
 interface UseSpritesReturn {
-  sprites: Map<string, LoadedSprite>;
+  /** Verifica se todos os sprites essenciais estão carregados */
   allLoaded: boolean;
-  getSprite: (unitType?: string) => LoadedSprite | null;
-  /** Frame atual da animação (ref para evitar re-renders) */
+  /** Obtém a imagem para um herói e animação específicos */
+  getImage: (
+    heroId: number,
+    animation: SpriteAnimation
+  ) => HTMLImageElement | null;
+  /** Obtém heroId baseado em avatar ou classCode */
+  getHeroId: (avatar?: string, classCode?: string) => number;
+  /** Frame index global para animações idle (ref para evitar re-renders) */
   frameIndexRef: React.MutableRefObject<number>;
-  /** Timestamp da última mudança de frame (para otimização) */
+  /** Timestamp da última mudança de frame */
   lastFrameChangeRef: React.MutableRefObject<number>;
 }
 
-// Configuração de animação de sprites
-const SPRITE_ANIMATION = {
-  /** Duração de cada frame em ms (200ms = 5 FPS para sprites) */
-  frameDuration: 200,
-  /** Número total de frames na animação idle */
-  totalFrames: 4,
-} as const;
+/** Animações essenciais que são pré-carregadas */
+const PRELOAD_ANIMATIONS: SpriteAnimation[] = [
+  "Idle",
+  "Walk",
+  "Sword_1",
+  "Dead",
+];
 
 /**
- * Hook para carregar e gerenciar sprites de unidades
- * Usa refs ao invés de state para frameIndex para evitar re-renders desnecessários
+ * Hook para carregar e gerenciar sprites de personagens
+ * Carrega animações essenciais no início e outras sob demanda
  */
 export function useSprites(): UseSpritesReturn {
-  const spritesRef = useRef<Map<string, LoadedSprite>>(new Map());
+  const imageCacheRef = useRef<ImageCache>(new Map());
   const [allLoaded, setAllLoaded] = useState(false);
   const frameIndexRef = useRef(0);
   const lastFrameChangeRef = useRef(0);
 
-  // Carregar todos os sprites
+  // Carregar animações essenciais para todos os heróis
   useEffect(() => {
-    const spriteKeys = Object.keys(SPRITE_SHEETS);
+    let totalToLoad = HERO_IDS.length * PRELOAD_ANIMATIONS.length;
     let loadedCount = 0;
 
-    spriteKeys.forEach((key) => {
-      const config = SPRITE_SHEETS[key];
-      const img = new Image();
+    HERO_IDS.forEach((heroId) => {
+      // Inicializar mapa para este herói
+      if (!imageCacheRef.current.has(heroId)) {
+        imageCacheRef.current.set(heroId, new Map());
+      }
+      const heroCache = imageCacheRef.current.get(heroId)!;
 
-      img.onload = () => {
-        spritesRef.current.set(key, { image: img, config });
-        loadedCount++;
+      PRELOAD_ANIMATIONS.forEach((animation) => {
+        const path = getAnimationPath(heroId, animation);
+        const img = new Image();
 
-        if (loadedCount === spriteKeys.length) {
-          setAllLoaded(true);
-        }
-      };
+        const loadedImage: LoadedImage = { image: img, loaded: false };
+        heroCache.set(animation, loadedImage);
 
-      img.onerror = () => {
-        console.error(`Falha ao carregar sprite: ${config.src}`);
-        loadedCount++;
+        img.onload = () => {
+          loadedImage.loaded = true;
+          loadedCount++;
+          if (loadedCount >= totalToLoad) {
+            setAllLoaded(true);
+          }
+        };
 
-        if (loadedCount === spriteKeys.length) {
-          setAllLoaded(true);
-        }
-      };
+        img.onerror = () => {
+          console.warn(`Falha ao carregar sprite: ${path}`);
+          loadedCount++;
+          if (loadedCount >= totalToLoad) {
+            setAllLoaded(true);
+          }
+        };
 
-      img.src = config.src;
+        img.src = path;
+      });
     });
 
-    return () => {
-      // Cleanup não necessário para imagens
-    };
+    // Inicializar timestamp
+    lastFrameChangeRef.current = performance.now();
   }, []);
 
-  // Atualizar frame index baseado no tempo (chamado pelo loop de render principal)
-  // NÃO usa requestAnimationFrame próprio - deixa o canvas principal controlar
-  useEffect(() => {
-    if (!allLoaded) return;
+  // Obter imagem (carrega sob demanda se necessário)
+  const getImage = useCallback(
+    (heroId: number, animation: SpriteAnimation): HTMLImageElement | null => {
+      const heroCache = imageCacheRef.current.get(heroId);
 
-    // Apenas inicializa o timestamp
-    lastFrameChangeRef.current = performance.now();
-  }, [allLoaded]);
-
-  // Função para obter sprite por ID de avatar ou classCode
-  const getSprite = useCallback(
-    (spriteIdentifier?: string): LoadedSprite | null => {
-      // Obtém a configuração do sprite
-      const config = getSpriteConfig(spriteIdentifier);
-
-      // Se é um ID válido ([n].png), busca diretamente
-      if (spriteIdentifier && spritesRef.current.has(spriteIdentifier)) {
-        return spritesRef.current.get(spriteIdentifier) || null;
+      if (!heroCache) {
+        // Herói não existe no cache, criar
+        imageCacheRef.current.set(heroId, new Map());
+        return null;
       }
 
-      // Busca pelo src da configuração
-      for (const [, sprite] of spritesRef.current.entries()) {
-        if (sprite.config.src === config.src) {
-          return sprite;
+      const cached = heroCache.get(animation);
+
+      if (cached?.loaded) {
+        return cached.image;
+      }
+
+      // Carregar sob demanda se não existe
+      if (!cached) {
+        const path = getAnimationPath(heroId, animation);
+        const img = new Image();
+        const loadedImage: LoadedImage = { image: img, loaded: false };
+        heroCache.set(animation, loadedImage);
+
+        img.onload = () => {
+          loadedImage.loaded = true;
+        };
+        img.onerror = () => {
+          console.warn(`Falha ao carregar sprite sob demanda: ${path}`);
+        };
+        img.src = path;
+      }
+
+      // Fallback para Idle se animação não carregada ainda
+      if (animation !== "Idle") {
+        const idleCached = heroCache.get("Idle");
+        if (idleCached?.loaded) {
+          return idleCached.image;
         }
       }
 
-      // Fallback para o primeiro sprite
-      return spritesRef.current.get("[1].png") || null;
+      return null;
+    },
+    []
+  );
+
+  // Wrapper para getHeroIdForUnit
+  const getHeroId = useCallback(
+    (avatar?: string, classCode?: string): number => {
+      return getHeroIdForUnit(avatar, classCode);
     },
     []
   );
 
   return {
-    sprites: spritesRef.current,
     allLoaded,
-    getSprite,
+    getImage,
+    getHeroId,
     frameIndexRef,
     lastFrameChangeRef,
   };
 }
 
 /**
- * Atualiza o frame de animação dos sprites
+ * Atualiza o frame de animação global
  * Deve ser chamado dentro do loop de render do canvas
  * @returns true se o frame mudou (precisa redesenhar sprites)
  */
@@ -126,13 +180,94 @@ export function updateSpriteFrame(
   currentTime: number
 ): boolean {
   const elapsed = currentTime - lastFrameChangeRef.current;
+  const idleConfig = ANIMATION_CONFIGS.Idle;
 
-  if (elapsed >= SPRITE_ANIMATION.frameDuration) {
-    frameIndexRef.current =
-      (frameIndexRef.current + 1) % SPRITE_ANIMATION.totalFrames;
+  if (elapsed >= idleConfig.frameDuration) {
+    frameIndexRef.current = (frameIndexRef.current + 1) % idleConfig.frameCount;
     lastFrameChangeRef.current = currentTime;
     return true;
   }
 
   return false;
 }
+
+/**
+ * Hook para gerenciar animações individuais de unidades no combate
+ */
+export function useUnitAnimationStates() {
+  const statesRef = useRef<Map<string, UnitAnimationState>>(new Map());
+
+  /** Define ou atualiza o estado de animação de uma unidade */
+  const setAnimation = useCallback(
+    (
+      unitId: string,
+      heroId: number,
+      state: CombatAnimationState,
+      onComplete?: () => void
+    ) => {
+      const animation = COMBAT_STATE_TO_ANIMATION[state];
+      const config = ANIMATION_CONFIGS[animation];
+
+      statesRef.current.set(unitId, {
+        heroId,
+        currentAnimation: animation,
+        frameIndex: 0,
+        lastFrameTime: performance.now(),
+        onComplete: config.loop ? undefined : onComplete,
+      });
+    },
+    []
+  );
+
+  /** Atualiza frames de todas as animações ativas */
+  const updateAnimations = useCallback((currentTime: number) => {
+    statesRef.current.forEach((state, unitId) => {
+      const config = ANIMATION_CONFIGS[state.currentAnimation];
+      const elapsed = currentTime - state.lastFrameTime;
+
+      if (elapsed >= config.frameDuration) {
+        const nextFrame = state.frameIndex + 1;
+
+        if (nextFrame >= config.frameCount) {
+          if (config.loop) {
+            state.frameIndex = 0;
+          } else {
+            // Animação terminou
+            state.onComplete?.();
+            // Voltar para idle
+            state.currentAnimation = "Idle";
+            state.frameIndex = 0;
+            state.onComplete = undefined;
+          }
+        } else {
+          state.frameIndex = nextFrame;
+        }
+
+        state.lastFrameTime = currentTime;
+      }
+    });
+  }, []);
+
+  /** Obtém estado atual de uma unidade */
+  const getState = useCallback(
+    (unitId: string): UnitAnimationState | undefined => {
+      return statesRef.current.get(unitId);
+    },
+    []
+  );
+
+  /** Remove estado de uma unidade */
+  const removeState = useCallback((unitId: string) => {
+    statesRef.current.delete(unitId);
+  }, []);
+
+  return {
+    setAnimation,
+    updateAnimations,
+    getState,
+    removeState,
+  };
+}
+
+/** Constantes exportadas para uso no canvas */
+export { FRAME_SIZE, ANIMATION_CONFIGS };

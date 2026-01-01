@@ -52,6 +52,9 @@ export interface SkillDefinition {
   description: string;
   category: SkillCategory;
 
+  // Disponível para tropas (criação de templates). Default: false/undefined
+  availableForTroops?: boolean;
+
   // Custo (apenas para ACTIVE)
   costTier?: SkillCostTier;
 
