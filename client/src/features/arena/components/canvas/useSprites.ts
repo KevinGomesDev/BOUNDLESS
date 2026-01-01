@@ -273,7 +273,7 @@ export function useUnitAnimationStates() {
 
   /** Atualiza frames de todas as animações ativas */
   const updateAnimations = useCallback((currentTime: number) => {
-    statesRef.current.forEach((state, unitId) => {
+    statesRef.current.forEach((state) => {
       const config = ANIMATION_CONFIGS[state.currentAnimation];
       const elapsed = currentTime - state.lastFrameTime;
 

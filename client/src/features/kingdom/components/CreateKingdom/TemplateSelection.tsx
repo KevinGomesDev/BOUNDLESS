@@ -165,17 +165,6 @@ const ALIGNMENT_NAMES: Record<string, string> = {
   ORDEM: "Ordem",
 };
 
-const CLASS_NAMES: Record<string, string> = {
-  WARRIOR: "Guerreiro",
-  CLERIC: "Clérigo",
-  MAGE: "Mago",
-  ROGUE: "Ladino",
-  RANGER: "Patrulheiro",
-  PALADIN: "Paladino",
-  NECROMANCER: "Necromante",
-  BERSERKER: "Berserker",
-};
-
 // Usa nomes do config global com mapeamento para chaves legadas
 const RESOURCE_NAMES: Record<string, string> = {
   minerio: GLOBAL_RESOURCE_NAMES.ore.name,
@@ -226,9 +215,6 @@ const TemplateDetailsView: React.FC<TemplateDetailsViewProps> = ({
           >
             {template.name}
           </h3>
-          <p className="text-parchment-aged text-xs italic">
-            Capital: {template.capitalName}
-          </p>
         </div>
       </div>
 
@@ -279,7 +265,7 @@ const TemplateDetailsView: React.FC<TemplateDetailsViewProps> = ({
                 <div>
                   <span className="text-parchment-dark">Classe:</span>
                   <span className="text-parchment-aged ml-2 font-medium">
-                    {CLASS_NAMES[regent.classCode] || regent.classCode}
+                    Regente
                   </span>
                 </div>
               </div>

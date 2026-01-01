@@ -519,6 +519,35 @@ export function MatchProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  // Listener para atualizações em tempo real da lista de lobbies
+  React.useEffect(() => {
+    const handleLobbiesUpdated = (data: {
+      action: "created" | "removed";
+      match?: OpenMatch;
+      matchId?: string;
+    }) => {
+      if (data.action === "created" && data.match) {
+        // Adiciona novo lobby à lista
+        dispatch({
+          type: "SET_OPEN_MATCHES",
+          payload: [...state.openMatches, data.match],
+        });
+      } else if (data.action === "removed" && data.matchId) {
+        // Remove lobby da lista
+        dispatch({
+          type: "SET_OPEN_MATCHES",
+          payload: state.openMatches.filter((m) => m.id !== data.matchId),
+        });
+      }
+    };
+
+    socketService.on("match:lobbies_updated", handleLobbiesUpdated);
+
+    return () => {
+      socketService.off("match:lobbies_updated", handleLobbiesUpdated);
+    };
+  }, [state.openMatches]);
+
   // Listener para o novo sistema de broadcast
   React.useEffect(() => {
     const handleMatchStateUpdated = (completeState: CompleteMatchState) => {

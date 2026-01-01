@@ -92,8 +92,20 @@ export const KingdomList: React.FC = () => {
         {/* Kingdom List */}
         {!isLoading && kingdoms.length > 0 && (
           <div className="space-y-3">
-            {kingdoms.map((kingdom) => (
-              <KingdomCard key={kingdom.id} kingdom={kingdom} />
+            {kingdoms.map((summary) => (
+              <KingdomCard
+                key={summary.id}
+                kingdom={{
+                  id: summary.id,
+                  name: summary.name,
+                  race: summary.race,
+                  alignment: summary.alignment,
+                  locationIndex: 0,
+                  ownerId: "",
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                }}
+              />
             ))}
           </div>
         )}
@@ -114,29 +126,11 @@ export const KingdomList: React.FC = () => {
  * Card de Reino - Placa de Pedra com Brasão
  */
 const KingdomCard: React.FC<{ kingdom: Kingdom }> = ({ kingdom }) => {
-  const alignmentConfig: Record<string, { color: string; icon: string }> = {
-    BOM: {
-      color: "text-green-400 border-green-600/50 bg-green-900/20",
-      icon: "✨",
-    },
-    NEUTRO: {
-      color: "text-parchment-aged border-metal-iron/50 bg-citadel-slate/30",
-      icon: "⚖️",
-    },
-    MAL: {
-      color: "text-war-ember border-war-crimson/50 bg-war-blood/20",
-      icon: "💀",
-    },
-  };
-
   const raceIcons: Record<string, string> = {
     HUMANOIDE: "👤",
     ABERRACAO: "👁️",
     CONSTRUTO: "🤖",
   };
-
-  const alignment =
-    alignmentConfig[kingdom.alignment] || alignmentConfig.NEUTRO;
 
   return (
     <div
@@ -163,37 +157,14 @@ const KingdomCard: React.FC<{ kingdom: Kingdom }> = ({ kingdom }) => {
               >
                 {kingdom.name}
               </h4>
-              <p className="text-parchment-dark text-xs">
-                Capital:{" "}
-                <span className="text-parchment-aged">
-                  {kingdom.capitalName}
-                </span>
-              </p>
             </div>
-          </div>
-
-          {/* Tags de Alinhamento e Raça */}
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span
-              className={`text-xs px-2 py-1 rounded border ${alignment.color} font-semibold`}
-            >
-              {alignment.icon} {kingdom.alignment}
-            </span>
-            <span className="text-xs px-2 py-1 rounded border border-metal-copper/50 bg-metal-copper/10 text-metal-bronze font-semibold">
-              {kingdom.race}
-            </span>
           </div>
         </div>
 
-        {/* Recursos */}
+        {/* Placeholder for resources */}
         <div className="text-right space-y-1">
-          <div className="bg-citadel-slate/50 px-2 py-1 rounded border border-metal-gold/30">
-            <span className="text-metal-gold font-bold text-sm">
-              💰 {kingdom.gold?.toLocaleString() || 0}
-            </span>
-          </div>
-          <div className="text-parchment-dark text-xs">
-            👥 {kingdom.population?.toLocaleString() || 0}
+          <div className="bg-citadel-slate/50 px-2 py-1 rounded border border-metal-gold/30 text-xs text-parchment-aged">
+            💰 N/A
           </div>
         </div>
       </div>

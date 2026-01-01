@@ -87,6 +87,45 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       dispatch({ type: "SET_LOBBIES", payload: data.lobbies });
     };
 
+    // Handler para atualizações em tempo real de lobbies (criação/remoção)
+    const handleLobbiesUpdated = (data: {
+      action: "created" | "removed";
+      lobbyId?: string;
+      lobby?: {
+        lobbyId: string;
+        hostUserId: string;
+        hostUsername: string;
+        hostKingdomName: string;
+        createdAt: Date;
+      };
+    }) => {
+      lobbyLog("🔄", "LOBBIES ATUALIZADOS", data);
+
+      if (data.action === "created" && data.lobby) {
+        // Adicionar novo lobby à lista
+        const newLobby: ArenaLobby = {
+          lobbyId: data.lobby.lobbyId,
+          hostUserId: data.lobby.hostUserId,
+          hostUsername: data.lobby.hostUsername,
+          hostKingdomName: data.lobby.hostKingdomName,
+          createdAt: data.lobby.createdAt,
+          status: "WAITING", // Lobbies recém-criados estão em WAITING
+        };
+        dispatch({
+          type: "SET_LOBBIES",
+          payload: [...stateRef.current.lobbies, newLobby],
+        });
+      } else if (data.action === "removed" && data.lobbyId) {
+        // Remover lobby da lista
+        dispatch({
+          type: "SET_LOBBIES",
+          payload: stateRef.current.lobbies.filter(
+            (l) => l.lobbyId !== data.lobbyId
+          ),
+        });
+      }
+    };
+
     const handlePlayerJoined = (data: PlayerJoinedResponse) => {
       lobbyLog("👤", "JOGADOR ENTROU NO LOBBY", {
         guestUserId: data.guestUserId,
@@ -452,11 +491,13 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       battleId: string;
       currentPlayerId: string;
       index: number;
+      round: number;
     }) => {
       battleLog("🔄", "PRÓXIMO JOGADOR", {
         battleId: data.battleId,
         currentPlayerId: data.currentPlayerId,
         turnIndex: data.index,
+        round: data.round,
       });
       // Resetar hasStartedAction de todas as unidades quando muda de jogador
       const updatedUnits = stateRef.current.units.map((u: ArenaUnit) => ({
@@ -473,6 +514,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
               ...stateRef.current.battle,
               currentPlayerId: data.currentPlayerId,
               currentTurnIndex: data.index,
+              round: data.round, // Sincronizar round do servidor
               activeUnitId: undefined, // Resetar unidade ativa ao mudar jogador
             }
           : null,
@@ -524,13 +566,17 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       battleLog("🔔", "NOVA RODADA", {
         battleId: data.battleId,
         round: data.round,
+        previousRound: stateRef.current.battle?.round,
       });
-      dispatch({
-        type: "SET_BATTLE",
-        payload: stateRef.current.battle
-          ? { ...stateRef.current.battle, round: data.round }
-          : null,
-      });
+      // Atualizar round imediatamente no estado
+      if (stateRef.current.battle) {
+        const updatedBattle = { ...stateRef.current.battle, round: data.round };
+        dispatch({ type: "SET_BATTLE", payload: updatedBattle });
+        console.log(
+          `%c[ArenaContext] Round atualizado: ${data.round}`,
+          "color: #22c55e; font-weight: bold;"
+        );
+      }
     };
 
     const handleBattleEnded = (data: BattleEndedResponse) => {
@@ -619,6 +665,24 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: false });
       // Configurar nova batalha (usa o handler existente)
       handleBattleStarted(data);
+    };
+
+    // Handler para quando oponente declina/sai do modal de revanche
+    const handleRematchDeclined = (data: {
+      lobbyId: string;
+      userId: string;
+      message: string;
+    }) => {
+      lobbyLog("🚫", "OPONENTE DECLINOU REVANCHE", data);
+      // Só processar se não foi eu que declinei
+      if (data.userId !== user.id) {
+        dispatch({ type: "SET_REMATCH_PENDING", payload: false });
+        dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: false });
+        dispatch({
+          type: "SET_ERROR",
+          payload: "O oponente saiu. Revanche cancelada.",
+        });
+      }
     };
 
     // Handler para quando um obstáculo é destruído
@@ -725,6 +789,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     // Register listeners
     socketService.on("battle:lobby_created", handleLobbyCreated);
     socketService.on("battle:lobbies_list", handleLobbiesList);
+    socketService.on("battle:lobbies_updated", handleLobbiesUpdated);
     socketService.on("battle:player_joined", handlePlayerJoined);
     socketService.on("battle:lobby_joined", handleLobbyJoined);
     socketService.on("battle:lobby_closed", handleLobbyClosed);
@@ -749,11 +814,13 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     socketService.on("battle:player_reconnected", handlePlayerReconnected);
     socketService.on("battle:rematch_requested", handleRematchRequested);
     socketService.on("battle:rematch_started", handleRematchStarted);
+    socketService.on("battle:rematch_declined", handleRematchDeclined);
     socketService.on("battle:obstacle_destroyed", handleObstacleDestroyed);
 
     return () => {
       socketService.off("battle:lobby_created", handleLobbyCreated);
       socketService.off("battle:lobbies_list", handleLobbiesList);
+      socketService.off("battle:lobbies_updated", handleLobbiesUpdated);
       socketService.off("battle:player_joined", handlePlayerJoined);
       socketService.off("battle:lobby_joined", handleLobbyJoined);
       socketService.off("battle:lobby_closed", handleLobbyClosed);
@@ -781,6 +848,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       socketService.off("battle:player_reconnected", handlePlayerReconnected);
       socketService.off("battle:rematch_requested", handleRematchRequested);
       socketService.off("battle:rematch_started", handleRematchStarted);
+      socketService.off("battle:rematch_declined", handleRematchDeclined);
       socketService.off("battle:obstacle_destroyed", handleObstacleDestroyed);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1045,6 +1113,20 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
   const dismissBattleResult = useCallback(() => {
     arenaLog("🚪", "Fechando modal de resultado");
+
+    // Notificar o servidor que o jogador saiu (para cancelar revanche pendente)
+    const lobbyId = state.currentLobby?.lobbyId || state.battle?.lobbyId;
+    if (user && lobbyId) {
+      arenaLog("⬆️", "EMIT: battle:decline_rematch", {
+        lobbyId,
+        userId: user.id,
+      });
+      socketService.emit("battle:decline_rematch", {
+        lobbyId,
+        userId: user.id,
+      });
+    }
+
     dispatch({ type: "SET_BATTLE_RESULT", payload: null });
     dispatch({ type: "SET_BATTLE", payload: null });
     dispatch({ type: "SET_UNITS", payload: [] });
@@ -1054,7 +1136,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: false });
     // Limpar sessão ativa para evitar loop de restauração
     clearSession();
-  }, [clearSession]);
+  }, [clearSession, user, state.currentLobby, state.battle]);
 
   const clearError = useCallback(() => {
     dispatch({ type: "SET_ERROR", payload: null });

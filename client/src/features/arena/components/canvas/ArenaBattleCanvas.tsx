@@ -423,49 +423,49 @@ export const ArenaBattleCanvas = memo(
       );
 
       // Função para barras de HP/Proteção (não usada atualmente, mas mantida para referência)
-      const drawUnitBars = useCallback(
-        (
-          ctx: CanvasRenderingContext2D,
-          x: number,
-          y: number,
-          size: number,
-          unit: ArenaUnit
-        ) => {
-          const barWidth = size - 8;
-          const barHeight = Math.max(2, size / 16);
-          const barX = x + 4;
-          const barY = y + size - barHeight * 3;
+      // const drawUnitBars = useCallback(
+      //   (
+      //     ctx: CanvasRenderingContext2D,
+      //     x: number,
+      //     y: number,
+      //     size: number,
+      //     unit: ArenaUnit
+      //   ) => {
+      //     const barWidth = size - 8;
+      //     const barHeight = Math.max(2, size / 16);
+      //     const barX = x + 4;
+      //     const barY = y + size - barHeight * 3;
 
-          // HP
-          const hpPercent = unit.currentHp / unit.maxHp;
-          const hpColor =
-            hpPercent > 0.6
-              ? UI_COLORS.hpFull
-              : hpPercent > 0.3
-              ? UI_COLORS.hpMedium
-              : UI_COLORS.hpLow;
+      //     // HP
+      //     const hpPercent = unit.currentHp / unit.maxHp;
+      //     const hpColor =
+      //       hpPercent > 0.6
+      //         ? UI_COLORS.hpFull
+      //         : hpPercent > 0.3
+      //         ? UI_COLORS.hpMedium
+      //         : UI_COLORS.hpLow;
 
-          ctx.fillStyle = "#1a1a1a";
-          ctx.fillRect(barX, barY, barWidth, barHeight);
-          ctx.fillStyle = hpColor;
-          ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+      //     ctx.fillStyle = "#1a1a1a";
+      //     ctx.fillRect(barX, barY, barWidth, barHeight);
+      //     ctx.fillStyle = hpColor;
+      //     ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
 
-          // Proteção
-          if (unit.protection > 0 || unit.protectionBroken) {
-            const protY = barY - barHeight - 1;
-            const maxProt = unit.armor * 2;
-            const protPercent = unit.protection / maxProt;
+      //     // Proteção
+      //     if (unit.protection > 0 || unit.protectionBroken) {
+      //       const protY = barY - barHeight - 1;
+      //       const maxProt = unit.armor * 2;
+      //       const protPercent = unit.protection / maxProt;
 
-            ctx.fillStyle = "#1a1a1a";
-            ctx.fillRect(barX, protY, barWidth, barHeight - 1);
-            ctx.fillStyle = unit.protectionBroken
-              ? UI_COLORS.protectionBroken
-              : UI_COLORS.protection;
-            ctx.fillRect(barX, protY, barWidth * protPercent, barHeight - 1);
-          }
-        },
-        []
-      );
+      //       ctx.fillStyle = "#1a1a1a";
+      //       ctx.fillRect(barX, protY, barWidth, barHeight - 1);
+      //       ctx.fillStyle = unit.protectionBroken
+      //         ? UI_COLORS.protectionBroken
+      //         : UI_COLORS.protection;
+      //       ctx.fillRect(barX, protY, barWidth * protPercent, barHeight - 1);
+      //     }
+      //   },
+      //   []
+      // );
 
       // Função para condições
       const drawConditions = useCallback(

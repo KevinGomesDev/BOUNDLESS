@@ -52,30 +52,45 @@ export const ArenaBattleView: React.FC = () => {
   const isMovingRef = useRef<boolean>(false); // Lock para evitar cliques rápidos
   const autoEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer para debounce do auto-end
   const unitsRef = useRef(units); // Ref para acessar units atualizado dentro do setTimeout
+  const cameraCenteredRef = useRef<string | null>(null); // Controla se já centralizou a câmera neste turno
 
   // Manter ref sincronizada
   useEffect(() => {
     unitsRef.current = units;
   }, [units]);
 
-  // Handler para abrir menu de pausa (ESC)
+  // Handler para atalhos de teclado (ESC = menu pausa, Espaço = finalizar turno)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isPauseMenuOpen) {
         setIsPauseMenuOpen(true);
       }
+      // Espaço finaliza o turno se for meu turno e tenho unidade selecionada
+      if (e.key === " " && battle && user) {
+        e.preventDefault(); // Evitar scroll da página
+        const isMyTurn = battle.currentPlayerId === user.id;
+        const myUnit = units.find((u) => u.ownerId === user.id && u.isAlive);
+        if (isMyTurn && myUnit && myUnit.hasStartedAction) {
+          console.log(
+            "%c[ArenaBattleView] ⌨️ Espaço pressionado - Finalizando turno",
+            "color: #f59e0b; font-weight: bold;"
+          );
+          endAction(myUnit.id);
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPauseMenuOpen]);
+  }, [isPauseMenuOpen, battle, user, units, endAction]);
 
   // Resetar flag de auto-end quando muda de turno
   useEffect(() => {
     autoEndTriggeredRef.current = false;
+    cameraCenteredRef.current = null; // Permitir centralizar novamente no novo turno
   }, [battle?.currentPlayerId, battle?.round]);
 
   // Auto-selecionar a unidade do turno atual quando muda de turno ou monta
-  // E guiar câmera para ela
+  // E guiar câmera para ela APENAS UMA VEZ no início do turno
   useEffect(() => {
     if (!battle || !user) return;
 
@@ -87,11 +102,16 @@ export const ArenaBattleView: React.FC = () => {
         // SEMPRE selecionar minha unidade quando é meu turno
         setSelectedUnitId(myAliveUnit.id);
 
-        // Guiar câmera para a unidade selecionada
-        // Pequeno delay para garantir que o canvas está pronto
-        setTimeout(() => {
-          canvasRef.current?.centerOnUnit(myAliveUnit.id);
-        }, 100);
+        // Guiar câmera para a unidade selecionada APENAS UMA VEZ por turno
+        // Usa a combinação currentPlayerId+round como chave para detectar novo turno
+        const turnKey = `${battle.currentPlayerId}-${battle.round}`;
+        if (cameraCenteredRef.current !== turnKey) {
+          cameraCenteredRef.current = turnKey;
+          // Pequeno delay para garantir que o canvas está pronto
+          setTimeout(() => {
+            canvasRef.current?.centerOnUnit(myAliveUnit.id);
+          }, 100);
+        }
 
         // Se a unidade ainda não iniciou ação, iniciar
         if (!myAliveUnit.hasStartedAction && myAliveUnit.movesLeft === 0) {
@@ -235,8 +255,10 @@ export const ArenaBattleView: React.FC = () => {
         (u) => u.posX === newX && u.posY === newY && u.isAlive
       );
 
-      // Sempre atualizar a direção do sprite baseado no movimento
-      setUnitDirection({ unitId: selectedUnit.id, direction });
+      // Calcular direção para sprite (baseado no movimento horizontal)
+      const deltaX = newX - selectedUnit.posX;
+      const spriteDirection: SpriteDirection = deltaX < 0 ? "left" : "right";
+      setUnitDirection({ unitId: selectedUnit.id, direction: spriteDirection });
 
       // Bloquear cliques rápidos enquanto movimento está sendo processado
       if (isMovingRef.current) {
@@ -400,15 +422,9 @@ export const ArenaBattleView: React.FC = () => {
       return;
     }
 
-    // Calcular direção baseado no clique
+    // Calcular direção baseado no clique (apenas left/right para sprite)
     const deltaX = x - selectedUnit.posX;
-    const deltaY = y - selectedUnit.posY;
-    let clickDirection: SpriteDirection = "right";
-    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-      clickDirection = deltaX >= 0 ? "right" : "left";
-    } else {
-      clickDirection = deltaY >= 0 ? "down" : "up";
-    }
+    const clickDirection: SpriteDirection = deltaX < 0 ? "left" : "right";
     setUnitDirection({ unitId: selectedUnit.id, direction: clickDirection });
 
     // Tentar mover para a célula

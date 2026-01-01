@@ -252,6 +252,21 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
       // Juntar socket à sala
       socket.join(matchId);
       socket.emit("match:created_success", { matchId });
+
+      // Broadcast para todos os clientes sobre a nova partida disponível
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      const kingdom = await prisma.kingdom.findUnique({
+        where: { id: kingdomId },
+      });
+      io.emit("match:lobbies_updated", {
+        action: "created",
+        match: {
+          id: matchId,
+          hostUsername: user?.username || "Unknown",
+          hostKingdomName: kingdom?.name || "Unknown",
+          createdAt: new Date(),
+        },
+      });
     } catch (error) {
       console.error("[MATCH] Erro ao criar partida:", error);
       socket.emit("error", { message: "Falha ao criar partida." });
@@ -370,6 +385,9 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
 
       // Broadcast estado completo
       await broadcastMatchState(io, matchId);
+
+      // Broadcast para atualizar lista de lobbies (remover da lista pois está cheio)
+      io.emit("match:lobbies_updated", { action: "removed", matchId });
 
       console.log(`[MATCH] Fase de preparação iniciada: ${matchId}`);
     } catch (error) {

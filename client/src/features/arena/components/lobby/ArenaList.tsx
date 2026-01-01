@@ -49,10 +49,6 @@ export const ArenaList: React.FC<ArenaListProps> = () => {
     }
   }, [kingdoms, selectedKingdom]);
 
-  const handleRefresh = () => {
-    listLobbies();
-  };
-
   const handleCreateLobby = async () => {
     if (!selectedKingdom || !authState.user?.id) return;
 
@@ -197,21 +193,6 @@ export const ArenaList: React.FC<ArenaListProps> = () => {
               🏟️ CRIAR ARENA
             </span>
           )}
-        </button>
-
-        {/* Atualizar Lista */}
-        <button
-          onClick={handleRefresh}
-          disabled={isLoading}
-          className="group relative px-6 py-4 bg-gradient-to-b from-citadel-granite to-citadel-carved 
-                     border-2 border-metal-iron rounded-lg shadow-stone-raised
-                     hover:from-citadel-weathered hover:to-citadel-granite
-                     disabled:opacity-50 transition-all duration-200"
-        >
-          <span className="text-parchment-aged font-semibold flex items-center justify-center gap-2">
-            <span className={isLoading ? "animate-spin" : ""}>🔄</span>
-            Atualizar Arenas
-          </span>
         </button>
       </div>
 

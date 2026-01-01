@@ -1,7 +1,7 @@
 // client/src/features/events/components/EventLog.tsx
 // Componente de log de eventos reutilizável
 
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useEvents } from "../context/EventContext";
 import type {
   GameEvent,

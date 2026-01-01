@@ -3,14 +3,6 @@ import type { TroopPassive, TroopTemplate, BaseAttributes } from "./types";
 import { AvatarSelector } from "./AnimatedCharacterSprite";
 import { AttributesPanel } from "./AttributesPanel";
 
-const TROOP_SLOTS = [
-  { index: 0, defaultName: "Tropa 1" },
-  { index: 1, defaultName: "Tropa 2" },
-  { index: 2, defaultName: "Tropa 3" },
-  { index: 3, defaultName: "Tropa 4" },
-  { index: 4, defaultName: "Tropa 5" },
-];
-
 const RESOURCE_TYPES = [
   { id: "ore", name: "Ore", color: "text-amber-400" },
   { id: "supplies", name: "Supplies", color: "text-green-400" },
