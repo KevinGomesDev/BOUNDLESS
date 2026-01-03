@@ -1,7 +1,6 @@
 // src/utils/conquest.utils.ts
 
 import { EVENTS, EventDef } from "../../../shared/data/events";
-import { rollD6Test, AdvantageMod } from "../logic/dice-system";
 import {
   ALL_ATTRIBUTE_KEYS,
   AttributeKey,
@@ -11,10 +10,10 @@ import {
 export const CONQUEST_ATTRIBUTES = ALL_ATTRIBUTE_KEYS;
 export type ConquestAttribute = AttributeKey;
 
-// Check if event triggers (sucesso = 4+ em 1D6)
+// Check if event triggers (50% chance)
 export function rollEventTrigger(): { roll: number; triggered: boolean } {
-  const result = rollD6Test(1, 0);
-  return { roll: result.allRolls[0], triggered: result.success };
+  const roll = Math.floor(Math.random() * 6) + 1;
+  return { roll, triggered: roll >= 4 };
 }
 
 // Pick N random unique attributes
@@ -40,23 +39,22 @@ export interface AttributeTestResult {
 }
 
 /**
- * Perform a single attribute test usando o novo sistema D6
- * Rola N dados (onde N = attributeValue), conta sucessos
- * Sucesso se tiver pelo menos 1 sucesso
+ * Perform a single attribute test
+ * Sucesso se o atributo >= threshold (4)
  */
 export function testAttribute(
   attributeValue: number,
-  attribute: ConquestAttribute,
-  advantageMod: AdvantageMod = 0
+  attribute: ConquestAttribute
 ): AttributeTestResult {
-  const result = rollD6Test(attributeValue, advantageMod);
+  const threshold = 4;
+  const success = attributeValue >= threshold;
   return {
     attribute,
-    rolls: result.allRolls,
+    rolls: [attributeValue],
     attributeValue,
-    successes: result.totalSuccesses,
-    threshold: result.successThreshold,
-    success: result.success,
+    successes: success ? 1 : 0,
+    threshold,
+    success,
   };
 }
 
@@ -98,8 +96,8 @@ export function processConquestEvent(
   // Sistema D6: cada atributo rola N dados, conta sucessos (4+)
   // Sucesso se tiver pelo menos 1 sucesso na rolagem
 
-  const attributeTests: AttributeTestResult[] = randomAttrs.map(
-    (attr) => testAttribute(unitAttributes[attr], attr, 0) // 0 = sem vantagem/desvantagem
+  const attributeTests: AttributeTestResult[] = randomAttrs.map((attr) =>
+    testAttribute(unitAttributes[attr], attr)
   );
 
   // Count successes

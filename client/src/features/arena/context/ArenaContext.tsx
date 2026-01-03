@@ -25,8 +25,8 @@ import type {
   UnitAttackedResponse,
   BattleEndedResponse,
   ArenaLobbyStatus,
-  ArenaUnit,
 } from "../types/arena.types";
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 export const ArenaContext = createContext<ArenaContextType | null>(null);
 
@@ -452,6 +452,10 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       currentHp: number;
       isAlive: boolean;
       conditions: string[];
+      hasStartedAction?: boolean;
+      movesLeft?: number;
+      actionsLeft?: number;
+      attacksLeftThisTurn?: number;
     }) => {
       battleLog("⏹️", "TURNO FINALIZADO", data);
       dispatch({
@@ -462,6 +466,17 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
           currentHp: data.currentHp,
           isAlive: data.isAlive,
           conditions: data.conditions,
+          // Campos de recursos resetados pelo servidor
+          ...(data.hasStartedAction !== undefined && {
+            hasStartedAction: data.hasStartedAction,
+          }),
+          ...(data.movesLeft !== undefined && { movesLeft: data.movesLeft }),
+          ...(data.actionsLeft !== undefined && {
+            actionsLeft: data.actionsLeft,
+          }),
+          ...(data.attacksLeftThisTurn !== undefined && {
+            attacksLeftThisTurn: data.attacksLeftThisTurn,
+          }),
         },
       });
     };
@@ -499,7 +514,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
       // Aplicar estado das unidades recebido do servidor (fonte de verdade)
       if (data.units && data.units.length > 0) {
-        const updatedUnits = stateRef.current.units.map((u: ArenaUnit) => {
+        const updatedUnits = stateRef.current.units.map((u: BattleUnit) => {
           const serverUnit = data.units!.find((su) => su.id === u.id);
           if (serverUnit) {
             return {
@@ -725,6 +740,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       currentTurnIndex: number;
       currentPlayerId: string;
       turnTimer?: number;
+      activeUnitId?: string; // Unidade ativa no momento da reconexão
       units: any[];
       actionOrder: string[];
       hostKingdom: { id: string; name: string; ownerId: string } | null;
@@ -737,6 +753,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         status: data.status,
         unitsCount: data.units.length,
         turnTimer: data.turnTimer,
+        activeUnitId: data.activeUnitId,
       });
       const battle: ArenaBattle = {
         battleId: data.battleId,
@@ -748,6 +765,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         currentPlayerId: data.currentPlayerId,
         actionOrder: data.actionOrder,
         units: data.units,
+        activeUnitId: data.activeUnitId, // Restaurar unidade ativa
         hostKingdom: data.hostKingdom || {
           id: "",
           name: "Unknown",
@@ -855,14 +873,19 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   }, [user?.id]);
 
   const createLobby = useCallback(
-    (kingdomId: string) => {
+    (kingdomId: string, vsBot: boolean = false) => {
       if (!user) return;
       lobbyLog("⬆️", "EMIT: arena:create_lobby", {
         userId: user.id,
         kingdomId,
+        vsBot,
       });
       dispatch({ type: "SET_LOADING", payload: true });
-      socketService.emit("battle:create_lobby", { userId: user.id, kingdomId });
+      socketService.emit("battle:create_lobby", {
+        userId: user.id,
+        kingdomId,
+        vsBot,
+      });
       dispatch({ type: "SET_LOADING", payload: false });
     },
     [user]

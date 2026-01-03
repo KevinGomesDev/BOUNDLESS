@@ -1,9 +1,10 @@
 import React from "react";
-import type { ArenaUnit, BattleEndedResponse } from "../../types/arena.types";
+import type { BattleEndedResponse } from "../../types/arena.types";
+import type { BattleUnit } from "../../../../../../shared/types/battle.types";
 
 interface BattleResultModalProps {
   result: BattleEndedResponse;
-  units: ArenaUnit[];
+  units: BattleUnit[];
   isWinner: boolean;
   myKingdomName: string;
   opponentKingdomName: string;
@@ -33,7 +34,7 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   const myUnits = units.filter((u) => u.ownerId === myUserId);
   const enemyUnits = units.filter((u) => u.ownerId !== myUserId);
 
-  const renderUnitCard = (unit: ArenaUnit, isEnemy: boolean) => {
+  const renderUnitCard = (unit: BattleUnit, isEnemy: boolean) => {
     const hpPercent = (unit.currentHp / unit.maxHp) * 100;
     const isDead = !unit.isAlive || unit.currentHp <= 0;
 

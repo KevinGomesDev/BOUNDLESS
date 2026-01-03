@@ -285,7 +285,6 @@ model Battle {
   ransomPrice      Int?
   ransomResource   String?
   // Clima e Terreno
-  weather          String   @default("SUNNY")   // SUNNY | RAIN | STORM | SNOW | BLIZZARD | FALLING_LEAVES
   terrainType      String   @default("PLAINS")  // FOREST | PLAINS | MOUNTAIN | DESERT | ICE | WASTELAND | SWAMP | RUINS
   territorySize    TerritorySize   @default(MEDIUM)  // SMALL | MEDIUM | LARGE
   obstacles        String   @default("[]")      // JSON: [{id, posX, posY, emoji}...]
@@ -338,6 +337,7 @@ model BattleUnit {
   corpseRemoved Boolean   @default(false)      // If true, corpse no longer blocks
   hasStartedAction Boolean @default(false)     // If unit already started action this turn
   actions     String      @default("[\"attack\",\"move\",\"dash\",\"dodge\"]") // Available actions (copied from Unit)
+  isAIControlled Boolean  @default(false)     // If true, AI controls this unit (funnel)
   // Unit size and vision
   size        String      @default("NORMAL")   // NORMAL | LARGE | HUGE | GARGANTUAN
   visionRange Int         @default(10)         // Vision range (max(10, focus))

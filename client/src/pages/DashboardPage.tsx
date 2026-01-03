@@ -189,13 +189,29 @@ const DashboardPage: React.FC = () => {
               accentColor="purple"
               headerAction={
                 !arenaState.currentLobby && (
-                  <CriarArenaBtn
-                    onClick={arenaActions.handleCreate}
-                    disabled={
-                      !arenaActions.hasKingdoms || arenaActions.isCreating
-                    }
-                    isLoading={arenaActions.isCreating}
-                  />
+                  <div className="flex items-center gap-2">
+                    {/* Checkbox BOT */}
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={arenaActions.vsBot}
+                        onChange={(e) =>
+                          arenaActions.setVsBot(e.target.checked)
+                        }
+                        className="w-3 h-3 accent-purple-500 cursor-pointer"
+                      />
+                      <span className="text-[10px] text-parchment-dark">
+                        BOT?
+                      </span>
+                    </label>
+                    <CriarArenaBtn
+                      onClick={arenaActions.handleCreate}
+                      disabled={
+                        !arenaActions.hasKingdoms || arenaActions.isCreating
+                      }
+                      isLoading={arenaActions.isCreating}
+                    />
+                  </div>
                 )
               }
             >

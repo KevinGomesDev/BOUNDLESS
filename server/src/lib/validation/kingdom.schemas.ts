@@ -80,6 +80,7 @@ export const CreateTroopTemplateSchema = z.object({
     .min(2, "Nome deve ter pelo menos 2 caracteres")
     .max(50, "Nome deve ter no máximo 50 caracteres"),
   description: z.string().max(500).optional(),
+  avatar: z.string().optional(), // ID do sprite (ex: "1")
   passiveId: z.string().min(1, "Passiva é obrigatória"),
   resourceType: ResourceTypeSchema,
   combat: z.number().min(1).max(15),
@@ -91,7 +92,21 @@ export const CreateTroopTemplateSchema = z.object({
 
 export const TroopTemplatesArraySchema = z
   .array(CreateTroopTemplateSchema)
-  .length(5, "Deve haver exatamente 5 templates de tropas");
+  .length(5, "Deve haver exatamente 5 templates de tropas")
+  .refine(
+    (templates) => {
+      // Verificar se avatares das tropas são únicos
+      const avatars = templates
+        .map((t) => t.avatar)
+        .filter((a): a is string => !!a);
+      const uniqueAvatars = new Set(avatars);
+      return avatars.length === uniqueAvatars.size;
+    },
+    {
+      message:
+        "Cada tropa deve ter um avatar único. Avatares duplicados não são permitidos.",
+    }
+  );
 
 // ============ CREATE KINGDOM ============
 
@@ -144,6 +159,24 @@ export const CreateKingdomSchema = z
     {
       message: "Insetos precisam de um recurso bônus selecionado",
       path: ["raceMetadata"],
+    }
+  )
+  .refine(
+    (data) => {
+      // Validação: avatar do regente não pode ser igual ao avatar de nenhuma tropa
+      const regentAvatar = data.regent.avatar;
+      if (!regentAvatar) return true;
+
+      const troopAvatars = data.troopTemplates
+        .map((t) => t.avatar)
+        .filter((a): a is string => !!a);
+
+      return !troopAvatars.includes(regentAvatar);
+    },
+    {
+      message:
+        "O avatar do regente não pode ser igual ao avatar de uma tropa. Cada entidade deve ter um avatar único no reino.",
+      path: ["regent", "avatar"],
     }
   );
 

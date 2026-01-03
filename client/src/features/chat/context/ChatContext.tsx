@@ -141,6 +141,15 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
       // Se tiver unitId (batalha), adicionar balão
       if (data.message.unitId) {
+        console.log(
+          "%c[ChatContext] 💬 Adicionando balão para unidade",
+          "color: #22c55e;",
+          {
+            unitId: data.message.unitId,
+            message: data.message.message,
+            expiresAt: Date.now() + CHAT_CONFIG.bubbleDuration,
+          }
+        );
         dispatch({
           type: "ADD_BUBBLE",
           payload: {
@@ -149,6 +158,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
             expiresAt: Date.now() + CHAT_CONFIG.bubbleDuration,
           },
         });
+      } else {
+        console.log(
+          "%c[ChatContext] ⚠️ Mensagem sem unitId - balão não será exibido",
+          "color: #f59e0b;",
+          { message: data.message }
+        );
       }
     };
 

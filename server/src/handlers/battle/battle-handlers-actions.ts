@@ -1,12 +1,14 @@
 import { Server, Socket } from "socket.io";
-import type { BattleObstacle } from "../../../../shared/types/battle.types";
+import type {
+  BattleObstacle,
+  BattleUnit,
+} from "../../../../shared/types/battle.types";
 import {
   executeAttackAction,
   executeDashAction,
   executeDodgeAction,
   executeMoveAction,
   executeSkillAction,
-  type CombatUnit,
 } from "../../logic/combat-actions";
 import { findSkillByCode } from "../../../../shared/data/skills.data";
 import {
@@ -41,6 +43,11 @@ import {
 } from "./battle-persistence";
 import { startBattleTurnTimer, stopBattleTurnTimer } from "./battle-timer";
 import { generateId } from "./battle-types";
+import {
+  checkAndProcessBotTurn,
+  checkAndProcessAIControlledUnit,
+  clearAIControlForBattle,
+} from "./battle-bot";
 
 export function registerBattleActionHandlers(io: Server, socket: Socket): void {
   socket.on("battle:dice_modal_open", ({ battleId }) => {
@@ -100,6 +107,10 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
       }
 
       if (unit.hasStartedAction) {
+        // Garantir que activeUnitId está definido (caso de reconexão)
+        if (!battle.activeUnitId) {
+          battle.activeUnitId = unitId;
+        }
         socket.emit("battle:action_started", {
           battleId,
           unitId,
@@ -142,6 +153,18 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
       });
 
       await saveBattleToDB(battle);
+
+      // Verificar se esta unidade está marcada para controle IA
+      // Se estiver, a IA assume automaticamente
+      const aiTookOver = await checkAndProcessAIControlledUnit(
+        battleId,
+        unitId
+      );
+      if (aiTookOver) {
+        console.log(
+          `[ARENA] Unidade ${unitId} foi processada pela IA automaticamente`
+        );
+      }
     } catch (err) {
       console.error("[ARENA] begin_action error:", err);
       socket.emit("battle:error", { message: "Erro ao iniciar ação" });
@@ -197,6 +220,9 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         battle.status = "ENDED";
         stopBattleTurnTimer(battle.id);
 
+        // Limpar controle IA de todas as unidades desta batalha
+        await clearAIControlForBattle(battle);
+
         emitBattleEndEvents(
           io,
           lobby.lobbyId,
@@ -243,6 +269,11 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         conditions: unit.conditions,
         damageFromConditions: turnEndResult.damageFromConditions,
         conditionsRemoved: turnEndResult.conditionsRemoved,
+        // Campos de recursos resetados - cliente precisa desses para evitar auto-end loop
+        hasStartedAction: unit.hasStartedAction,
+        movesLeft: unit.movesLeft,
+        actionsLeft: unit.actionsLeft,
+        attacksLeftThisTurn: unit.attacksLeftThisTurn,
       });
 
       if (turnEndResult.unitDefeated) {
@@ -340,6 +371,9 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
       startBattleTurnTimer(battle);
       await saveBattleToDB(battle);
+
+      // Verificar se é turno do BOT e processar automaticamente
+      await checkAndProcessBotTurn(battle);
     } catch (err) {
       console.error("[ARENA] end_unit_action error:", err);
     }
@@ -358,12 +392,12 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
       }
 
       const result = executeMoveAction(
-        unit as CombatUnit,
+        unit,
         toX,
         toY,
         battle.gridWidth,
         battle.gridHeight,
-        battle.units as CombatUnit[],
+        battle.units,
         battle.config.map.obstacles || []
       );
 
@@ -440,10 +474,11 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         }
 
         const result = executeAttackAction(
-          attacker as CombatUnit,
-          target as CombatUnit | null,
+          attacker,
+          target ?? null,
           damageType,
-          obstacle
+          obstacle,
+          battle.units
         );
 
         if (!result.success) {
@@ -622,7 +657,7 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         return socket.emit("battle:error", { message: "Unidade inválida" });
       }
 
-      const result = executeDashAction(unit as CombatUnit);
+      const result = executeDashAction(unit);
 
       if (!result.success) {
         return socket.emit("battle:error", { message: result.error });
@@ -657,7 +692,7 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         return socket.emit("battle:error", { message: "Unidade inválida" });
       }
 
-      const result = executeDodgeAction(unit as CombatUnit);
+      const result = executeDodgeAction(unit);
 
       if (!result.success) {
         return socket.emit("battle:error", { message: result.error });
@@ -800,10 +835,10 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
         // Executar skill
         const result = executeSkillAction(
-          caster as CombatUnit,
+          caster,
           skillCode,
-          target as CombatUnit | null,
-          battle.units as CombatUnit[],
+          target,
+          battle.units,
           battle.isArena
         );
 

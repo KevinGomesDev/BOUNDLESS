@@ -271,6 +271,62 @@ export const WIZARD_SKILLS: SkillDefinition[] = [
 ];
 
 // =============================================================================
+// INVOCADOR - Skills (SPIRITUAL / DEVOTION)
+// =============================================================================
+
+export const EIDOLON_CHARGE: SkillDefinition = {
+  code: "EIDOLON_CHARGE",
+  name: "Carga Eidolon",
+  description:
+    "No começo de toda Batalha, INVOCA seu Eidolon adjacente a você. Sempre que o Eidolon mata uma Unidade, ele ganha +1 em todos os atributos (permanente na Partida). Se o Eidolon morrer, perde todos os acúmulos.",
+  category: "PASSIVE",
+  conditionApplied: "EIDOLON_CHARGE",
+  metadata: {
+    summonCode: "EIDOLON",
+    summonOnBattleStart: true,
+  },
+};
+
+export const EIDOLON_PROTECTION: SkillDefinition = {
+  code: "EIDOLON_PROTECTION",
+  name: "Proteção de Eidolon",
+  description:
+    "Caso você esteja adjacente ao seu Eidolon e receber dano, você converte em Dano Verdadeiro e o transfere para seu Eidolon.",
+  category: "PASSIVE",
+  conditionApplied: "EIDOLON_PROTECTION",
+  metadata: {
+    requiresAdjacentSummon: "EIDOLON",
+    transferDamageToSummon: true,
+    convertToTrueDamage: true,
+  },
+};
+
+export const EIDOLON_RESISTANCE: SkillDefinition = {
+  code: "EIDOLON_RESISTANCE",
+  name: "Resistência Eidolon",
+  description:
+    "Caso seu Eidolon tenha 1 ou mais de Proteção, você recupera [FOCO] de Proteção dele.",
+  category: "ACTIVE",
+  costTier: "HIGH",
+  range: "ADJACENT",
+  targetType: "ALLY",
+  functionName: "executeEidolonResistance",
+  consumesAction: true,
+  cooldown: 2,
+  metadata: {
+    targetMustBeSummon: "EIDOLON",
+    requiresSummonProtection: 1,
+    drainProtectionAmount: "FOCUS",
+  },
+};
+
+export const SUMMONER_SKILLS: SkillDefinition[] = [
+  EIDOLON_CHARGE,
+  EIDOLON_PROTECTION,
+  EIDOLON_RESISTANCE,
+];
+
+// =============================================================================
 // TROPAS - Passivas selecionáveis em templates
 // =============================================================================
 
@@ -333,6 +389,7 @@ export const ALL_SKILLS: SkillDefinition[] = [
   ...RANGER_SKILLS,
   ...CLERIC_SKILLS,
   ...WIZARD_SKILLS,
+  ...SUMMONER_SKILLS,
   ...TROOP_SKILLS,
 ];
 
@@ -401,6 +458,10 @@ const SKILL_ICONS: Record<string, string> = {
   HUNTERS_MARK: "🎯",
   NATURAL_EXPLORER: "🌲",
   VOLLEY: "🏹",
+  // Summoner
+  EIDOLON_CHARGE: "👻",
+  EIDOLON_PROTECTION: "🛡️",
+  EIDOLON_RESISTANCE: "💠",
 };
 
 /**
@@ -431,6 +492,10 @@ const SKILL_COLORS: Record<string, string> = {
   HUNTERS_MARK: "emerald",
   NATURAL_EXPLORER: "emerald",
   VOLLEY: "emerald",
+  // Summoner - violet
+  EIDOLON_CHARGE: "violet",
+  EIDOLON_PROTECTION: "violet",
+  EIDOLON_RESISTANCE: "fuchsia",
 };
 
 /**

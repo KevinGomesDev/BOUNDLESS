@@ -357,14 +357,16 @@ export function isCellVisibleByUnit(
 
   return false;
 }
-export type WeatherType =
-  | "SUNNY"
-  | "RAIN"
-  | "STORM"
-  | "SNOW"
-  | "BLIZZARD"
-  | "FALLING_LEAVES";
-export type BattleTerrainType =
+
+// =============================================================================
+// CONFIGURAÇÃO DE TERRENO UNIFICADA
+// =============================================================================
+// Usado tanto no WorldMap quanto nas batalhas
+
+/**
+ * Tipos de terreno disponíveis
+ */
+export type TerrainType =
   | "FOREST"
   | "PLAINS"
   | "MOUNTAIN"
@@ -372,172 +374,210 @@ export type BattleTerrainType =
   | "ICE"
   | "WASTELAND"
   | "SWAMP"
-  | "RUINS";
+  | "RUINS"
+  | "OCEAN";
 
-// =============================================================================
-// CONFIGURAÇÃO DE CLIMA (WEATHER)
-// =============================================================================
+/**
+ * Cor RGB para uso em Canvas/WebGL
+ */
+export interface TerrainColor {
+  hex: string; // Cor em hex (#RRGGBB)
+  rgb: { r: number; g: number; b: number }; // RGB para canvas
+}
 
-export interface WeatherDefinition {
-  code: WeatherType;
+/**
+ * Definição completa de um tipo de terreno
+ */
+export interface TerrainDefinition {
+  code: TerrainType;
   name: string;
-  description: string;
   emoji: string;
-  effect: string;
-  cssFilter: string;
-}
-
-export const WEATHER_CONFIG = {
-  definitions: {
-    SUNNY: {
-      code: "SUNNY" as WeatherType,
-      name: "Ensolarado",
-      description: "Um dia claro e agradável.",
-      emoji: "☀️",
-      effect: "Nenhum efeito.",
-      cssFilter: "",
-    },
-    RAIN: {
-      code: "RAIN" as WeatherType,
-      name: "Chuva",
-      description: "O chão fica escorregadio.",
-      emoji: "🌧️",
-      effect: "Ao falhar uma ação, a unidade fica Derrubada.",
-      cssFilter: "brightness(0.85) saturate(0.9) hue-rotate(200deg)",
-    },
-    STORM: {
-      code: "STORM" as WeatherType,
-      name: "Tempestade",
-      description: "Ventos poderosos e chão escorregadio.",
-      emoji: "⛈️",
-      effect:
-        "Ao falhar uma ação, a unidade fica Derrubada e precisa gastar uma ação para se levantar.",
-      cssFilter: "brightness(0.7) saturate(0.8) contrast(1.1)",
-    },
-    SNOW: {
-      code: "SNOW" as WeatherType,
-      name: "Neve",
-      description: "A neve traz um frio ancestral.",
-      emoji: "🌨️",
-      effect: "Ao falhar uma ação, a unidade recebe 2 de Dano Verdadeiro.",
-      cssFilter: "brightness(1.1) saturate(0.7) hue-rotate(180deg)",
-    },
-    BLIZZARD: {
-      code: "BLIZZARD" as WeatherType,
-      name: "Nevasca",
-      description:
-        "A nevasca é tão poderosa quanto o mais temido dos Generais.",
-      emoji: "❄️",
-      effect: "Ao falhar uma ação, a unidade recebe 4 de Dano Verdadeiro.",
-      cssFilter: "brightness(1.2) saturate(0.5) contrast(0.9)",
-    },
-    FALLING_LEAVES: {
-      code: "FALLING_LEAVES" as WeatherType,
-      name: "Folhas Caindo",
-      description: "Uma misteriosa força está afetando a batalha.",
-      emoji: "🍂",
-      effect:
-        "Ao falhar uma ação, a unidade é movida para um lugar aleatório do campo de batalha.",
-      cssFilter: "sepia(0.3) brightness(0.95)",
-    },
-  } as Record<WeatherType, WeatherDefinition>,
-} as const;
-
-// Aliases para compatibilidade
-export const WEATHER_DEFINITIONS = WEATHER_CONFIG.definitions;
-export const ALL_WEATHER_TYPES: WeatherType[] = Object.keys(
-  WEATHER_CONFIG.definitions
-) as WeatherType[];
-
-export function getWeatherDefinition(weather: WeatherType): WeatherDefinition {
-  return WEATHER_CONFIG.definitions[weather];
-}
-
-export function getRandomWeather(): WeatherType {
-  const index = Math.floor(Math.random() * ALL_WEATHER_TYPES.length);
-  return ALL_WEATHER_TYPES[index];
-}
-
-// =============================================================================
-// CONFIGURAÇÃO DE TERRENO (TERRAIN)
-// =============================================================================
-
-export interface BattleTerrainDefinition {
-  code: BattleTerrainType;
-  name: string;
   obstacleEmoji: string;
   obstacleAlt: string;
+  /** Cores para o grid de batalha (variações para padrão xadrez) */
+  colors: {
+    primary: TerrainColor; // Célula clara
+    secondary: TerrainColor; // Célula escura
+    accent: TerrainColor; // Detalhes/bordas
+  };
+  /** Cor para o WorldMap (hex) */
+  worldMapColor: number;
+  /** Se pode ter batalhas neste terreno */
+  allowsBattle: boolean;
 }
 
+/**
+ * Configuração de todos os terrenos
+ */
 export const TERRAIN_CONFIG = {
   definitions: {
     FOREST: {
-      code: "FOREST" as BattleTerrainType,
+      code: "FOREST" as TerrainType,
       name: "Floresta",
+      emoji: "🌲",
       obstacleEmoji: "🌲",
       obstacleAlt: "🌳",
+      colors: {
+        primary: { hex: "#2d5a3f", rgb: { r: 45, g: 90, b: 63 } },
+        secondary: { hex: "#1e3d2a", rgb: { r: 30, g: 61, b: 42 } },
+        accent: { hex: "#3d7a52", rgb: { r: 61, g: 122, b: 82 } },
+      },
+      worldMapColor: 0x2d6a4f,
+      allowsBattle: true,
     },
     PLAINS: {
-      code: "PLAINS" as BattleTerrainType,
+      code: "PLAINS" as TerrainType,
       name: "Planície",
+      emoji: "🌾",
       obstacleEmoji: "🪨",
       obstacleAlt: "🌾",
+      colors: {
+        primary: { hex: "#7cb668", rgb: { r: 124, g: 182, b: 104 } },
+        secondary: { hex: "#5a9a47", rgb: { r: 90, g: 154, b: 71 } },
+        accent: { hex: "#95d5b2", rgb: { r: 149, g: 213, b: 178 } },
+      },
+      worldMapColor: 0x95d5b2,
+      allowsBattle: true,
     },
     MOUNTAIN: {
-      code: "MOUNTAIN" as BattleTerrainType,
+      code: "MOUNTAIN" as TerrainType,
       name: "Montanha",
+      emoji: "⛰️",
       obstacleEmoji: "🗻",
       obstacleAlt: "⛰️",
+      colors: {
+        primary: { hex: "#6b7b8a", rgb: { r: 107, g: 123, b: 138 } },
+        secondary: { hex: "#4a5a68", rgb: { r: 74, g: 90, b: 104 } },
+        accent: { hex: "#8a9aaa", rgb: { r: 138, g: 154, b: 170 } },
+      },
+      worldMapColor: 0x778da9,
+      allowsBattle: true,
     },
     DESERT: {
-      code: "DESERT" as BattleTerrainType,
+      code: "DESERT" as TerrainType,
       name: "Deserto",
+      emoji: "🏜️",
       obstacleEmoji: "🌵",
       obstacleAlt: "🏜️",
+      colors: {
+        primary: { hex: "#d4a855", rgb: { r: 212, g: 168, b: 85 } },
+        secondary: { hex: "#b8923d", rgb: { r: 184, g: 146, b: 61 } },
+        accent: { hex: "#e9c46a", rgb: { r: 233, g: 196, b: 106 } },
+      },
+      worldMapColor: 0xe9c46a,
+      allowsBattle: true,
     },
     ICE: {
-      code: "ICE" as BattleTerrainType,
+      code: "ICE" as TerrainType,
       name: "Gelo",
+      emoji: "❄️",
       obstacleEmoji: "🧊",
       obstacleAlt: "❄️",
+      colors: {
+        primary: { hex: "#c5d8f0", rgb: { r: 197, g: 216, b: 240 } },
+        secondary: { hex: "#a8c4e8", rgb: { r: 168, g: 196, b: 232 } },
+        accent: { hex: "#dbe7ff", rgb: { r: 219, g: 231, b: 255 } },
+      },
+      worldMapColor: 0xdbe7ff,
+      allowsBattle: true,
     },
     WASTELAND: {
-      code: "WASTELAND" as BattleTerrainType,
+      code: "WASTELAND" as TerrainType,
       name: "Terra Devastada",
+      emoji: "💀",
       obstacleEmoji: "💀",
       obstacleAlt: "🦴",
+      colors: {
+        primary: { hex: "#5c4a3d", rgb: { r: 92, g: 74, b: 61 } },
+        secondary: { hex: "#3d3229", rgb: { r: 61, g: 50, b: 41 } },
+        accent: { hex: "#6c584c", rgb: { r: 108, g: 88, b: 76 } },
+      },
+      worldMapColor: 0x6c584c,
+      allowsBattle: true,
     },
     SWAMP: {
-      code: "SWAMP" as BattleTerrainType,
+      code: "SWAMP" as TerrainType,
       name: "Pântano",
+      emoji: "🐸",
       obstacleEmoji: "🐸",
       obstacleAlt: "🌿",
+      colors: {
+        primary: { hex: "#4a5d4a", rgb: { r: 74, g: 93, b: 74 } },
+        secondary: { hex: "#3a4d3a", rgb: { r: 58, g: 77, b: 58 } },
+        accent: { hex: "#5a6d5a", rgb: { r: 90, g: 109, b: 90 } },
+      },
+      worldMapColor: 0x4a5d4a,
+      allowsBattle: true,
     },
     RUINS: {
-      code: "RUINS" as BattleTerrainType,
+      code: "RUINS" as TerrainType,
       name: "Ruínas",
+      emoji: "🏚️",
       obstacleEmoji: "🏚️",
       obstacleAlt: "🪦",
+      colors: {
+        primary: { hex: "#5a5a5a", rgb: { r: 90, g: 90, b: 90 } },
+        secondary: { hex: "#3a3a3a", rgb: { r: 58, g: 58, b: 58 } },
+        accent: { hex: "#7a7a7a", rgb: { r: 122, g: 122, b: 122 } },
+      },
+      worldMapColor: 0x5a5a5a,
+      allowsBattle: true,
     },
-  } as Record<BattleTerrainType, BattleTerrainDefinition>,
+    OCEAN: {
+      code: "OCEAN" as TerrainType,
+      name: "Oceano",
+      emoji: "🌊",
+      obstacleEmoji: "🌊",
+      obstacleAlt: "🐚",
+      colors: {
+        primary: { hex: "#3d6a8a", rgb: { r: 61, g: 106, b: 138 } },
+        secondary: { hex: "#2d5a7a", rgb: { r: 45, g: 90, b: 122 } },
+        accent: { hex: "#457b9d", rgb: { r: 69, g: 123, b: 157 } },
+      },
+      worldMapColor: 0x457b9d,
+      allowsBattle: false, // Não permite batalhas no oceano
+    },
+  } as Record<TerrainType, TerrainDefinition>,
 } as const;
 
 // Aliases para compatibilidade
-export const BATTLE_TERRAIN_DEFINITIONS = TERRAIN_CONFIG.definitions;
-export const ALL_TERRAIN_TYPES: BattleTerrainType[] = Object.keys(
+export const TERRAIN_DEFINITIONS = TERRAIN_CONFIG.definitions;
+export const ALL_TERRAIN_TYPES: TerrainType[] = Object.keys(
   TERRAIN_CONFIG.definitions
-) as BattleTerrainType[];
+) as TerrainType[];
 
-export function getTerrainDefinition(
-  terrain: BattleTerrainType
-): BattleTerrainDefinition {
+/** Terrenos que permitem batalhas (exclui OCEAN) */
+export const BATTLE_TERRAIN_TYPES: TerrainType[] = ALL_TERRAIN_TYPES.filter(
+  (t) => TERRAIN_CONFIG.definitions[t].allowsBattle
+);
+
+/**
+ * Obter definição de um terreno
+ */
+export function getTerrainDefinition(terrain: TerrainType): TerrainDefinition {
   return TERRAIN_CONFIG.definitions[terrain];
 }
 
-export function getRandomTerrain(): BattleTerrainType {
-  const index = Math.floor(Math.random() * ALL_TERRAIN_TYPES.length);
-  return ALL_TERRAIN_TYPES[index];
+/**
+ * Obter terreno aleatório para batalhas (exclui OCEAN)
+ */
+export function getRandomTerrain(): TerrainType {
+  const index = Math.floor(Math.random() * BATTLE_TERRAIN_TYPES.length);
+  return BATTLE_TERRAIN_TYPES[index];
 }
+
+/**
+ * Obter cores do terreno para o grid de batalha
+ */
+export function getTerrainColors(
+  terrain: TerrainType
+): TerrainDefinition["colors"] {
+  return TERRAIN_CONFIG.definitions[terrain].colors;
+}
+
+// Alias legado para compatibilidade
+export type BattleTerrainType = TerrainType;
+export const BATTLE_TERRAIN_DEFINITIONS = TERRAIN_DEFINITIONS;
 
 // =============================================================================
 // CONFIGURAÇÃO DE TAMANHO DE TERRITÓRIO
@@ -614,7 +654,7 @@ export const MAGIC_DAMAGE_CONFIG: Record<MagicDamageTier, number> = {
   /**
    * Dano comum: Focus * 1.5
    */
-  LOW: 1.5,
+  LOW: 2,
 
   /**
    * Dano alto: Focus * 2
@@ -624,7 +664,7 @@ export const MAGIC_DAMAGE_CONFIG: Record<MagicDamageTier, number> = {
   /**
    * Dano extremo: Focus * 4
    */
-  HIGH: 4,
+  HIGH: 2,
 } as const;
 
 /**
@@ -739,7 +779,7 @@ export const TURN_CONFIG = {
    * Tempo máximo de um turno em segundos
    * Quando o timer chega a 0, o turno avança automaticamente
    */
-  timerSeconds: 30,
+  timerSeconds: 1200,
 } as const;
 
 // =============================================================================
@@ -1019,7 +1059,6 @@ export const GLOBAL_CONFIG = {
   movement: MOVEMENT_CONFIG,
   damageTypes: DAMAGE_TYPES,
   dice: DICE_CONFIG,
-  weather: WEATHER_CONFIG,
   terrain: TERRAIN_CONFIG,
   territorySize: TERRITORY_SIZE_CONFIG,
 } as const;

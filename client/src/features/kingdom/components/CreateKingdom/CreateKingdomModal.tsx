@@ -111,6 +111,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
         troopTemplates: troopsForm.templates.map((t) => ({
           slotIndex: t.slotIndex,
           name: t.name,
+          avatar: t.avatar,
           passiveId: t.passiveId,
           resourceType: t.resourceType,
           combat: t.combat,
@@ -320,6 +321,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
                       setActiveSlot={troopsForm.setActiveSlot}
                       updateTemplate={troopsForm.updateTemplate}
                       updateAttribute={troopsForm.updateAttribute}
+                      regentAvatar={regentForm.data.avatar}
                     />
                   )}
                 </>

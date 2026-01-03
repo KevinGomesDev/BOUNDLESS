@@ -1,7 +1,7 @@
 // server/src/logic/MapGenerator.ts
 import { Delaunay } from "d3-delaunay";
 import { BiomeGenerator } from "./BiomeGenerator";
-import { TERRAIN_TYPES, TerrainType } from "../../../shared/data/terrains";
+import { type TerrainType } from "../../../shared/config/global.config";
 
 // Tipos de tamanho compatíveis com o enum do Prisma
 export type TerritorySize = "SMALL" | "MEDIUM" | "LARGE";
@@ -126,7 +126,7 @@ export class MapGenerator {
             id: index,
             center: { x: point[0], y: point[1] },
             type: "WATER" as const,
-            terrain: TERRAIN_TYPES.OCEAN,
+            terrain: "OCEAN" as TerrainType,
             polygonPoints: polygon as [number, number][],
             size: "MEDIUM" as TerritorySize,
             areaSlots: 0,

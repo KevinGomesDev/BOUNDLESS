@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
-import type { ArenaUnit } from "../../types/arena.types";
 import { getConditionInfo } from "../../constants";
 import { ATTRIBUTE_NAMES } from "../../../../../../shared/config/global.config";
 import { getSkillInfo } from "../../../../../../shared/data/skills.data";
+import type { BattleUnit } from "../../../../../../shared/types/battle.types";
 
 // =============================================================================
 // COMPONENTES INTERNOS
@@ -514,7 +514,7 @@ const COLOR_CLASSES: Record<string, { active: string; normal: string }> = {
 // =============================================================================
 
 interface UnitPanelProps {
-  selectedUnit: ArenaUnit | null;
+  selectedUnit: BattleUnit | null;
   activeUnitId: string | undefined; // Unidade que está efetivamente no turno
   isMyTurn: boolean;
   currentUserId: string;

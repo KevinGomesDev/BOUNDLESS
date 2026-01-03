@@ -27,6 +27,8 @@ interface Step3TroopsProps {
     attr: keyof BaseAttributes,
     value: number
   ) => void;
+  /** Avatar do regente para impedir duplicação */
+  regentAvatar?: string;
 }
 
 export const Step3Troops: React.FC<Step3TroopsProps> = ({
@@ -41,6 +43,7 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
   setActiveSlot,
   updateTemplate,
   updateAttribute,
+  regentAvatar,
 }) => {
   const currentTemplate = templates[activeSlot];
   const currentTotal =
@@ -49,6 +52,17 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
     currentTemplate.focus +
     currentTemplate.armor +
     currentTemplate.vitality;
+
+  // Calcular avatares em uso: regente + outras tropas (não a atual)
+  const usedAvatarsForCurrentSlot = [
+    // Avatar do regente
+    ...(regentAvatar ? [regentAvatar] : []),
+    // Avatares das outras tropas (não a do slot atual)
+    ...templates
+      .filter((_, i) => i !== activeSlot)
+      .map((t) => t.avatar)
+      .filter((a): a is string => !!a),
+  ];
 
   const allTemplatesValid = templates.every((t) => {
     const total = t.combat + t.speed + t.focus + t.armor + t.vitality;
@@ -108,6 +122,7 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
             selectedAvatar={currentTemplate.avatar || "1"}
             onSelectAvatar={(avatar) => updateTemplate(activeSlot, { avatar })}
             spriteSize={88}
+            usedAvatars={usedAvatarsForCurrentSlot}
           />
 
           <div className="space-y-2">

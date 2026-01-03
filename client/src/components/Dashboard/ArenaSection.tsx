@@ -184,6 +184,7 @@ export const useArenaSectionActions = () => {
 
   const [selectedKingdom, setSelectedKingdom] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
+  const [vsBot, setVsBot] = useState(false);
 
   useEffect(() => {
     if (kingdoms.length > 0 && !selectedKingdom) {
@@ -195,6 +196,7 @@ export const useArenaSectionActions = () => {
     console.log("[ArenaSection] handleCreate called", {
       selectedKingdom,
       hasKingdoms: kingdoms.length > 0,
+      vsBot,
     });
     if (!selectedKingdom || !authState.user?.id) {
       alert("Selecione um reino primeiro");
@@ -206,9 +208,14 @@ export const useArenaSectionActions = () => {
       alert(sessionState.canJoinReason || "Você já está em uma sessão ativa");
       return;
     }
-    console.log("[ArenaSection] Creating lobby with kingdom:", selectedKingdom);
+    console.log(
+      "[ArenaSection] Creating lobby with kingdom:",
+      selectedKingdom,
+      "vsBot:",
+      vsBot
+    );
     setIsCreating(true);
-    createLobby(selectedKingdom);
+    createLobby(selectedKingdom, vsBot);
     setTimeout(() => setIsCreating(false), 1000);
   };
 
@@ -217,5 +224,7 @@ export const useArenaSectionActions = () => {
     isCreating,
     hasKingdoms: kingdoms.length > 0,
     selectedKingdom,
+    vsBot,
+    setVsBot,
   };
 };

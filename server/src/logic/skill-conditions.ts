@@ -262,6 +262,52 @@ export const SKILL_CONDITIONS: Record<string, ConditionDefinition> = {
       rangedDamagePenalty: 1,
     },
   },
+
+  // =========================================================================
+  // INVOCADOR
+  // =========================================================================
+  EIDOLON_CHARGE: {
+    id: "EIDOLON_CHARGE",
+    name: "Carga Eidolon",
+    description:
+      "Invoca Eidolon no início da batalha. Eidolon ganha +1 em todos stats por kill.",
+    expiry: "permanent",
+    icon: "👻",
+    color: "#8b5cf6",
+    effects: {
+      summonOnBattleStart: "EIDOLON",
+      summonGrowthOnKill: 1, // +1 em todos stats por kill
+    },
+  },
+
+  EIDOLON_PROTECTION: {
+    id: "EIDOLON_PROTECTION",
+    name: "Proteção de Eidolon",
+    description:
+      "Dano recebido adjacente ao Eidolon é convertido em Dano Verdadeiro e transferido para o Eidolon.",
+    expiry: "permanent",
+    icon: "🛡️",
+    color: "#a855f7",
+    effects: {
+      transferDamageToSummon: "EIDOLON",
+      convertToTrueDamage: true,
+    },
+  },
+
+  EIDOLON_GROWTH: {
+    id: "EIDOLON_GROWTH",
+    name: "Crescimento Eidolon",
+    description:
+      "O Eidolon cresce a cada kill. Acúmulos são perdidos se morrer.",
+    expiry: "permanent",
+    icon: "📈",
+    color: "#c084fc",
+    effects: {
+      // Acúmulos são armazenados como metadata na unidade
+      isEidolon: true,
+      resetsOnDeath: true,
+    },
+  },
 };
 
 // =============================================================================

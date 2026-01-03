@@ -1,17 +1,15 @@
-// Arena Types - Re-exporta tipos do shared e adiciona tipos específicos do cliente
 // FONTE DE VERDADE: shared/types/arena.types.ts
 
-// Re-exportar todos os tipos compartilhados
+// Re-exportar todos os tipos do shared
 export type {
-  ArenaLobbyStatus,
   ArenaLobby,
-  ArenaUnit,
+  ArenaLobbyStatus,
   ArenaGrid,
+  ArenaMapConfig,
   ArenaConfig,
-  ArenaKingdom,
   ArenaBattle,
   ArenaBattleResult,
-  // Payloads
+  ArenaKingdom,
   CreateLobbyPayload,
   JoinLobbyPayload,
   LeaveLobbyPayload,
@@ -20,7 +18,6 @@ export type {
   MovePayload,
   AttackPayload,
   SurrenderPayload,
-  // Responses
   LobbyCreatedResponse,
   LobbiesListResponse,
   PlayerJoinedResponse,
@@ -30,24 +27,19 @@ export type {
   BattleEndedResponse,
 } from "../../../../../shared/types/arena.types";
 
-// Re-exportar tipos de condições
-export type {
-  ConditionInfo,
-  ConditionId,
-} from "../../../../../shared/types/conditions.types";
+export type { BattleUnit } from "../../../../../shared/types/battle.types";
 
-// Importar para uso nos tipos do cliente
+// =============================================================================
+// TIPOS ESPECÍFICOS DO CLIENTE
+// =============================================================================
+
 import type {
   ArenaLobby,
   ArenaLobbyStatus,
   ArenaBattle,
   ArenaBattleResult,
-  ArenaUnit,
 } from "../../../../../shared/types/arena.types";
-
-// =============================================================================
-// TIPOS ESPECÍFICOS DO CLIENTE
-// =============================================================================
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 /**
  * Estado global do contexto Arena
@@ -57,7 +49,7 @@ export interface ArenaState {
   currentLobby: ArenaLobby | null;
   battle: ArenaBattle | null;
   battleResult: ArenaBattleResult | null;
-  units: ArenaUnit[];
+  units: BattleUnit[];
   isHost: boolean;
   isLoading: boolean;
   error: string | null;
@@ -70,7 +62,7 @@ export interface ArenaState {
  */
 export interface ArenaContextType {
   state: ArenaState;
-  createLobby: (kingdomId: string) => void;
+  createLobby: (kingdomId: string, vsBot?: boolean) => void;
   listLobbies: () => void;
   joinLobby: (lobbyId: string, kingdomId: string) => void;
   leaveLobby: () => void;
@@ -106,8 +98,8 @@ export type ArenaAction =
     }
   | { type: "SET_BATTLE"; payload: ArenaBattle | null }
   | { type: "SET_BATTLE_RESULT"; payload: ArenaBattleResult | null }
-  | { type: "SET_UNITS"; payload: ArenaUnit[] }
-  | { type: "UPDATE_UNIT"; payload: Partial<ArenaUnit> & { id: string } }
+  | { type: "SET_UNITS"; payload: BattleUnit[] }
+  | { type: "UPDATE_UNIT"; payload: Partial<BattleUnit> & { id: string } }
   | { type: "SET_IS_HOST"; payload: boolean }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }

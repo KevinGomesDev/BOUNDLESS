@@ -1,30 +1,27 @@
 // shared/types/battle.types.ts
-// Tipos para Batalha - Clima, Terreno e Obstáculos
+// Tipos para Batalha - Terreno e Obstáculos
 // NOTA: As definições de configuração estão centralizadas em global.config.ts
 // Este arquivo re-exporta para compatibilidade
 
 // Re-exportar tipos e configurações de global.config.ts
 export type {
   TerritorySize,
-  WeatherType,
-  BattleTerrainType,
-  WeatherDefinition,
-  BattleTerrainDefinition,
+  TerrainType,
+  BattleTerrainType, // Alias legado
+  TerrainDefinition,
+  TerrainColor,
 } from "../config/global.config";
 
 export {
-  // Clima
-  WEATHER_CONFIG,
-  WEATHER_DEFINITIONS,
-  ALL_WEATHER_TYPES,
-  getWeatherDefinition,
-  getRandomWeather,
   // Terreno
   TERRAIN_CONFIG,
-  BATTLE_TERRAIN_DEFINITIONS,
+  TERRAIN_DEFINITIONS,
+  BATTLE_TERRAIN_DEFINITIONS, // Alias legado
   ALL_TERRAIN_TYPES,
+  BATTLE_TERRAIN_TYPES,
   getTerrainDefinition,
   getRandomTerrain,
+  getTerrainColors,
   // Tamanho de território
   TERRITORY_SIZE_CONFIG,
   ALL_TERRITORY_SIZES,
@@ -60,17 +57,65 @@ export interface BattleObstacle {
 // =============================================================================
 
 import type {
-  WeatherType,
-  BattleTerrainType,
+  TerrainType,
   TerritorySize,
+  UnitSize,
 } from "../config/global.config";
 
 /**
  * Configuração de mapa de batalha
  */
 export interface BattleMapConfig {
-  weather: WeatherType;
-  terrainType: BattleTerrainType;
+  terrainType: TerrainType;
   territorySize: TerritorySize;
   obstacles: BattleObstacle[];
+}
+
+// =============================================================================
+// BATTLE UNIT - Tipo principal de unidade em batalha
+// =============================================================================
+
+/**
+ * Unidade em batalha - tipo principal usado em todo o sistema de combate
+ */
+export interface BattleUnit {
+  id: string;
+  sourceUnitId: string;
+  ownerId: string;
+  ownerKingdomId: string;
+  name: string;
+  avatar?: string;
+  category: string;
+  troopSlot?: number;
+  level: number;
+  classCode?: string;
+  classFeatures: string[];
+  equipment: string[];
+  combat: number;
+  speed: number;
+  focus: number;
+  armor: number;
+  vitality: number;
+  damageReduction: number;
+  currentHp: number;
+  maxHp: number;
+  posX: number;
+  posY: number;
+  movesLeft: number;
+  actionsLeft: number;
+  attacksLeftThisTurn: number;
+  isAlive: boolean;
+  actionMarks: number;
+  physicalProtection: number;
+  maxPhysicalProtection: number;
+  magicalProtection: number;
+  maxMagicalProtection: number;
+  conditions: string[];
+  hasStartedAction: boolean;
+  actions: string[];
+  grabbedByUnitId?: string;
+  size: UnitSize;
+  visionRange: number;
+  skillCooldowns: Record<string, number>;
+  isAIControlled: boolean;
 }

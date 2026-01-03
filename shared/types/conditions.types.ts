@@ -69,6 +69,14 @@ export interface ConditionEffects {
   immuneToRangedIfAdjacentAlly?: boolean; // Imune a ranged se adjacente a aliado
   extraRangedAttacks?: number; // Ataques à distância extras
   rangedDamagePenalty?: number; // Penalidade de dano em ataques à distância
+
+  // === EFEITOS DE INVOCADOR ===
+  summonOnBattleStart?: string; // Código da invocação a criar no início da batalha
+  summonGrowthOnKill?: number; // Bônus de stats por kill (para summons)
+  transferDamageToSummon?: string; // Código do summon que recebe dano transferido
+  convertToTrueDamage?: boolean; // Dano transferido é verdadeiro (ignora proteção)
+  isEidolon?: boolean; // Marca a unidade como Eidolon
+  resetsOnDeath?: boolean; // Acúmulos são resetados ao morrer
 }
 
 /**

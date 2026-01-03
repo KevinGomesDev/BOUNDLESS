@@ -172,32 +172,68 @@ interface AvatarSelectorProps {
   spriteSize?: number;
   /** Título do seletor */
   title?: string;
+  /** Avatares já em uso que não podem ser selecionados (exceto o atual) */
+  usedAvatars?: string[];
 }
 
 /**
  * Seletor de avatar genérico com setas para navegar entre sprites animados
  * Usa os novos sprites Hero_001 a Hero_015
+ * Pula automaticamente avatares já em uso por outras entidades do reino
  */
 export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
   selectedAvatar,
   onSelectAvatar,
   spriteSize = 128,
   title = "Aparência",
+  usedAvatars = [],
 }) => {
   // Converter avatar para heroId
   const currentHeroId = parseAvatarToHeroId(selectedAvatar);
   const currentIndex = HERO_IDS.indexOf(currentHeroId);
   const validIndex = currentIndex >= 0 ? currentIndex : 0;
 
+  // Avatares disponíveis (não usados por outros, ou é o atual)
+  const isAvatarAvailable = (heroId: number): boolean => {
+    const avatarString = heroIdToAvatarString(heroId);
+    // Disponível se: não está na lista de usados OU é o avatar atual
+    return (
+      !usedAvatars.includes(avatarString) || avatarString === selectedAvatar
+    );
+  };
+
+  // Contar avatares disponíveis
+  const availableCount = HERO_IDS.filter(isAvatarAvailable).length;
+
+  const findNextAvailable = (startIndex: number, direction: 1 | -1): number => {
+    let index = startIndex;
+    let attempts = 0;
+    const maxAttempts = HERO_IDS.length;
+
+    while (attempts < maxAttempts) {
+      index = (index + direction + HERO_IDS.length) % HERO_IDS.length;
+      if (isAvatarAvailable(HERO_IDS[index])) {
+        return index;
+      }
+      attempts++;
+    }
+
+    // Se não encontrou, retorna o atual (todos bloqueados)
+    return validIndex;
+  };
+
   const goToPrev = () => {
-    const newIndex = (validIndex - 1 + HERO_IDS.length) % HERO_IDS.length;
+    const newIndex = findNextAvailable(validIndex, -1);
     onSelectAvatar(heroIdToAvatarString(HERO_IDS[newIndex]));
   };
 
   const goToNext = () => {
-    const newIndex = (validIndex + 1) % HERO_IDS.length;
+    const newIndex = findNextAvailable(validIndex, 1);
     onSelectAvatar(heroIdToAvatarString(HERO_IDS[newIndex]));
   };
+
+  // Desabilitar navegação se só tem 1 ou menos disponíveis
+  const canNavigate = availableCount > 1;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -210,8 +246,13 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         <button
           type="button"
           onClick={goToPrev}
-          className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/70 text-white transition-all
-                     hover:scale-110 active:scale-95 border border-slate-500/30"
+          disabled={!canNavigate}
+          className={`p-2 rounded-full transition-all border border-slate-500/30
+                     ${
+                       canNavigate
+                         ? "bg-slate-700/50 hover:bg-slate-600/70 text-white hover:scale-110 active:scale-95"
+                         : "bg-slate-800/30 text-slate-600 cursor-not-allowed"
+                     }`}
         >
           <svg
             className="w-5 h-5"
@@ -246,8 +287,13 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         <button
           type="button"
           onClick={goToNext}
-          className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/70 text-white transition-all
-                     hover:scale-110 active:scale-95 border border-slate-500/30"
+          disabled={!canNavigate}
+          className={`p-2 rounded-full transition-all border border-slate-500/30
+                     ${
+                       canNavigate
+                         ? "bg-slate-700/50 hover:bg-slate-600/70 text-white hover:scale-110 active:scale-95"
+                         : "bg-slate-800/30 text-slate-600 cursor-not-allowed"
+                     }`}
         >
           <svg
             className="w-5 h-5"
@@ -265,9 +311,9 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         </button>
       </div>
 
-      {/* Contador */}
+      {/* Contador - mostra disponíveis */}
       <p className="text-xs text-slate-400">
-        {validIndex + 1} / {HERO_IDS.length}
+        {availableCount} / {HERO_IDS.length} disponíveis
       </p>
     </div>
   );
@@ -285,6 +331,8 @@ interface AvatarGridSelectorProps {
   columns?: number;
   /** Tamanho de cada miniatura */
   thumbnailSize?: number;
+  /** Avatares já em uso que não podem ser selecionados (exceto o atual) */
+  usedAvatars?: string[];
 }
 
 export const AvatarGridSelector: React.FC<AvatarGridSelectorProps> = ({
@@ -292,32 +340,56 @@ export const AvatarGridSelector: React.FC<AvatarGridSelectorProps> = ({
   onSelectAvatar,
   columns = 5,
   thumbnailSize = 48,
+  usedAvatars = [],
 }) => {
   const currentHeroId = parseAvatarToHeroId(selectedAvatar);
+
+  const isAvatarAvailable = (heroId: number): boolean => {
+    const avatarString = heroIdToAvatarString(heroId);
+    return (
+      !usedAvatars.includes(avatarString) || avatarString === selectedAvatar
+    );
+  };
 
   return (
     <div
       className="grid gap-2"
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
-      {HERO_IDS.map((heroId) => (
-        <button
-          key={heroId}
-          type="button"
-          onClick={() => onSelectAvatar(heroIdToAvatarString(heroId))}
-          className={`p-1 rounded border-2 transition-all ${
-            currentHeroId === heroId
-              ? "border-amber-500 bg-amber-500/20"
-              : "border-slate-600 hover:border-slate-500"
-          }`}
-        >
-          <AnimatedCharacterSprite
-            heroId={heroId}
-            size={thumbnailSize}
-            animation="Idle"
-          />
-        </button>
-      ))}
+      {HERO_IDS.map((heroId) => {
+        const isAvailable = isAvatarAvailable(heroId);
+        const isSelected = currentHeroId === heroId;
+
+        return (
+          <button
+            key={heroId}
+            type="button"
+            onClick={() =>
+              isAvailable && onSelectAvatar(heroIdToAvatarString(heroId))
+            }
+            disabled={!isAvailable}
+            className={`p-1 rounded border-2 transition-all relative ${
+              isSelected
+                ? "border-amber-500 bg-amber-500/20"
+                : isAvailable
+                ? "border-slate-600 hover:border-slate-500"
+                : "border-slate-700 bg-slate-900/80 opacity-40 cursor-not-allowed"
+            }`}
+          >
+            <AnimatedCharacterSprite
+              heroId={heroId}
+              size={thumbnailSize}
+              animation="Idle"
+            />
+            {/* Indicador de "em uso" */}
+            {!isAvailable && !isSelected && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded">
+                <span className="text-xs text-red-400 font-bold">EM USO</span>
+              </div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 };

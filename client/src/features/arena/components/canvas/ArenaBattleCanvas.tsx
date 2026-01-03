@@ -8,8 +8,11 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import type { ArenaUnit, ArenaBattle } from "../../types/arena.types";
-import type { BattleObstacle } from "../../../../../../shared/types/battle.types";
+import type { ArenaBattle } from "../../types/arena.types";
+import type {
+  BattleObstacle,
+  BattleUnit,
+} from "../../../../../../shared/types/battle.types";
 import { useSprites, updateSpriteFrame } from "./useSprites";
 import { useUnitAnimations } from "./useUnitAnimations";
 import { UI_COLORS, UNIT_RENDER_CONFIG } from "./canvas.constants";
@@ -28,18 +31,25 @@ export interface ArenaBattleCanvasRef {
   centerOnUnit: (unitId: string) => void;
 }
 
+interface ActiveBubble {
+  message: string;
+  expiresAt: number;
+}
+
 interface ArenaBattleCanvasProps {
   battle: ArenaBattle;
-  units: ArenaUnit[];
+  units: BattleUnit[];
   currentUserId: string;
   selectedUnitId: string | null;
   onCellClick?: (x: number, y: number) => void;
-  onUnitClick?: (unit: ArenaUnit) => void;
+  onUnitClick?: (unit: BattleUnit) => void;
   onObstacleClick?: (obstacle: BattleObstacle) => void;
   /** Direção para virar a unidade selecionada (baseado no movimento/clique) */
   unitDirection?: { unitId: string; direction: SpriteDirection } | null;
   /** Ação pendente - quando "attack", mostra células atacáveis */
   pendingAction?: string | null;
+  /** Balões de fala ativos (unitId -> mensagem) */
+  activeBubbles?: Map<string, ActiveBubble>;
 }
 
 /**
@@ -59,6 +69,7 @@ export const ArenaBattleCanvas = memo(
         onObstacleClick,
         unitDirection,
         pendingAction,
+        activeBubbles,
       },
       ref
     ) => {
@@ -70,7 +81,8 @@ export const ArenaBattleCanvas = memo(
       const CONDITION_COLORS = config.conditionColors;
       const MAP_CONFIG = config.map;
       const OBSTACLES = MAP_CONFIG?.obstacles || [];
-      const WEATHER_CSS_FILTER = MAP_CONFIG?.weatherCssFilter || "";
+      // Cores do terreno para o grid (usa cores do terreno, não cores padrão)
+      const TERRAIN_COLORS = MAP_CONFIG?.terrainColors;
 
       // Tamanho fixo da célula para o canvas interno (sem zoom)
       const BASE_CELL_SIZE = 40; // pixels por célula
@@ -156,7 +168,7 @@ export const ArenaBattleCanvas = memo(
 
       // Map de posições de unidades vivas para lookup O(1)
       const unitPositionMap = useMemo(() => {
-        const map = new Map<string, ArenaUnit>();
+        const map = new Map<string, BattleUnit>();
         units.forEach((unit) => {
           if (unit.isAlive) {
             map.set(`${unit.posX},${unit.posY}`, unit);
@@ -167,7 +179,7 @@ export const ArenaBattleCanvas = memo(
 
       // Map de cadáveres para lookup O(1) (unidades mortas que não foram removidas)
       const corpsePositionMap = useMemo(() => {
-        const map = new Map<string, ArenaUnit>();
+        const map = new Map<string, BattleUnit>();
         units.forEach((unit) => {
           if (!unit.isAlive && !unit.conditions?.includes("CORPSE_REMOVED")) {
             map.set(`${unit.posX},${unit.posY}`, unit);
@@ -356,7 +368,7 @@ export const ArenaBattleCanvas = memo(
           x: number,
           y: number,
           size: number,
-          unit: ArenaUnit,
+          unit: BattleUnit,
           isOwned: boolean
         ) => {
           // Unidade morta - desenha X simples
@@ -524,7 +536,7 @@ export const ArenaBattleCanvas = memo(
       //     x: number,
       //     y: number,
       //     size: number,
-      //     unit: ArenaUnit
+      //     unit: BattleUnit
       //   ) => {
       //     const barWidth = size - 8;
       //     const barHeight = Math.max(2, size / 16);
@@ -578,6 +590,71 @@ export const ArenaBattleCanvas = memo(
         [CONDITION_COLORS]
       );
 
+      // Função para desenhar balão de fala sobre a unidade
+      const drawSpeechBubble = useCallback(
+        (
+          ctx: CanvasRenderingContext2D,
+          x: number,
+          y: number,
+          size: number,
+          message: string,
+          isOwned: boolean
+        ) => {
+          const bubbleHeight = 20;
+          const bubbleY = y - bubbleHeight - 8; // Acima da unidade
+          const maxWidth = size * 3; // Máximo 3 células de largura
+
+          // Medir texto e calcular largura
+          ctx.font = "10px 'MedievalSharp', serif";
+          const textWidth = Math.min(
+            ctx.measureText(message).width + 12,
+            maxWidth
+          );
+          const bubbleWidth = textWidth;
+          const bubbleX = x + (size - bubbleWidth) / 2; // Centralizado
+
+          // Truncar texto se muito longo
+          let displayText = message;
+          if (ctx.measureText(message).width + 12 > maxWidth) {
+            while (
+              ctx.measureText(displayText + "...").width + 12 > maxWidth &&
+              displayText.length > 0
+            ) {
+              displayText = displayText.slice(0, -1);
+            }
+            displayText += "...";
+          }
+
+          // Fundo do balão
+          const bgColor = isOwned ? "#d4af37" : "#dc2626";
+          const textColor = isOwned ? "#1a1a1a" : "#ffffff";
+
+          ctx.fillStyle = bgColor;
+          ctx.beginPath();
+          ctx.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 4);
+          ctx.fill();
+
+          // Triângulo apontando para baixo
+          ctx.beginPath();
+          ctx.moveTo(x + size / 2 - 4, bubbleY + bubbleHeight);
+          ctx.lineTo(x + size / 2, bubbleY + bubbleHeight + 6);
+          ctx.lineTo(x + size / 2 + 4, bubbleY + bubbleHeight);
+          ctx.closePath();
+          ctx.fill();
+
+          // Texto
+          ctx.fillStyle = textColor;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            displayText,
+            bubbleX + bubbleWidth / 2,
+            bubbleY + bubbleHeight / 2
+          );
+        },
+        []
+      );
+
       // === DESENHAR GRID ESTÁTICO (cache offscreen) ===
       const drawStaticGrid = useCallback(() => {
         // Criar/redimensionar canvas de cache se necessário
@@ -600,38 +677,65 @@ export const ArenaBattleCanvas = memo(
 
         ctx.imageSmoothingEnabled = false;
 
-        // Fundo
-        ctx.fillStyle = GRID_COLORS.gridBackground;
+        // Cores do terreno (com fallback para cores padrão)
+        const primaryColor =
+          TERRAIN_COLORS?.primary?.hex || GRID_COLORS.cellLight;
+        const secondaryColor =
+          TERRAIN_COLORS?.secondary?.hex || GRID_COLORS.cellDark;
+        const accentColor = TERRAIN_COLORS?.accent?.hex || GRID_COLORS.gridDot;
+
+        // Gerar variações de cor para criar efeito de terreno natural
+        const terrainColors = [primaryColor, secondaryColor, accentColor];
+
+        // Função hash determinística para posição (sempre mesmo resultado para mesma célula)
+        const hashPosition = (x: number, y: number): number => {
+          // Simple hash based on position - creates consistent "random" pattern
+          const hash = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+          return hash - Math.floor(hash);
+        };
+
+        // Fundo base
+        ctx.fillStyle = secondaryColor;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        // Desenhar grid (só células base, sem highlights)
+        // Desenhar grid com variação natural por célula
         for (let y = 0; y < GRID_HEIGHT; y++) {
           for (let x = 0; x < GRID_WIDTH; x++) {
             const cellX = x * cellSize;
             const cellY = y * cellSize;
 
-            // Padrão xadrez
-            const isLight = (x + y) % 2 === 0;
-            ctx.fillStyle = isLight
-              ? GRID_COLORS.cellLight
-              : GRID_COLORS.cellDark;
+            // Selecionar cor baseada em hash da posição (determinístico)
+            const hash = hashPosition(x, y);
+            const colorIndex = Math.floor(hash * terrainColors.length);
+            const baseColor = terrainColors[colorIndex];
+
+            // Desenhar célula base
+            ctx.fillStyle = baseColor;
             ctx.fillRect(cellX, cellY, cellSize, cellSize);
 
-            // Borda
-            ctx.strokeStyle = GRID_COLORS.gridLine;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(cellX, cellY, cellSize, cellSize);
-
-            // Ponto central decorativo
-            if ((x + y) % 4 === 0) {
-              ctx.fillStyle = GRID_COLORS.gridDot;
-              ctx.fillRect(
-                cellX + cellSize / 2 - 1,
-                cellY + cellSize / 2 - 1,
-                2,
-                2
-              );
+            // Adicionar "textura" com pequenos detalhes aleatórios
+            const detailHash = hashPosition(x * 3, y * 7);
+            if (detailHash > 0.7) {
+              // 30% das células têm detalhes decorativos
+              const detailColor =
+                terrainColors[(colorIndex + 1) % terrainColors.length];
+              ctx.fillStyle = detailColor + "40"; // 25% opacity
+              const detailX = cellX + detailHash * cellSize * 0.6;
+              const detailY =
+                cellY + hashPosition(x * 5, y * 3) * cellSize * 0.6;
+              const detailSize = 2 + Math.floor(detailHash * 3);
+              ctx.fillRect(detailX, detailY, detailSize, detailSize);
             }
+
+            // Borda sutil
+            ctx.strokeStyle = accentColor + "30"; // 19% opacity
+            ctx.lineWidth = 1;
+            ctx.strokeRect(
+              cellX + 0.5,
+              cellY + 0.5,
+              cellSize - 1,
+              cellSize - 1
+            );
           }
         }
 
@@ -641,6 +745,7 @@ export const ArenaBattleCanvas = memo(
         canvasHeight,
         cellSize,
         GRID_COLORS,
+        TERRAIN_COLORS,
         GRID_WIDTH,
         GRID_HEIGHT,
       ]);
@@ -648,7 +753,7 @@ export const ArenaBattleCanvas = memo(
       // Invalidar cache quando grid muda
       useEffect(() => {
         gridCacheValidRef.current = false;
-      }, [canvasWidth, canvasHeight, GRID_COLORS]);
+      }, [canvasWidth, canvasHeight, GRID_COLORS, TERRAIN_COLORS]);
 
       // === FUNÇÃO DE DESENHO OTIMIZADA ===
       const draw = useCallback(() => {
@@ -674,9 +779,10 @@ export const ArenaBattleCanvas = memo(
           const [x, y] = cellKey.split(",").map(Number);
           const cellX = x * cellSize;
           const cellY = y * cellSize;
-          ctx.fillStyle = GRID_COLORS.cellMovable;
+          // Verde brilhante fixo para preview de movimento
+          ctx.fillStyle = "rgba(34, 197, 94, 0.4)";
           ctx.fillRect(cellX, cellY, cellSize, cellSize);
-          ctx.strokeStyle = GRID_COLORS.gridLine;
+          ctx.strokeStyle = "rgba(34, 197, 94, 0.8)";
           ctx.lineWidth = 1;
           ctx.strokeRect(cellX, cellY, cellSize, cellSize);
         });
@@ -714,8 +820,8 @@ export const ArenaBattleCanvas = memo(
           const cellX = obstacle.posX * cellSize;
           const cellY = obstacle.posY * cellSize;
 
-          // Desenhar emoji do obstáculo
-          const fontSize = Math.max(12, cellSize * 0.6);
+          // Desenhar emoji do obstáculo (tamanho maior)
+          const fontSize = Math.max(16, cellSize * 0.85);
           ctx.font = `${fontSize}px Arial`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -744,6 +850,21 @@ export const ArenaBattleCanvas = memo(
 
           if (unit.isAlive) {
             drawConditions(ctx, cellX, cellY, unit.conditions);
+          }
+
+          // === DESENHAR BALÃO DE FALA (se houver) ===
+          if (activeBubbles && unit.isAlive) {
+            const bubble = activeBubbles.get(unit.id);
+            if (bubble && bubble.expiresAt > Date.now()) {
+              drawSpeechBubble(
+                ctx,
+                cellX,
+                cellY,
+                cellSize,
+                bubble.message,
+                isOwned
+              );
+            }
           }
         });
 
@@ -833,6 +954,8 @@ export const ArenaBattleCanvas = memo(
         GRID_HEIGHT,
         drawUnit,
         drawConditions,
+        drawSpeechBubble,
+        activeBubbles,
         GRID_COLORS,
         OBSTACLES,
         getVisualPosition,
@@ -851,6 +974,7 @@ export const ArenaBattleCanvas = memo(
         attackableCells,
         visibleCells,
         spritesLoaded,
+        activeBubbles,
         // frameIndex removido - agora controlado pelo loop de animação
       ]);
 
@@ -1054,7 +1178,6 @@ export const ArenaBattleCanvas = memo(
                 // Default
                 return "default";
               })(),
-              filter: WEATHER_CSS_FILTER || undefined,
               transition: "filter 0.5s ease-in-out, cursor 0.1s ease",
             }}
             className="border-4 border-metal-iron rounded-lg shadow-2xl arena"

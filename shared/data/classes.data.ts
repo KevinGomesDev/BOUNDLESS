@@ -3,7 +3,12 @@
 // FONTE DE VERDADE para classes de heróis/regentes
 
 import type { HeroClassDefinition } from "../types/skills.types";
-import { WARRIOR_SKILLS, CLERIC_SKILLS, WIZARD_SKILLS } from "./skills.data";
+import {
+  WARRIOR_SKILLS,
+  CLERIC_SKILLS,
+  WIZARD_SKILLS,
+  SUMMONER_SKILLS,
+} from "./skills.data";
 
 // =============================================================================
 // CLASSES (Apenas 3 classes principais)
@@ -47,6 +52,19 @@ export const HERO_CLASSES: HeroClassDefinition[] = [
     archetype: "ARCANE",
     resourceUsed: "ARCANA",
     skills: WIZARD_SKILLS,
+  },
+
+  // =============================================================================
+  // INVOCADOR - ESPIRITUAL (DEVOTION)
+  // =============================================================================
+  {
+    code: "SUMMONER",
+    name: "Invocador",
+    description:
+      "Mestre espiritual que canaliza seu poder através de um Eidolon - uma manifestação espiritual que cresce ao consumir as almas de seus inimigos.",
+    archetype: "SPIRITUAL",
+    resourceUsed: "DEVOTION",
+    skills: SUMMONER_SKILLS,
   },
 ];
 

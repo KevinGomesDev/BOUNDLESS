@@ -1,5 +1,5 @@
 // server/src/worldmap/generation/BiomeGenerator.ts
-import { TERRAIN_TYPES, TerrainType } from "../../../../shared/data/terrains";
+import { type TerrainType } from "../../../../shared/config/global.config";
 import { MathUtils } from "../../utils/math";
 
 interface BioSeed {
@@ -42,12 +42,11 @@ export class BiomeGenerator {
     const mapHeight = mapBottom - mapTop;
     const pct = (y - mapTop) / mapHeight;
 
-    if (pct < 0.25) return TERRAIN_TYPES.ICE;
-    if (pct < 0.35) return TERRAIN_TYPES.MOUNTAIN;
-    if (pct < 0.65)
-      return Math.random() > 0.5 ? TERRAIN_TYPES.FOREST : TERRAIN_TYPES.PLAINS;
-    if (pct < 0.8) return TERRAIN_TYPES.WASTELAND;
-    return TERRAIN_TYPES.DESERT;
+    if (pct < 0.25) return "ICE";
+    if (pct < 0.35) return "MOUNTAIN";
+    if (pct < 0.65) return Math.random() > 0.5 ? "FOREST" : "PLAINS";
+    if (pct < 0.8) return "WASTELAND";
+    return "DESERT";
   }
 
   getBiomeForPoint(x: number, y: number): TerrainType {
@@ -64,6 +63,6 @@ export class BiomeGenerator {
       }
     }
 
-    return closestSeed ? closestSeed.type : TERRAIN_TYPES.PLAINS;
+    return closestSeed ? closestSeed.type : "PLAINS";
   }
 }

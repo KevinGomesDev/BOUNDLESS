@@ -1,6 +1,8 @@
 // Session Types - Shared between Frontend and Backend
 // Gerenciamento de sessões ativas (Match, Arena Lobby, Arena Battle)
 
+import type { BattleUnit } from "./battle.types";
+
 /**
  * Tipos de sessão suportados pelo sistema
  */
@@ -43,6 +45,8 @@ export interface ArenaLobbyData {
   guestKingdomId?: string;
   status: ArenaLobbyStatus;
   createdAt: Date;
+  /** Se true, o guest é um BOT controlado por IA */
+  vsBot?: boolean;
 }
 
 /**
@@ -58,7 +62,7 @@ export interface ArenaBattleData {
   activeUnitId?: string; // Unidade ativa escolhida pelo jogador neste turno
   gridWidth: number;
   gridHeight: number;
-  units: any[]; // ArenaUnit[]
+  units: BattleUnit[];
   actionOrder: string[];
   turnTimer: number;
   config: any; // ArenaConfig com mapa, clima e obstáculos

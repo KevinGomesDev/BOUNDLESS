@@ -268,6 +268,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket): void => {
           currentTurnIndex: battle.currentTurnIndex,
           currentPlayerId: battle.actionOrder[battle.currentTurnIndex],
           turnTimer: battle.turnTimer, // Timer atual da batalha
+          activeUnitId: battle.activeUnitId, // Unidade ativa (se houver)
           units: battle.units,
           actionOrder: battle.actionOrder,
           hostKingdom: hostKingdom

@@ -8,11 +8,8 @@ import {
   createConditionEvent,
 } from "../services/event.service";
 import { EVENT_CODES } from "../../../shared/types/events.types";
-import type {
-  CombatUnit,
-  AttackActionResult,
-  MoveActionResult,
-} from "./combat-actions";
+import type { AttackActionResult, MoveActionResult } from "./combat-actions";
+import { BattleUnit } from "../../../shared/types/battle.types";
 
 // =============================================================================
 // EVENTOS DE ATAQUE
@@ -23,8 +20,8 @@ import type {
  */
 export async function emitAttackHitEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   result: AttackActionResult
 ): Promise<void> {
   await createCombatEvent({
@@ -66,8 +63,8 @@ export async function emitAttackHitEvent(
  */
 export async function emitAttackDodgedEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit
+  attacker: BattleUnit,
+  target: BattleUnit
 ): Promise<void> {
   await createCombatEvent({
     battleId,
@@ -86,8 +83,8 @@ export async function emitAttackDodgedEvent(
  */
 export async function emitAttackBlockedEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   damageBlocked: number
 ): Promise<void> {
   await createCombatEvent({
@@ -112,7 +109,7 @@ export async function emitAttackBlockedEvent(
  */
 export async function emitMovementEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   result: MoveActionResult
 ): Promise<void> {
   await createMovementEvent({
@@ -137,7 +134,7 @@ export async function emitMovementEvent(
  */
 export async function emitDashEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   newMovesLeft: number
 ): Promise<void> {
   await createMovementEvent({
@@ -202,7 +199,7 @@ export async function emitRoundStartEvent(
  */
 export async function emitUnitTurnStartEvent(
   battleId: string,
-  unit: CombatUnit
+  unit: BattleUnit
 ): Promise<void> {
   await createTurnEvent({
     battleId,
@@ -221,7 +218,7 @@ export async function emitUnitTurnStartEvent(
  */
 export async function emitUnitTurnEndEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   damageFromConditions?: number,
   conditionsRemoved?: string[]
 ): Promise<void> {
@@ -248,7 +245,7 @@ export async function emitUnitTurnEndEvent(
  */
 export async function emitConditionAppliedEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   conditionCode: string,
   conditionName: string
 ): Promise<void> {
@@ -268,7 +265,7 @@ export async function emitConditionAppliedEvent(
  */
 export async function emitConditionRemovedEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   conditionCode: string,
   conditionName: string
 ): Promise<void> {
@@ -292,8 +289,8 @@ export async function emitConditionRemovedEvent(
  */
 export async function emitGrabEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   success: boolean
 ): Promise<void> {
   if (success) {
@@ -327,8 +324,8 @@ export async function emitGrabEvent(
  */
 export async function emitThrowEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   finalX: number,
   finalY: number,
   damage: number
@@ -351,8 +348,8 @@ export async function emitThrowEvent(
  */
 export async function emitKnockdownEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   success: boolean
 ): Promise<void> {
   if (success) {
@@ -374,8 +371,8 @@ export async function emitKnockdownEvent(
  */
 export async function emitDisarmEvent(
   battleId: string,
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   success: boolean
 ): Promise<void> {
   if (success) {
@@ -397,8 +394,8 @@ export async function emitDisarmEvent(
  */
 export async function emitHelpEvent(
   battleId: string,
-  helper: CombatUnit,
-  target: CombatUnit
+  helper: BattleUnit,
+  target: BattleUnit
 ): Promise<void> {
   await createCombatEvent({
     battleId,
@@ -417,7 +414,7 @@ export async function emitHelpEvent(
  */
 export async function emitProtectEvent(
   battleId: string,
-  unit: CombatUnit
+  unit: BattleUnit
 ): Promise<void> {
   await createCombatEvent({
     battleId,
@@ -434,7 +431,7 @@ export async function emitProtectEvent(
  */
 export async function emitFleeEvent(
   battleId: string,
-  unit: CombatUnit,
+  unit: BattleUnit,
   success: boolean
 ): Promise<void> {
   if (success) {

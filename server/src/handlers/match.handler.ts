@@ -3,7 +3,7 @@ import { Socket, Server } from "socket.io";
 import { prisma } from "../lib/prisma";
 import { CrisisState, CrisisType } from "../types";
 import { CRISIS_DEFINITIONS } from "../../../shared/data/crises";
-import { TERRAIN_TYPES } from "../../../shared/data/terrains";
+import { TERRAIN_CONFIGS } from "../../../shared/data/terrains";
 import { MapGenerator } from "../worldmap/generation/MapGenerator";
 import {
   BUILDABLE_STRUCTURES,
@@ -215,10 +215,8 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
 
         // Salvar territórios no banco
         for (const t of territories) {
-          const terrainKey =
-            Object.keys(TERRAIN_TYPES).find(
-              (key) => TERRAIN_TYPES[key].name === t.terrain.name
-            ) || "PLAINS";
+          // t.terrain já é a chave do terreno (TerrainType)
+          const terrainKey = t.terrain;
 
           await tx.territory.create({
             data: {
@@ -400,7 +398,7 @@ export const registerMatchHandlers = (io: Server, socket: Socket) => {
   // 4. OBTER DADOS ESTÁTICOS
   // ============================================================
   socket.on("game:get_terrains", () => {
-    socket.emit("game:terrains_data", TERRAIN_TYPES);
+    socket.emit("game:terrains_data", TERRAIN_CONFIGS);
   });
 
   // ============================================================

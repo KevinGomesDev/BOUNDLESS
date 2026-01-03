@@ -9,14 +9,10 @@ import {
 import type { ArenaConfig } from "../../../../shared/types/arena.types";
 import type {
   BattleObstacle,
-  BattleTerrainType,
+  TerrainType,
   TerritorySize,
-  WeatherType,
 } from "../../../../shared/types/battle.types";
-import {
-  BATTLE_TERRAIN_DEFINITIONS,
-  WEATHER_DEFINITIONS,
-} from "../../../../shared/types/battle.types";
+import { TERRAIN_DEFINITIONS } from "../../../../shared/types/battle.types";
 import type { BattleUnit } from "../../utils/battle-unit.factory";
 import { activeBattles, battleLobbies, userToLobby } from "./battle-state";
 import type { Battle, BattleLobby } from "./battle-types";
@@ -32,32 +28,25 @@ export function createBaseArenaConfig(): Omit<ArenaConfig, "grid" | "map"> {
 export function reconstructArenaConfig(dbBattle: {
   gridWidth: number;
   gridHeight: number;
-  weather: string;
   terrainType: string;
   territorySize: string;
   obstacles: string;
 }): ArenaConfig {
-  const weather = dbBattle.weather as WeatherType;
-  const terrainType = dbBattle.terrainType as BattleTerrainType;
+  const terrainType = dbBattle.terrainType as TerrainType;
   const territorySize = dbBattle.territorySize as TerritorySize;
   const obstacles: BattleObstacle[] = JSON.parse(dbBattle.obstacles || "[]");
 
-  const weatherDef = WEATHER_DEFINITIONS[weather] || WEATHER_DEFINITIONS.SUNNY;
   const terrainDef =
-    BATTLE_TERRAIN_DEFINITIONS[terrainType] ||
-    BATTLE_TERRAIN_DEFINITIONS.PLAINS;
+    TERRAIN_DEFINITIONS[terrainType] || TERRAIN_DEFINITIONS.PLAINS;
 
   return {
     ...createBaseArenaConfig(),
     grid: { width: dbBattle.gridWidth, height: dbBattle.gridHeight },
     map: {
-      weather,
-      weatherEmoji: weatherDef.emoji,
-      weatherName: weatherDef.name,
-      weatherEffect: weatherDef.effect,
-      weatherCssFilter: weatherDef.cssFilter,
       terrainType,
       terrainName: terrainDef.name,
+      terrainEmoji: terrainDef.emoji,
+      terrainColors: terrainDef.colors,
       territorySize,
       obstacles,
     },
@@ -92,7 +81,6 @@ export async function saveBattleToDB(battle: Battle): Promise<void> {
         round: battle.round,
         currentTurnIndex: battle.currentTurnIndex,
         actionOrder: JSON.stringify(battle.actionOrder),
-        weather: mapConfig?.weather || "SUNNY",
         terrainType: mapConfig?.terrainType || "PLAINS",
         territorySize: mapConfig?.territorySize || "MEDIUM",
         obstacles: JSON.stringify(mapConfig?.obstacles || []),
@@ -116,6 +104,7 @@ export async function saveBattleToDB(battle: Battle): Promise<void> {
           conditions: JSON.stringify(unit.conditions),
           hasStartedAction: unit.hasStartedAction,
           skillCooldowns: JSON.stringify(unit.skillCooldowns || {}),
+          isAIControlled: unit.isAIControlled ?? false,
         },
         create: {
           id: unit.id,
@@ -151,6 +140,7 @@ export async function saveBattleToDB(battle: Battle): Promise<void> {
           size: unit.size || "NORMAL",
           visionRange: unit.visionRange || 10,
           skillCooldowns: JSON.stringify(unit.skillCooldowns || {}),
+          isAIControlled: unit.isAIControlled ?? false,
         },
       });
     }
@@ -279,6 +269,11 @@ export async function updateUserStats(
   isArena: boolean
 ): Promise<void> {
   try {
+    // Ignorar IDs especiais (BOT, AI, etc.)
+    const isSpecialId = (id: string | null | undefined): boolean => {
+      return !id || id.startsWith("__");
+    };
+
     if (winnerId && loserId && winnerId === loserId) {
       console.error(
         `[STATS] ❌ ERRO: winnerId e loserId são iguais! (${winnerId})`
@@ -286,7 +281,8 @@ export async function updateUserStats(
       return;
     }
 
-    if (winnerId) {
+    // Atualizar estatísticas do vencedor (se não for BOT)
+    if (winnerId && !isSpecialId(winnerId)) {
       if (isArena) {
         await prisma.user.update({
           where: { id: winnerId },
@@ -301,7 +297,8 @@ export async function updateUserStats(
       console.log(`[STATS] ${winnerId} ganhou +1 vitória (arena=${isArena})`);
     }
 
-    if (loserId) {
+    // Atualizar estatísticas do perdedor (se não for BOT)
+    if (loserId && !isSpecialId(loserId)) {
       if (isArena) {
         await prisma.user.update({
           where: { id: loserId },
@@ -314,6 +311,18 @@ export async function updateUserStats(
         });
       }
       console.log(`[STATS] ${loserId} ganhou +1 derrota (arena=${isArena})`);
+    }
+
+    // Log quando BOT está envolvido
+    if (isSpecialId(winnerId)) {
+      console.log(
+        `[STATS] BOT venceu - estatísticas não atualizadas para vencedor`
+      );
+    }
+    if (isSpecialId(loserId)) {
+      console.log(
+        `[STATS] BOT perdeu - estatísticas não atualizadas para perdedor`
+      );
     }
   } catch (err) {
     console.error("[STATS] Erro ao atualizar estatísticas:", err);
@@ -371,6 +380,8 @@ export async function loadBattlesFromDB(): Promise<void> {
         visionRange: u.visionRange ?? Math.max(10, u.focus),
         // Cooldowns de skills (lidos do banco ou default vazio)
         skillCooldowns: JSON.parse(u.skillCooldowns || "{}"),
+        // Flag de controle IA (funil)
+        isAIControlled: u.isAIControlled ?? false,
       }));
 
       const battle: Battle = {

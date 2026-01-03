@@ -3,11 +3,14 @@ import { prisma } from "../../lib/prisma";
 import { canJoinNewSession } from "../../utils/session.utils";
 import { battleLobbies, socketToUser, userToLobby } from "./battle-state";
 import { saveLobbyToDB, deleteLobbyFromDB } from "./battle-persistence";
-import { createAndStartBattle } from "./battle-creation";
+import {
+  createAndStartBattle,
+  createAndStartBotBattle,
+} from "./battle-creation";
 import type { BattleLobby } from "./battle-types";
 
 export function registerBattleLobbyHandlers(io: Server, socket: Socket): void {
-  socket.on("battle:create_lobby", async ({ userId, kingdomId }) => {
+  socket.on("battle:create_lobby", async ({ userId, kingdomId, vsBot }) => {
     try {
       const blockReason = await canJoinNewSession(userId);
       if (blockReason) {
@@ -55,6 +58,7 @@ export function registerBattleLobbyHandlers(io: Server, socket: Socket): void {
         hostKingdomId: kingdomId,
         status: "WAITING",
         createdAt: new Date(),
+        vsBot: vsBot === true,
       };
 
       battleLobbies.set(lobbyId, lobby);
@@ -64,6 +68,48 @@ export function registerBattleLobbyHandlers(io: Server, socket: Socket): void {
       await saveLobbyToDB(lobby);
 
       socket.join(lobbyId);
+
+      // Se é contra BOT, iniciar batalha imediatamente
+      if (vsBot === true) {
+        console.log(
+          `[ARENA] Lobby BOT criado: ${lobbyId} por ${user.username} - Iniciando batalha...`
+        );
+
+        try {
+          const battle = await createAndStartBotBattle({
+            lobby,
+            hostKingdom: kingdom,
+            io,
+          });
+
+          // Emitir evento de batalha iniciada para o host
+          socket.emit("battle:battle_started", {
+            battleId: battle.id,
+            lobbyId: lobby.lobbyId,
+            config: battle.config,
+            units: battle.units,
+            actionOrder: battle.actionOrder,
+            hostKingdom: {
+              id: kingdom.id,
+              name: kingdom.name,
+              ownerId: userId,
+            },
+            guestKingdom: {
+              id: "__BOT__",
+              name: "🤖 Regente BOT",
+              ownerId: "__BOT__",
+            },
+          });
+
+          console.log(`[ARENA] Batalha BOT iniciada: ${battle.id}`);
+        } catch (err) {
+          console.error("[ARENA] Erro ao criar batalha BOT:", err);
+          socket.emit("battle:error", {
+            message: "Erro ao criar batalha contra BOT",
+          });
+        }
+        return;
+      }
 
       socket.emit("battle:lobby_created", {
         lobbyId,

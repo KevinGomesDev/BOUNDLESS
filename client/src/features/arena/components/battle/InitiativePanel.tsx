@@ -1,14 +1,15 @@
 import React, { useMemo } from "react";
-import type { ArenaBattle, ArenaUnit } from "../../types/arena.types";
+import type { ArenaBattle } from "../../types/arena.types";
 import { ScarMarks } from "../shared/ScarMarks";
 import { getMaxMarksByCategory } from "../../../../../../shared/config/global.config";
+import type { BattleUnit } from "../../../../../../shared/types/battle.types";
 
 interface InitiativePanelProps {
   battle: ArenaBattle;
-  units: ArenaUnit[];
+  units: BattleUnit[];
   currentUserId: string;
   /** Callback quando clicar em uma unidade na lista */
-  onUnitClick?: (unit: ArenaUnit) => void;
+  onUnitClick?: (unit: BattleUnit) => void;
 }
 
 /**
@@ -77,7 +78,7 @@ export const InitiativePanel: React.FC<InitiativePanelProps> = ({
     unit,
     isOwned,
   }: {
-    unit: ArenaUnit;
+    unit: BattleUnit;
     isOwned: boolean;
   }) => {
     const isDead = !unit.isAlive;

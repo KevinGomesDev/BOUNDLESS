@@ -5,21 +5,20 @@ import {
   HERO_CLASSES,
   getSkillsForClass,
 } from "../../../../shared/data/classes.data";
-import { rollExplodingD6Once } from "../dice";
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Generate creature stats per spec: for each attribute, 1D6 (exploding on 6) + level
+// Generate creature stats: base value (1-6) + level
 function generateCreatureStats(level: number) {
-  const rollPlusLevel = () => rollExplodingD6Once() + level;
+  const randomBase = () => Math.floor(Math.random() * 6) + 1 + level;
   return {
-    combat: rollPlusLevel(),
-    speed: rollPlusLevel(),
-    focus: rollPlusLevel(),
-    armor: rollPlusLevel(),
-    vitality: rollPlusLevel(),
+    combat: randomBase(),
+    speed: randomBase(),
+    focus: randomBase(),
+    armor: randomBase(),
+    vitality: randomBase(),
   };
 }
 

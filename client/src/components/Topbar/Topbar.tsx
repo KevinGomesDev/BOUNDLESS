@@ -176,14 +176,12 @@ const BackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
 };
 
 /**
- * Indicador de Clima com tooltip (para contexto de batalha)
+ * Indicador de Terreno com tooltip (para contexto de batalha)
  */
-const WeatherIndicator: React.FC<{
+const TerrainIndicator: React.FC<{
   emoji: string;
   name: string;
-  effect: string;
-  terrainName: string;
-}> = ({ emoji, name, effect, terrainName }) => {
+}> = ({ emoji, name }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -196,21 +194,13 @@ const WeatherIndicator: React.FC<{
         <span className="text-xl">{emoji}</span>
       </div>
       {showTooltip && (
-        <div className="absolute z-[200] top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-3 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="absolute z-[200] top-full left-1/2 -translate-x-1/2 mt-2 w-40 p-3 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg">
+          <div className="flex items-center gap-2">
             <span className="text-2xl">{emoji}</span>
-            <div>
-              <span className="text-parchment-light font-bold text-sm block">
-                {name}
-              </span>
-              <span className="text-parchment-dark text-[10px]">
-                Terreno: {terrainName}
-              </span>
-            </div>
+            <span className="text-parchment-light font-bold text-sm">
+              {name}
+            </span>
           </div>
-          <p className="text-parchment-aged text-xs leading-relaxed border-t border-metal-iron/30 pt-2">
-            {effect}
-          </p>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron" />
         </div>
       )}
@@ -338,14 +328,12 @@ const BattleLayout: React.FC<{
       isMyTurn={battleData.isMyTurn}
     />
 
-    {/* CENTRO: Clima e Separador */}
+    {/* CENTRO: Terreno e Separador */}
     <div className="flex items-center gap-4">
       {battleData.config.map && (
-        <WeatherIndicator
-          emoji={battleData.config.map.weatherEmoji}
-          name={battleData.config.map.weatherName}
-          effect={battleData.config.map.weatherEffect}
-          terrainName={battleData.config.map.terrainName}
+        <TerrainIndicator
+          emoji={battleData.config.map.terrainEmoji}
+          name={battleData.config.map.terrainName}
         />
       )}
       <span className="text-2xl font-bold text-war-crimson">⚔️</span>

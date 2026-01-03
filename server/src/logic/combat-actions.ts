@@ -8,49 +8,23 @@ import {
   getExtraAttacksFromConditions,
 } from "./conditions";
 import {
-  getManhattanDistance,
   isAdjacent,
   isAdjacentOmnidirectional,
-  getAdjacentPositions,
 } from "../../../shared/types/skills.types";
-import type { BattleObstacle } from "../../../shared/types/battle.types";
+import type {
+  BattleObstacle,
+  BattleUnit,
+} from "../../../shared/types/battle.types";
 import {
   OBSTACLE_CONFIG,
   DEFENSE_CONFIG,
 } from "../../../shared/config/global.config";
 import {
-  calculatePhysicalProtection,
-  calculateMagicalProtection,
-} from "./dice-system";
-
-export interface CombatUnit {
-  id: string;
-  ownerId: string;
-  ownerKingdomId: string;
-  name: string;
-  category: string;
-  combat: number;
-  speed: number; // Movement = floor(speed / 2), minimum 1
-  focus: number;
-  armor: number;
-  vitality: number;
-  damageReduction: number; // Fixed DR, most units have 0
-  currentHp: number;
-  posX: number;
-  posY: number;
-  movesLeft: number;
-  actionsLeft: number;
-  attacksLeftThisTurn: number; // Ataques restantes neste turno (para extraAttacks)
-  isAlive: boolean;
-  // Proteção Física - ver shared/config/balance.config.ts
-  physicalProtection: number;
-  maxPhysicalProtection: number;
-  // Proteção Mágica - ver shared/config/balance.config.ts
-  magicalProtection: number;
-  maxMagicalProtection: number;
-  conditions: string[];
-  actions: string[];
-}
+  shouldTransferDamageToEidolon,
+  transferDamageToEidolon,
+  processUnitDeathForEidolon,
+  processEidolonDeath,
+} from "./summon-logic";
 
 export interface MoveActionResult {
   success: boolean;
@@ -82,6 +56,9 @@ export interface AttackActionResult {
   attacksLeftThisTurn?: number; // Ataques restantes após este
   dodgeChance?: number; // % de chance de esquiva
   dodgeRoll?: number; // Rolagem de 1-100
+  // Eidolon (Invocador)
+  damageTransferredToEidolon?: boolean; // Dano foi transferido para Eidolon
+  eidolonDefeated?: boolean; // Eidolon morreu ao receber dano transferido
 }
 
 export interface DashActionResult {
@@ -101,12 +78,12 @@ export function calculateBaseMovement(speed: number): number {
 }
 
 export function executeMoveAction(
-  unit: CombatUnit,
+  unit: BattleUnit,
   toX: number,
   toY: number,
   gridWidth: number,
   gridHeight: number,
-  allUnits: CombatUnit[],
+  allUnits: BattleUnit[],
   obstacles: BattleObstacle[] = []
 ): MoveActionResult {
   if (!unit.actions.includes("move")) {
@@ -193,9 +170,9 @@ export function executeMoveAction(
  * Pode atacar: unidade viva, cadáver (unidade morta) ou obstáculo
  */
 export interface AttackParams {
-  attacker: CombatUnit;
+  attacker: BattleUnit;
   // Alvo: unidade (viva ou morta)
-  targetUnit?: CombatUnit;
+  targetUnit?: BattleUnit;
   // Alvo: obstáculo (posição)
   targetObstacle?: BattleObstacle;
   // Tipo de dano
@@ -209,10 +186,11 @@ export interface AttackParams {
  * - Esquiva = 1D100 vs Speed × dodgeMultiplier (máximo maxDodgeChance)
  */
 export function executeAttackAction(
-  attacker: CombatUnit,
-  target: CombatUnit | null,
+  attacker: BattleUnit,
+  target: BattleUnit | null,
   damageType: string = "FISICO",
-  obstacle?: BattleObstacle
+  obstacle?: BattleObstacle,
+  allUnits: BattleUnit[] = []
 ): AttackActionResult {
   if (!attacker.actions.includes("attack")) {
     return { success: false, error: "Unit cannot attack" };
@@ -392,7 +370,58 @@ export function executeAttackAction(
     dodgeRoll,
   });
 
-  // Aplicar dano na proteção apropriada
+  // === VERIFICAR TRANSFERÊNCIA DE DANO PARA EIDOLON ===
+  // Se o alvo tem EIDOLON_PROTECTION e está adjacente ao Eidolon
+  const eidolonToTransfer = shouldTransferDamageToEidolon(target, allUnits);
+
+  let eidolonDefeated = false;
+  let damageTransferredToEidolon = false;
+
+  if (eidolonToTransfer) {
+    // Dano é transferido como DANO VERDADEIRO para o Eidolon
+    const transferResult = transferDamageToEidolon(
+      eidolonToTransfer,
+      damageToApply
+    );
+    eidolonDefeated = transferResult.eidolonDefeated;
+    damageTransferredToEidolon = true;
+
+    console.log(
+      `[COMBAT] 🛡️ Dano transferido para Eidolon: ${damageToApply} (Verdadeiro)`
+    );
+
+    // Se Eidolon morreu, processar reset de bônus
+    if (eidolonDefeated) {
+      processEidolonDeath(eidolonToTransfer, "arena");
+    }
+
+    // Aplicar expiração de condições (mesmo sem dano no alvo)
+    attacker.conditions = applyConditionScanResult(
+      attacker.conditions,
+      attackerScan
+    );
+    target.conditions = applyConditionScanResult(target.conditions, targetScan);
+
+    return {
+      success: true,
+      targetType: "unit",
+      rawDamage,
+      damageReduction,
+      finalDamage: damageToApply,
+      damageType,
+      targetHpAfter: target.currentHp, // Alvo não recebeu dano
+      targetPhysicalProtection: target.physicalProtection,
+      targetMagicalProtection: target.magicalProtection,
+      targetDefeated: false,
+      attacksLeftThisTurn: attacker.attacksLeftThisTurn,
+      dodgeChance,
+      dodgeRoll,
+      damageTransferredToEidolon: true,
+      eidolonDefeated,
+    };
+  }
+
+  // Aplicar dano na proteção apropriada (fluxo normal)
   const protectionResult = applyDualProtectionDamage(
     target.physicalProtection,
     target.magicalProtection,
@@ -416,6 +445,14 @@ export function executeAttackAction(
   if (target.currentHp <= 0) {
     targetDefeated = true;
     target.isAlive = false;
+
+    // Processar morte para crescimento do Eidolon (se atacante for Eidolon)
+    processUnitDeathForEidolon(attacker, target, "arena");
+
+    // Se o alvo era um Eidolon, processar reset
+    if (target.conditions.includes("EIDOLON_GROWTH")) {
+      processEidolonDeath(target, "arena");
+    }
   }
 
   return {
@@ -435,7 +472,7 @@ export function executeAttackAction(
   };
 }
 
-export function executeDashAction(unit: CombatUnit): DashActionResult {
+export function executeDashAction(unit: BattleUnit): DashActionResult {
   if (!unit.actions.includes("dash")) {
     return { success: false, error: "Unit cannot dash" };
   }
@@ -463,7 +500,7 @@ export function executeDashAction(unit: CombatUnit): DashActionResult {
   };
 }
 
-export function executeDodgeAction(unit: CombatUnit): DodgeActionResult {
+export function executeDodgeAction(unit: BattleUnit): DodgeActionResult {
   if (!unit.actions.includes("dodge")) {
     return { success: false, error: "Unit cannot dodge" };
   }
@@ -516,7 +553,7 @@ export const COMBAT_ACTIONS = {
 export { DEFAULT_UNIT_ACTIONS } from "./unit-actions";
 
 export function canUnitPerformAction(
-  unit: CombatUnit,
+  unit: BattleUnit,
   actionId: string
 ): boolean {
   if (!unit.actions.includes(actionId) || !unit.isAlive) return false;
@@ -524,7 +561,7 @@ export function canUnitPerformAction(
   return scan.canPerform;
 }
 
-export function getAvailableActions(unit: CombatUnit): string[] {
+export function getAvailableActions(unit: BattleUnit): string[] {
   if (!unit.isAlive) return [];
 
   const available: string[] = [];
@@ -609,8 +646,8 @@ export interface AttackObstacleResult {
 
 // Ajuda: aplica HELP_NEXT na unidade adjacente (reduz CD em 1 na próxima ação)
 export function executeHelpAction(
-  helper: CombatUnit,
-  target: CombatUnit
+  helper: BattleUnit,
+  target: BattleUnit
 ): HelpActionResult {
   if (!helper.isAlive) {
     return { success: false, error: "Unidade morta não pode ajudar" };
@@ -631,7 +668,7 @@ export function executeHelpAction(
 }
 
 // Proteger-se: reduz próximo dano em 5; uma vez por batalha
-export function executeProtectAction(unit: CombatUnit): ProtectActionResult {
+export function executeProtectAction(unit: BattleUnit): ProtectActionResult {
   if (!unit.isAlive) {
     return { success: false, error: "Unidade morta não pode se proteger" };
   }
@@ -689,8 +726,8 @@ function simpleContestedCheck(
 
 // Derrubar: teste Combat vs Speed; aplica DERRUBADA
 export function executeKnockdownAction(
-  attacker: CombatUnit,
-  target: CombatUnit
+  attacker: BattleUnit,
+  target: BattleUnit
 ): SimpleContestedResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode derrubar" };
@@ -718,8 +755,8 @@ export function executeKnockdownAction(
 
 // Desarmar: teste Combat vs Speed; aplica DISARMED
 export function executeDisarmAction(
-  attacker: CombatUnit,
-  target: CombatUnit
+  attacker: BattleUnit,
+  target: BattleUnit
 ): SimpleContestedResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode desarmar" };
@@ -747,8 +784,8 @@ export function executeDisarmAction(
 
 // Agarrar: teste Combat vs Speed; ambos ficam AGARRADO
 export function executeGrabAction(
-  attacker: CombatUnit,
-  target: CombatUnit
+  attacker: BattleUnit,
+  target: BattleUnit
 ): GrabActionResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode agarrar" };
@@ -780,13 +817,13 @@ export function executeGrabAction(
 
 // Arremessar: usa Combat para determinar distância, dano fixo
 export function executeThrowAction(
-  attacker: CombatUnit,
-  target: CombatUnit,
+  attacker: BattleUnit,
+  target: BattleUnit,
   dirX: number,
   dirY: number,
   gridWidth: number,
   gridHeight: number,
-  allUnits: CombatUnit[]
+  allUnits: BattleUnit[]
 ): ThrowActionResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode arremessar" };
@@ -886,8 +923,8 @@ export function executeThrowAction(
 
 // Fuga: teste de Speed vs Speed do inimigo
 export function executeFleeAction(
-  unit: CombatUnit,
-  nearestEnemy: CombatUnit
+  unit: BattleUnit,
+  nearestEnemy: BattleUnit
 ): FleeActionResult {
   if (!unit.isAlive) {
     return { success: false, error: "Unidade morta não pode fugir" };
@@ -909,7 +946,7 @@ export function executeFleeAction(
 
 // Conjurar: sucesso baseado em Focus (sempre funciona, Focus determina potência)
 export function executeCastAction(
-  unit: CombatUnit,
+  unit: BattleUnit,
   spellId: string
 ): CastActionResult {
   if (!unit.isAlive) {
@@ -934,7 +971,6 @@ import {
   getManhattanDistance as getSkillManhattanDistance,
   DEFAULT_RANGE_VALUES,
   type SkillExecutionResult,
-  type SkillCombatUnit,
 } from "../../../shared/types/skills.types";
 
 // Re-exportar tipos e funções do skill-executors
@@ -960,9 +996,9 @@ export type SkillActionResult = SkillExecutionResult;
  * Valida se a unidade pode usar uma skill
  */
 export function validateSkillUse(
-  caster: CombatUnit,
+  caster: BattleUnit,
   skillCode: string,
-  target: CombatUnit | null,
+  target: BattleUnit | null,
   isArena: boolean
 ): { valid: boolean; error?: string } {
   // Verificar se a skill existe
@@ -1054,10 +1090,10 @@ export function validateSkillUse(
  * Delega para o sistema de skill-executors
  */
 export function executeSkillAction(
-  caster: CombatUnit,
+  caster: BattleUnit,
   skillCode: string,
-  target: CombatUnit | null,
-  allUnits: CombatUnit[],
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
   isArena: boolean = true
 ): SkillActionResult {
   // Importar dinamicamente para evitar dependência circular
@@ -1070,11 +1106,5 @@ export function executeSkillAction(
   }
 
   // Delegar para o executor centralizado (passa isArena para dobrar cooldown)
-  return executeSkill(
-    caster as SkillCombatUnit,
-    skillCode,
-    target as SkillCombatUnit | null,
-    allUnits as SkillCombatUnit[],
-    isArena
-  );
+  return executeSkill(caster, skillCode, target, allUnits, isArena);
 }

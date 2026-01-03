@@ -5,11 +5,11 @@ import React, { useEffect, useCallback } from "react";
 import { ChatProvider, useChat } from "../context/ChatContext";
 import { ChatBox } from "./ChatBox";
 import { BattleBubbles } from "./BattleBubbles";
-import type { ArenaUnit } from "../../arena/types/arena.types";
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 interface BattleChatInnerProps {
   currentUnitId?: string;
-  units?: ArenaUnit[];
+  units?: BattleUnit[];
   currentUserId?: string;
 }
 
@@ -59,7 +59,7 @@ const BattleChatInner: React.FC<BattleChatInnerProps> = ({
           activeBubbles={state.activeBubbles}
         />
 
-        <div className="fixed bottom-4 left-4 z-40">
+        <div className="fixed bottom-4 right-4 z-40">
           <button
             onClick={openChat}
             className="
@@ -89,7 +89,7 @@ const BattleChatInner: React.FC<BattleChatInnerProps> = ({
         activeBubbles={state.activeBubbles}
       />
 
-      <div className="fixed bottom-4 left-4 z-40 w-72">
+      <div className="fixed bottom-4 right-4 z-40 w-72">
         <ChatBox
           currentUnitId={currentUnitId}
           variant="compact"
@@ -107,7 +107,7 @@ const BattleChatInner: React.FC<BattleChatInnerProps> = ({
 interface BattleChatProps {
   battleId: string;
   currentUnitId?: string;
-  units?: ArenaUnit[];
+  units?: BattleUnit[];
   currentUserId?: string;
 }
 

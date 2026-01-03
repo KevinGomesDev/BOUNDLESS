@@ -3,7 +3,7 @@
 // Simplificado: não tenta seguir unidades no canvas, mas mostra nome da unidade
 
 import React, { useMemo, useEffect, useState } from "react";
-import type { ArenaUnit } from "../../arena/types/arena.types";
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 interface ActiveBubble {
   message: string;
@@ -11,7 +11,7 @@ interface ActiveBubble {
 }
 
 interface BattleBubblesProps {
-  units: ArenaUnit[];
+  units: BattleUnit[];
   currentUserId: string;
   /** Map de unitId -> mensagem ativa */
   activeBubbles: Map<string, ActiveBubble>;

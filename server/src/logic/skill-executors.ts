@@ -4,7 +4,6 @@
 
 import type {
   SkillExecutionResult,
-  SkillCombatUnit,
   SkillDefinition,
 } from "../../../shared/types/skills.types";
 import {
@@ -12,15 +11,16 @@ import {
   isAdjacentOmnidirectional,
 } from "../../../shared/types/skills.types";
 import { findSkillByCode } from "../../../shared/data/skills.data";
+import type { BattleUnit } from "../../../shared/types/battle.types";
 
 // =============================================================================
 // TIPOS LOCAIS
 // =============================================================================
 
 export type SkillExecutorFn = (
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
   skill: SkillDefinition
 ) => SkillExecutionResult;
 
@@ -57,6 +57,9 @@ export const SKILL_EXECUTORS: Record<string, SkillExecutorFn> = {
   // Ranger
   executeHuntersMark,
   executeVolley,
+
+  // Invocador
+  executeEidolonResistance,
 };
 
 // =============================================================================
@@ -75,10 +78,10 @@ export const ARENA_COOLDOWN_MULTIPLIER = 2;
  * @param isArena - Se true, cooldowns são dobrados
  */
 export function executeSkill(
-  caster: SkillCombatUnit,
+  caster: BattleUnit,
   skillCode: string,
-  target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
   isArena: boolean = false
 ): SkillExecutionResult {
   const skill = findSkillByCode(skillCode);
@@ -140,7 +143,7 @@ export function executeSkill(
 /**
  * Reduz todos os cooldowns de uma unidade em 1 (chamado no início de cada rodada)
  */
-export function tickSkillCooldowns(unit: SkillCombatUnit): void {
+export function tickSkillCooldowns(unit: BattleUnit): void {
   if (!unit.skillCooldowns) return;
 
   for (const skillCode of Object.keys(unit.skillCooldowns)) {
@@ -154,7 +157,7 @@ export function tickSkillCooldowns(unit: SkillCombatUnit): void {
  * Verifica se uma skill está em cooldown
  */
 export function isSkillOnCooldown(
-  unit: SkillCombatUnit,
+  unit: BattleUnit,
   skillCode: string
 ): boolean {
   return (unit.skillCooldowns?.[skillCode] ?? 0) > 0;
@@ -163,10 +166,7 @@ export function isSkillOnCooldown(
 /**
  * Obtém o cooldown restante de uma skill
  */
-export function getSkillCooldown(
-  unit: SkillCombatUnit,
-  skillCode: string
-): number {
+export function getSkillCooldown(unit: BattleUnit, skillCode: string): number {
   return unit.skillCooldowns?.[skillCode] ?? 0;
 }
 
@@ -179,9 +179,9 @@ export function getSkillCooldown(
  * Cooldown: 1 vez por batalha (tratado via metadata ou condição especial)
  */
 function executeSecondWind(
-  caster: SkillCombatUnit,
-  _target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  _target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   const healAmount = caster.vitality;
@@ -201,9 +201,9 @@ function executeSecondWind(
  * WARRIOR_ACTION_SURGE: Ganha uma ação extra (NÃO consome ação)
  */
 function executeActionSurge(
-  caster: SkillCombatUnit,
-  _target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  _target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   // Ganha uma ação extra (consumesAction=false na definição)
@@ -223,9 +223,9 @@ function executeActionSurge(
  * BARBARIAN_TOTAL_DESTRUCTION: Dano igual ao Combat em alvo adjacente, recebe o mesmo dano
  */
 function executeTotalDestruction(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -263,9 +263,9 @@ function executeTotalDestruction(
  * CLERIC_HEAL: Cura aliado adjacente (Focus de HP)
  */
 function executeHeal(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   const healTarget = target || caster;
@@ -292,9 +292,9 @@ function executeHeal(
  * CLERIC_BLESS: Aliados em área ganham BLESSED
  */
 function executeBless(
-  caster: SkillCombatUnit,
-  _target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  _target: BattleUnit | null,
+  allUnits: BattleUnit[],
   skill: SkillDefinition
 ): SkillExecutionResult {
   const radius = skill.rangeValue ?? 2;
@@ -329,9 +329,9 @@ function executeBless(
  * CLERIC_DIVINE_FAVOR: Próximo ataque tem vantagem
  */
 function executeDivineFavor(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   const effectTarget = target || caster;
@@ -350,9 +350,9 @@ function executeDivineFavor(
  * CLERIC_CURE_WOUNDS: Cura aliado adjacente (Focus de HP)
  */
 function executeCureWounds(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   const healTarget = target || caster;
@@ -379,12 +379,12 @@ function executeCureWounds(
  * CLERIC_TURN_UNDEAD: Aplica FRIGHTENED em inimigos adjacentes
  */
 function executeTurnUndead(
-  caster: SkillCombatUnit,
-  _target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  _target: BattleUnit | null,
+  allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
-  const affectedUnits: SkillCombatUnit[] = [];
+  const affectedUnits: BattleUnit[] = [];
 
   for (const unit of allUnits) {
     if (unit.ownerId === caster.ownerId) continue;
@@ -411,9 +411,9 @@ function executeTurnUndead(
  * CLERIC_CELESTIAL_EXPULSION: Remove condições negativas do alvo
  */
 function executeCelestialExpulsion(
-  _caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  _caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -458,9 +458,9 @@ function executeCelestialExpulsion(
  * WIZARD_FIREBALL: Dano em área (Focus de dano para todos em raio)
  */
 function executeFireball(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
   skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -513,9 +513,9 @@ function executeFireball(
  * WIZARD_TELEPORT: Teleporta para posição
  */
 function executeTeleport(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -539,9 +539,9 @@ function executeTeleport(
  * WIZARD_MAGIC_MISSILE: Dano mágico garantido (Focus de dano)
  */
 function executeMagicMissile(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -578,9 +578,9 @@ function executeMagicMissile(
  * WIZARD_SHIELD: Ganha proteção mágica temporária
  */
 function executeShield(
-  caster: SkillCombatUnit,
-  _target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  _target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   const shieldAmount = caster.focus * 2;
@@ -603,9 +603,9 @@ function executeShield(
  * RANGER_HUNTERS_MARK: Marca um inimigo (+2 dano em ataques contra ele)
  */
 function executeHuntersMark(
-  _caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  _allUnits: SkillCombatUnit[],
+  _caster: BattleUnit,
+  target: BattleUnit | null,
+  _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -626,9 +626,9 @@ function executeHuntersMark(
  * RANGER_VOLLEY: Ataca todos os inimigos em área com metade do dano
  */
 function executeVolley(
-  caster: SkillCombatUnit,
-  target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[],
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
   skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
@@ -676,5 +676,185 @@ function executeVolley(
   return {
     success: true,
     damageDealt: totalDamage,
+  };
+}
+
+// =============================================================================
+// EXECUTORES - INVOCADOR
+// =============================================================================
+
+/**
+ * SUMMONER_EIDOLON_RESISTANCE: Drena proteção do Eidolon para si
+ * - O Eidolon deve ter pelo menos 1 de proteção
+ * - Recupera [FOCO] de proteção do Eidolon para o caster
+ */
+function executeEidolonResistance(
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
+  _skill: SkillDefinition
+): SkillExecutionResult {
+  // Se não passou target, tenta encontrar o Eidolon adjacente
+  let eidolon = target;
+
+  if (!eidolon) {
+    // Procura o Eidolon do caster que esteja adjacente
+    eidolon =
+      allUnits.find(
+        (u) =>
+          u.ownerId === caster.ownerId &&
+          u.category === "SUMMON" &&
+          u.conditions.includes("EIDOLON_GROWTH") &&
+          u.isAlive &&
+          isAdjacentOmnidirectional(caster.posX, caster.posY, u.posX, u.posY)
+      ) || null;
+  }
+
+  if (!eidolon) {
+    return { success: false, error: "Nenhum Eidolon adjacente encontrado" };
+  }
+
+  // Verificar se é um Eidolon válido
+  if (
+    eidolon.category !== "SUMMON" ||
+    !eidolon.conditions.includes("EIDOLON_GROWTH")
+  ) {
+    return { success: false, error: "Alvo não é seu Eidolon" };
+  }
+
+  // Verificar se está adjacente
+  if (
+    !isAdjacentOmnidirectional(
+      caster.posX,
+      caster.posY,
+      eidolon.posX,
+      eidolon.posY
+    )
+  ) {
+    return { success: false, error: "Eidolon não está adjacente" };
+  }
+
+  // Verificar se Eidolon tem proteção física
+  const eidolonProtection = eidolon.physicalProtection;
+  if (eidolonProtection < 1) {
+    return {
+      success: false,
+      error: "Eidolon não tem proteção suficiente",
+    };
+  }
+
+  // Quantidade a drenar = FOCO do caster (máximo o que o Eidolon tem)
+  const drainAmount = Math.min(caster.focus, eidolonProtection);
+
+  // Remover proteção do Eidolon
+  eidolon.physicalProtection -= drainAmount;
+
+  // Adicionar proteção ao caster (respeitar máximo)
+  const casterMaxProtection = caster.maxPhysicalProtection;
+  const casterCurrentProtection = caster.physicalProtection;
+  const actualGain = Math.min(
+    drainAmount,
+    casterMaxProtection - casterCurrentProtection
+  );
+  caster.physicalProtection += actualGain;
+
+  return {
+    success: true,
+    healAmount: actualGain, // Usando healAmount para representar proteção ganhaconst
+    damageDealt: drainAmount, // Usando damageDealt para representar proteção drenada
+  };
+}
+
+// =============================================================================
+// HELPERS PARA INVOCAÇÃO DE EIDOLON
+// =============================================================================
+
+/**
+ * Verifica se uma unidade é o Eidolon de um invocador
+ */
+export function isEidolonOf(unit: BattleUnit, summoner: BattleUnit): boolean {
+  return (
+    unit.ownerId === summoner.ownerId &&
+    unit.category === "SUMMON" &&
+    unit.conditions.includes("EIDOLON_GROWTH")
+  );
+}
+
+/**
+ * Encontra o Eidolon de um invocador
+ */
+export function findEidolon(
+  summoner: BattleUnit,
+  allUnits: BattleUnit[]
+): BattleUnit | undefined {
+  return allUnits.find((u) => isEidolonOf(u, summoner) && u.isAlive);
+}
+
+/**
+ * Verifica se um invocador está adjacente ao seu Eidolon
+ */
+export function isAdjacentToEidolon(
+  summoner: BattleUnit,
+  allUnits: BattleUnit[]
+): boolean {
+  const eidolon = findEidolon(summoner, allUnits);
+  if (!eidolon) return false;
+
+  return isAdjacentOmnidirectional(
+    summoner.posX,
+    summoner.posY,
+    eidolon.posX,
+    eidolon.posY
+  );
+}
+
+/**
+ * Processa o crescimento do Eidolon quando ele mata uma unidade
+ * Retorna os novos stats bonus (para persistir na partida)
+ */
+export function processEidolonKill(
+  eidolon: BattleUnit,
+  currentBonus: number = 0
+): { newBonus: number; statsGained: number } {
+  const statsGained = 1; // +1 em cada stat por kill
+  const newBonus = currentBonus + statsGained;
+
+  // Aplicar bônus imediatamente aos stats do Eidolon
+  eidolon.combat += statsGained;
+  eidolon.speed += statsGained;
+  eidolon.focus += statsGained;
+  eidolon.armor += statsGained;
+  eidolon.vitality += statsGained;
+
+  // Aumentar HP máximo e atual proporcionalmente
+  const hpGain = statsGained * 2; // vitality * 2 = HP
+  eidolon.currentHp += hpGain;
+  // maxHp precisa ser recalculado baseado no novo vitality
+
+  // Recalcular proteções máximas
+  eidolon.maxPhysicalProtection = eidolon.armor * 2;
+  eidolon.maxMagicalProtection = eidolon.focus * 2;
+
+  return { newBonus, statsGained };
+}
+
+/**
+ * Reseta o Eidolon para stats base quando morre
+ * Retorna os stats base para uso na próxima batalha
+ */
+export function resetEidolonOnDeath(): {
+  combat: number;
+  speed: number;
+  focus: number;
+  armor: number;
+  vitality: number;
+} {
+  // Stats base do Eidolon (de summons.data.ts)
+  return {
+    combat: 3,
+    speed: 3,
+    focus: 3,
+    armor: 3,
+    vitality: 3,
   };
 }

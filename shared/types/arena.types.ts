@@ -22,66 +22,12 @@ export interface ArenaLobby {
   createdAt: Date;
 }
 
-// =============================================================================
-// UNIT TYPES
-// =============================================================================
-
-import type { UnitSize } from "../config/global.config";
-
-export interface ArenaUnit {
-  id: string;
-  dbId: string;
-  ownerId: string;
-  ownerKingdomId: string;
-  name: string;
-  avatar?: string; // ID do sprite (ex: "[1].png")
-  category: string;
-  troopSlot?: number;
-  level: number;
-  classCode?: string;
-  classFeatures: string[];
-  equipment: string[];
-  // Stats
-  combat: number;
-  speed: number;
-  focus: number;
-  armor: number;
-  vitality: number;
-  damageReduction: number;
-  currentHp: number;
-  maxHp: number;
-  // Battle state
-  posX: number;
-  posY: number;
-  movesLeft: number;
-  actionsLeft: number;
-  attacksLeftThisTurn: number; // Ataques restantes neste turno (extraAttacks)
-  isAlive: boolean;
-  actionMarks: number;
-  // Proteção Física - ver shared/config/balance.config.ts
-  physicalProtection: number;
-  maxPhysicalProtection: number;
-  // Proteção Mágica - ver shared/config/balance.config.ts
-  magicalProtection: number;
-  maxMagicalProtection: number;
-  conditions: string[];
-  hasStartedAction?: boolean;
-  actions?: string[];
-  // Tamanho da unidade (células ocupadas) - default NORMAL (1x1)
-  size?: UnitSize;
-  // Alcance de visão calculado (max(10, focus)) - calculado no servidor
-  visionRange?: number;
-}
-
-// =============================================================================
-// CONFIG TYPES
-// =============================================================================
-
 import type {
-  WeatherType,
-  BattleTerrainType,
+  TerrainType,
   TerritorySize,
   BattleObstacle,
+  TerrainColor,
+  BattleUnit,
 } from "./battle.types";
 
 export interface ArenaGrid {
@@ -90,13 +36,14 @@ export interface ArenaGrid {
 }
 
 export interface ArenaMapConfig {
-  weather: WeatherType;
-  weatherEmoji: string;
-  weatherName: string;
-  weatherEffect: string;
-  weatherCssFilter: string;
-  terrainType: BattleTerrainType;
+  terrainType: TerrainType;
   terrainName: string;
+  terrainEmoji: string;
+  terrainColors: {
+    primary: TerrainColor;
+    secondary: TerrainColor;
+    accent: TerrainColor;
+  };
   territorySize: TerritorySize;
   obstacles: BattleObstacle[];
 }
@@ -141,7 +88,7 @@ export interface ArenaBattle {
   currentPlayerId: string;
   activeUnitId?: string; // Unidade ativa escolhida pelo jogador neste turno
   actionOrder: string[];
-  units: ArenaUnit[];
+  units: BattleUnit[];
   hostKingdom: ArenaKingdom;
   guestKingdom: ArenaKingdom;
   turnTimer: number;
@@ -161,7 +108,7 @@ export interface ArenaBattleResult {
   reason: string;
   surrenderedBy?: string;
   disconnectedBy?: string;
-  finalUnits: ArenaUnit[];
+  finalUnits: BattleUnit[];
 }
 
 // =============================================================================
@@ -240,7 +187,7 @@ export interface BattleStartedResponse {
   battleId: string;
   lobbyId: string;
   config: ArenaConfig;
-  units: ArenaUnit[];
+  units: BattleUnit[];
   actionOrder: string[];
   hostKingdom: ArenaKingdom;
   guestKingdom: ArenaKingdom;
@@ -299,5 +246,5 @@ export interface BattleEndedResponse {
   surrenderedBy?: string;
   disconnectedBy?: string;
   abandonedBy?: string;
-  finalUnits?: ArenaUnit[];
+  finalUnits?: BattleUnit[];
 }

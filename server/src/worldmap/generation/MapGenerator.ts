@@ -1,6 +1,6 @@
 // server/src/worldmap/generation/MapGenerator.ts
 import { BiomeGenerator } from "./BiomeGenerator";
-import { TERRAIN_TYPES, TerrainType } from "../../../../shared/data/terrains";
+import { type TerrainType } from "../../../../shared/config/global.config";
 
 /**
  * Estrutura de um território gerado
@@ -208,7 +208,7 @@ export class MapGenerator {
         id: id,
         center: { x: centerX, y: centerY },
         type: "WATER",
-        terrain: TERRAIN_TYPES.OCEAN,
+        terrain: "OCEAN" as TerrainType,
         polygonPoints: polygonPoints,
         size: "LARGE",
         areaSlots: 0,

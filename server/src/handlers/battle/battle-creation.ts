@@ -2,6 +2,7 @@ import { generateBattleMap } from "../../logic/battle-map";
 import {
   BattleUnit,
   createBattleUnitsWithRandomPositions,
+  createBotUnitsFromTemplate,
   determineActionOrder,
   getArenaBattleGridSize,
 } from "../../utils/battle-unit.factory";
@@ -16,6 +17,9 @@ import {
   saveLobbyToDB,
 } from "./battle-persistence";
 import { startBattleTurnTimer } from "./battle-timer";
+import { checkAndProcessBotTurn } from "./battle-bot";
+import { KINGDOM_TEMPLATES } from "../../../../shared/data/kingdom-templates";
+import { processEidolonSummonsOnBattleStart } from "../../logic/summon-logic";
 
 interface CreateBattleParams {
   lobby: BattleLobby;
@@ -65,6 +69,20 @@ export async function createAndStartBattle({
     territorySize,
     unitPositions: occupiedPositions,
   });
+
+  // Processar invocações no início da batalha (ex: Eidolon)
+  const summonedUnits = processEidolonSummonsOnBattleStart(
+    allUnits,
+    gridWidth,
+    gridHeight,
+    mapConfig.obstacles?.map((o) => ({ x: o.posX, y: o.posY })) || [],
+    "arena"
+  );
+
+  // Adicionar unidades invocadas à lista
+  for (const summon of summonedUnits) {
+    allUnits.push(summon);
+  }
 
   const arenaConfig: ArenaConfig = {
     ...createBaseArenaConfig(),
@@ -141,12 +159,10 @@ export async function createAndStartBattle({
     } células)`
   );
   console.log("-".repeat(60));
-  console.log("[ARENA] 🌤️  CLIMA E TERRENO:");
+  console.log("[ARENA] �️  TERRENO:");
   console.log(
-    `[ARENA]   Clima: ${mapConfig.weatherName} ${mapConfig.weatherEmoji}`
+    `[ARENA]   Tipo: ${mapConfig.terrainName} ${mapConfig.terrainEmoji}`
   );
-  console.log(`[ARENA]   Efeito: ${mapConfig.weatherEffect}`);
-  console.log(`[ARENA]   Terreno: ${mapConfig.terrainName}`);
   console.log("-".repeat(60));
   console.log("[ARENA] 🪨 OBSTÁCULOS:");
   console.log(`[ARENA]   Quantidade: ${mapConfig.obstacles.length}`);
@@ -179,6 +195,169 @@ export async function createAndStartBattle({
       )
       .join(" → ")}`
   );
+  console.log("=".repeat(60) + "\n");
+
+  return battle;
+}
+
+// =============================================================================
+// BATALHA CONTRA BOT
+// =============================================================================
+
+const BOT_USER_ID = "__BOT__";
+const BOT_KINGDOM_ID = "__BOT_KINGDOM__";
+
+interface CreateBotBattleParams {
+  lobby: BattleLobby;
+  hostKingdom: any;
+  io: any;
+}
+
+/**
+ * Cria e inicia uma batalha contra um BOT
+ * Seleciona um template aleatório e cria um regente BOT com IA
+ */
+export async function createAndStartBotBattle({
+  lobby,
+  hostKingdom,
+  io,
+}: CreateBotBattleParams): Promise<Battle> {
+  const lobbyId = lobby.lobbyId;
+  const {
+    width: gridWidth,
+    height: gridHeight,
+    territorySize,
+  } = getArenaBattleGridSize();
+
+  const battleId = generateId();
+
+  // Selecionar um template aleatório para o BOT
+  const randomTemplate =
+    KINGDOM_TEMPLATES[Math.floor(Math.random() * KINGDOM_TEMPLATES.length)];
+
+  // Criar unidades BOT a partir do template
+  const botUnits = createBotUnitsFromTemplate(randomTemplate, BOT_USER_ID, {
+    id: BOT_KINGDOM_ID,
+    name: `🤖 ${randomTemplate.regent.name}`,
+  });
+
+  // Criar unidades do jogador e do BOT com posições aleatórias
+  const { units: allUnits, occupiedPositions } =
+    createBattleUnitsWithRandomPositions(
+      hostKingdom.units,
+      lobby.hostUserId,
+      { id: hostKingdom.id, name: hostKingdom.name },
+      botUnits,
+      BOT_USER_ID,
+      { id: BOT_KINGDOM_ID, name: `🤖 ${randomTemplate.regent.name}` },
+      gridWidth,
+      gridHeight,
+      "arena"
+    );
+
+  // Determinar ordem de ação baseada na soma de speed
+  const actionOrder = determineActionOrder(
+    allUnits,
+    lobby.hostUserId,
+    BOT_USER_ID
+  );
+
+  const mapConfig = generateBattleMap({
+    gridWidth,
+    gridHeight,
+    territorySize,
+    unitPositions: occupiedPositions,
+  });
+
+  // Processar invocações no início da batalha (ex: Eidolon)
+  const summonedUnits = processEidolonSummonsOnBattleStart(
+    allUnits,
+    gridWidth,
+    gridHeight,
+    mapConfig.obstacles?.map((o) => ({ x: o.posX, y: o.posY })) || [],
+    "arena"
+  );
+
+  // Adicionar unidades invocadas à lista
+  for (const summon of summonedUnits) {
+    allUnits.push(summon);
+  }
+
+  const arenaConfig: ArenaConfig = {
+    ...createBaseArenaConfig(),
+    grid: { width: gridWidth, height: gridHeight },
+    map: mapConfig,
+  };
+
+  // Atualizar o lobby com dados do BOT
+  lobby.guestUserId = BOT_USER_ID;
+  lobby.guestKingdomId = BOT_KINGDOM_ID;
+  lobby.status = "BATTLING";
+  lobby.vsBot = true;
+
+  const battle: Battle = {
+    id: battleId,
+    lobbyId,
+    gridWidth,
+    gridHeight,
+    round: 1,
+    currentTurnIndex: 0,
+    status: "ACTIVE",
+    turnTimer: 0,
+    actionOrder,
+    units: allUnits,
+    createdAt: new Date(),
+    config: arenaConfig,
+    roundActionsCount: new Map<string, number>([
+      [lobby.hostUserId, 0],
+      [BOT_USER_ID, 0],
+    ]),
+    hostUserId: lobby.hostUserId,
+    guestUserId: BOT_USER_ID,
+    hostKingdomId: hostKingdom.id,
+    guestKingdomId: BOT_KINGDOM_ID,
+    isArena: true,
+  };
+
+  activeBattles.set(battleId, battle);
+
+  await saveBattleToDB(battle);
+  await saveLobbyToDB(lobby);
+
+  startBattleTurnTimer(battle);
+
+  // Verificar se é turno do BOT e processar automaticamente
+  setTimeout(() => {
+    checkAndProcessBotTurn(battle);
+  }, 500); // Pequeno delay para garantir que cliente receba os eventos de início
+
+  console.log("\n" + "=".repeat(60));
+  console.log(`[ARENA] 🤖 NOVA BATALHA vs BOT INICIADA`);
+  console.log("=".repeat(60));
+  console.log(`[ARENA] ID da Batalha: ${battleId}`);
+  console.log(`[ARENA] Lobby ID: ${lobbyId}`);
+  console.log(`[ARENA] Host: ${hostKingdom.name} (${lobby.hostUserId})`);
+  console.log(
+    `[ARENA] BOT: ${randomTemplate.regent.name} (Template: ${randomTemplate.name})`
+  );
+  console.log("-".repeat(60));
+  console.log("[ARENA] 📐 GRID:");
+  console.log(`[ARENA]   Tamanho do Território: ${territorySize}`);
+  console.log(
+    `[ARENA]   Dimensões: ${gridWidth}x${gridHeight} (${
+      gridWidth * gridHeight
+    } células)`
+  );
+  console.log("-".repeat(60));
+  console.log("[ARENA] ⚔️  UNIDADES:");
+  allUnits.forEach((unit, idx) => {
+    const side = unit.ownerId === lobby.hostUserId ? "HOST" : "BOT 🤖";
+    console.log(
+      `[ARENA]   ${idx + 1}. [${side}] ${unit.name} - Pos: (${unit.posX},${
+        unit.posY
+      })`
+    );
+  });
   console.log("=".repeat(60) + "\n");
 
   return battle;

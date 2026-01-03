@@ -26,7 +26,7 @@ shared/types/                    # Tipos compartilhados (CRÍTICO!)
 Tipos usados por client E server → `shared/types/`
 
 ```typescript
-import type { ArenaUnit } from "../../../shared/types";
+import type { BattleUnit } from "../../../shared/types";
 ```
 
 ### 2. Backend = Fonte de Verdade
@@ -201,3 +201,30 @@ export function registerFeatureHandlers(io: Server, socket: Socket) {
 - ❌ Calcular lógica de jogo no frontend
 - ❌ Criar socket events sem verificar listener correspondente
 - ❌ Executar `npm run build/dev` (assumir que estão rodando)
+- ❌ Criar tipos novos se já existir um tipo similar - REUTILIZAR
+- ❌ Comentar ou depreciar código antigo - DELETAR
+- ❌ Manter arquivos não usados - DELETAR
+
+---
+
+## Princípios de Código Limpo
+
+### Reutilização de Tipos
+
+- **SEMPRE** usar tipos existentes antes de criar novos
+- Se um tipo existe em `shared/types/`, use-o
+- Se encontrar tipo duplicado/perdido, mova para `shared/types/` e delete o original
+- Tipo principal de unidade de batalha: `BattleUnit` (de `battle-unit.factory.ts`)
+
+### Limpeza Contínua
+
+- Ao refatorar: **DELETE** versões antigas, nunca comente
+- Ao encontrar código morto: **DELETE** imediatamente
+- Ao encontrar arquivos não usados: **DELETE**
+- Ao encontrar imports não usados: **DELETE**
+
+### Objetivo
+
+> **O FOCO É MANTER O CÓDIGO LIMPO E INTELIGENTE.**
+
+Menos código = menos bugs = mais fácil de manter.

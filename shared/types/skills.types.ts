@@ -69,39 +69,6 @@ export interface SkillExecutionResult {
   newPosY?: number;
 }
 
-/**
- * Unidade de combate para execução de skills
- */
-export interface SkillCombatUnit {
-  id: string;
-  ownerId: string;
-  name: string;
-  category: string;
-  combat: number;
-  speed: number;
-  focus: number;
-  armor: number;
-  vitality: number;
-  damageReduction: number;
-  currentHp: number;
-  posX: number;
-  posY: number;
-  movesLeft: number;
-  actionsLeft: number;
-  isAlive: boolean;
-  physicalProtection: number;
-  maxPhysicalProtection: number;
-  magicalProtection: number;
-  maxMagicalProtection: number;
-  conditions: string[];
-  actions: string[];
-  // Cooldowns de skills: skillCode -> rodadas restantes
-  skillCooldowns?: Record<string, number>;
-}
-
-/**
- * Definição de uma skill/habilidade
- */
 export interface SkillDefinition {
   code: string;
   name: string;

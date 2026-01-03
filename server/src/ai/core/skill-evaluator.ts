@@ -1,0 +1,353 @@
+// server/src/ai/core/skill-evaluator.ts
+// Avaliação e seleção de skills para a IA
+
+import { BattleUnit } from "../../../../shared/types/battle.types";
+import type {
+  SkillDefinition,
+  SkillRange,
+  SkillTargetType,
+  DEFAULT_RANGE_VALUES,
+} from "../../../../shared/types/skills.types";
+import type { AISkillPriority, AIProfile } from "../types/ai.types";
+import { manhattanDistance } from "./pathfinding";
+import { getEnemies, getAllies } from "./target-selection";
+
+interface SkillEvaluation {
+  skill: SkillDefinition;
+  score: number;
+  validTargets: BattleUnit[];
+  bestTarget: BattleUnit | null;
+  canUse: boolean;
+  reason: string;
+}
+
+/**
+ * Obtém o range efetivo de uma skill
+ */
+export function getSkillEffectiveRange(skill: SkillDefinition): number {
+  switch (skill.range) {
+    case "SELF":
+      return 0;
+    case "ADJACENT":
+      return 1;
+    case "RANGED":
+      return skill.rangeValue ?? 4;
+    case "AREA":
+      return skill.rangeValue ?? 2;
+    default:
+      return 1;
+  }
+}
+
+/**
+ * Verifica se uma skill pode ser usada em um alvo específico
+ */
+export function canUseSkillOnTarget(
+  caster: BattleUnit,
+  target: BattleUnit,
+  skill: SkillDefinition,
+  allUnits: BattleUnit[]
+): boolean {
+  const distance = manhattanDistance(
+    { x: caster.posX, y: caster.posY },
+    { x: target.posX, y: target.posY }
+  );
+  const range = getSkillEffectiveRange(skill);
+
+  // Verificar distância
+  if (distance > range) return false;
+
+  // Verificar tipo de alvo
+  const isAlly = target.ownerId === caster.ownerId;
+  const isSelf = target.id === caster.id;
+
+  switch (skill.targetType) {
+    case "SELF":
+      return isSelf;
+    case "ALLY":
+      return isAlly && !isSelf;
+    case "ENEMY":
+      return !isAlly;
+    case "ALL":
+      return true;
+    default:
+      // Se targetType não especificado, assumir ENEMY para skills ativas
+      return !isAlly;
+  }
+}
+
+/**
+ * Obtém todos os alvos válidos para uma skill
+ */
+export function getValidTargetsForSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  allUnits: BattleUnit[]
+): BattleUnit[] {
+  const aliveUnits = allUnits.filter((u) => u.isAlive);
+
+  return aliveUnits.filter((unit) =>
+    canUseSkillOnTarget(caster, unit, skill, allUnits)
+  );
+}
+
+/**
+ * Avalia uma skill de dano
+ */
+function evaluateDamageSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  validTargets: BattleUnit[]
+): { score: number; bestTarget: BattleUnit | null; reason: string } {
+  if (validTargets.length === 0) {
+    return { score: 0, bestTarget: null, reason: "Sem alvos válidos" };
+  }
+
+  // Priorizar alvos com HP baixo (para finalizar)
+  const targetsWithScores = validTargets.map((target) => {
+    const hpPercentage = target.currentHp / target.maxHp;
+    let score = 50; // Base score
+
+    // Bonus por HP baixo
+    if (hpPercentage <= 0.3) score += 30;
+    else if (hpPercentage <= 0.5) score += 15;
+
+    // Bonus se o alvo está com HP muito baixo (potencial de kill)
+    if (target.currentHp <= caster.combat * 2) {
+      score += 25; // Pode matar
+    }
+
+    return { target, score };
+  });
+
+  targetsWithScores.sort((a, b) => b.score - a.score);
+  const best = targetsWithScores[0];
+
+  return {
+    score: best.score,
+    bestTarget: best.target,
+    reason: `Dano em ${best.target.name}`,
+  };
+}
+
+/**
+ * Avalia uma skill de cura
+ */
+function evaluateHealSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  validTargets: BattleUnit[]
+): { score: number; bestTarget: BattleUnit | null; reason: string } {
+  // Filtrar apenas aliados que precisam de cura
+  const needsHealing = validTargets.filter((t) => t.currentHp < t.maxHp * 0.8);
+
+  if (needsHealing.length === 0) {
+    return { score: 0, bestTarget: null, reason: "Ninguém precisa de cura" };
+  }
+
+  // Priorizar aliados com HP mais baixo
+  const targetsWithScores = needsHealing.map((target) => {
+    const hpPercentage = target.currentHp / target.maxHp;
+    let score = 40;
+
+    // Quanto menor o HP, maior a prioridade
+    score += (1 - hpPercentage) * 50;
+
+    // Bonus extra se estiver crítico
+    if (hpPercentage <= 0.3) score += 20;
+
+    return { target, score };
+  });
+
+  targetsWithScores.sort((a, b) => b.score - a.score);
+  const best = targetsWithScores[0];
+
+  return {
+    score: best.score,
+    bestTarget: best.target,
+    reason: `Curar ${best.target.name}`,
+  };
+}
+
+/**
+ * Avalia uma skill de buff
+ */
+function evaluateBuffSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  validTargets: BattleUnit[]
+): { score: number; bestTarget: BattleUnit | null; reason: string } {
+  if (validTargets.length === 0) {
+    return { score: 0, bestTarget: null, reason: "Sem alvos para buff" };
+  }
+
+  // Por enquanto, priorizar aliados com mais HP (que vão durar mais)
+  const targetsWithScores = validTargets.map((target) => {
+    const hpPercentage = target.currentHp / target.maxHp;
+    let score = 30;
+    score += hpPercentage * 20;
+    return { target, score };
+  });
+
+  targetsWithScores.sort((a, b) => b.score - a.score);
+  const best = targetsWithScores[0];
+
+  return {
+    score: best.score,
+    bestTarget: best.target,
+    reason: `Buff em ${best.target.name}`,
+  };
+}
+
+/**
+ * Avalia uma skill de debuff
+ */
+function evaluateDebuffSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  validTargets: BattleUnit[]
+): { score: number; bestTarget: BattleUnit | null; reason: string } {
+  if (validTargets.length === 0) {
+    return { score: 0, bestTarget: null, reason: "Sem alvos para debuff" };
+  }
+
+  // Priorizar inimigos mais perigosos (com mais HP)
+  const targetsWithScores = validTargets.map((target) => {
+    const hpPercentage = target.currentHp / target.maxHp;
+    let score = 35;
+    score += hpPercentage * 25;
+    return { target, score };
+  });
+
+  targetsWithScores.sort((a, b) => b.score - a.score);
+  const best = targetsWithScores[0];
+
+  return {
+    score: best.score,
+    bestTarget: best.target,
+    reason: `Debuff em ${best.target.name}`,
+  };
+}
+
+/**
+ * Avalia uma skill completamente
+ */
+export function evaluateSkill(
+  caster: BattleUnit,
+  skill: SkillDefinition,
+  allUnits: BattleUnit[],
+  skillPriority: AISkillPriority
+): SkillEvaluation {
+  // Se prioridade é NONE, não avaliar skills
+  if (skillPriority === "NONE") {
+    return {
+      skill,
+      score: 0,
+      validTargets: [],
+      bestTarget: null,
+      canUse: false,
+      reason: "IA não usa skills",
+    };
+  }
+
+  const validTargets = getValidTargetsForSkill(caster, skill, allUnits);
+
+  if (validTargets.length === 0) {
+    return {
+      skill,
+      score: 0,
+      validTargets: [],
+      bestTarget: null,
+      canUse: false,
+      reason: "Sem alvos válidos",
+    };
+  }
+
+  // Avaliar baseado na categoria e targetType da skill
+  // Como não temos um campo "type" explícito, inferimos do targetType
+  let evaluation: {
+    score: number;
+    bestTarget: BattleUnit | null;
+    reason: string;
+  };
+
+  // Inferir tipo de skill baseado no targetType
+  const isHealingSkill =
+    skill.targetType === "ALLY" || skill.targetType === "SELF";
+  const isOffensiveSkill = skill.targetType === "ENEMY";
+
+  // Se skill aplica condição, verificar se é buff ou debuff
+  const appliesCondition = !!skill.conditionApplied;
+
+  if (isHealingSkill && appliesCondition) {
+    // Buff em aliados
+    evaluation = evaluateBuffSkill(caster, skill, validTargets);
+  } else if (isHealingSkill) {
+    // Cura (skill de suporte sem condição)
+    evaluation = evaluateHealSkill(caster, skill, validTargets);
+  } else if (isOffensiveSkill && appliesCondition) {
+    // Debuff em inimigos
+    evaluation = evaluateDebuffSkill(caster, skill, validTargets);
+  } else if (isOffensiveSkill) {
+    // Dano
+    evaluation = evaluateDamageSkill(caster, skill, validTargets);
+  } else {
+    // Skill genérica
+    evaluation = {
+      score: 20,
+      bestTarget: validTargets[0],
+      reason: "Skill genérica",
+    };
+  }
+
+  // Ajustar score baseado na prioridade
+  if (skillPriority === "SMART") {
+    evaluation.score *= 1.2; // Bonus para IA esperta
+  }
+
+  return {
+    skill,
+    score: evaluation.score,
+    validTargets,
+    bestTarget: evaluation.bestTarget,
+    canUse: evaluation.score > 0 && evaluation.bestTarget !== null,
+    reason: evaluation.reason,
+  };
+}
+
+/**
+ * Seleciona a melhor skill para usar
+ */
+export function selectBestSkill(
+  caster: BattleUnit,
+  availableSkills: SkillDefinition[],
+  allUnits: BattleUnit[],
+  profile: AIProfile
+): SkillEvaluation | null {
+  if (profile.skillPriority === "NONE" || availableSkills.length === 0) {
+    return null;
+  }
+
+  const evaluations = availableSkills
+    .map((skill) =>
+      evaluateSkill(caster, skill, allUnits, profile.skillPriority)
+    )
+    .filter((e) => e.canUse);
+
+  if (evaluations.length === 0) return null;
+
+  // Ordenar por score
+  evaluations.sort((a, b) => b.score - a.score);
+
+  // Para SMART, sempre pegar a melhor
+  // Para BASIC, adicionar aleatoriedade
+  if (profile.skillPriority === "BASIC" && evaluations.length > 1) {
+    // 70% chance de usar a melhor, 30% chance de usar qualquer outra
+    if (Math.random() > 0.7) {
+      const randomIndex = Math.floor(Math.random() * evaluations.length);
+      return evaluations[randomIndex];
+    }
+  }
+
+  return evaluations[0];
+}

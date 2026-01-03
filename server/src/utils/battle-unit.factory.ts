@@ -12,13 +12,19 @@ import {
   calculateUnitVision,
   type UnitSize,
 } from "../../../shared/config/global.config";
-import type { TerritorySize } from "../../../shared/types/battle.types";
+import type {
+  TerritorySize,
+  BattleUnit,
+} from "../../../shared/types/battle.types";
+
+// Re-exportar BattleUnit para compatibilidade com imports existentes
+export type { BattleUnit } from "../../../shared/types/battle.types";
 
 // Tipo para unidade do banco de dados
 interface DBUnit {
   id: string;
   name: string | null;
-  avatar: string | null; // Nome do arquivo sprite
+  avatar: string | null;
   category: string;
   troopSlot: number | null;
   level: number;
@@ -31,52 +37,7 @@ interface DBUnit {
   armor: number;
   vitality: number;
   damageReduction: number | null;
-  size?: UnitSize | null; // Tamanho da unidade
-}
-
-// Tipo para BattleUnit
-export interface BattleUnit {
-  id: string;
-  sourceUnitId: string;
-  ownerId: string;
-  ownerKingdomId: string;
-  name: string;
-  avatar?: string; // Nome do arquivo sprite
-  category: string;
-  troopSlot?: number;
-  level: number;
-  classCode?: string;
-  classFeatures: string[];
-  equipment: string[];
-  combat: number;
-  speed: number;
-  focus: number;
-  armor: number;
-  vitality: number;
-  damageReduction: number;
-  currentHp: number;
-  maxHp: number;
-  posX: number;
-  posY: number;
-  movesLeft: number;
-  actionsLeft: number;
-  attacksLeftThisTurn: number; // Ataques restantes neste turno (para extraAttacks)
-  isAlive: boolean;
-  actionMarks: number;
-  physicalProtection: number;
-  maxPhysicalProtection: number;
-  magicalProtection: number;
-  maxMagicalProtection: number;
-  conditions: string[];
-  hasStartedAction: boolean;
-  actions: string[];
-  grabbedByUnitId?: string;
-  // Tamanho da unidade (células ocupadas) - default NORMAL (1x1)
-  size: UnitSize;
-  // Alcance de visão calculado (max(10, focus))
-  visionRange: number;
-  // Cooldowns de skills: skillCode -> rodadas restantes
-  skillCooldowns: Record<string, number>;
+  size?: UnitSize | null;
 }
 
 interface KingdomInfo {
@@ -180,6 +141,8 @@ export function createBattleUnit(
     visionRange: calculateUnitVision(dbUnit.focus),
     // Cooldowns de skills inicializam vazios
     skillCooldowns: {},
+    // Controle IA desabilitado por padrão
+    isAIControlled: false,
   };
 }
 
@@ -358,4 +321,46 @@ export function determineActionOrder(
   return hostInitiative >= guestInitiative
     ? [hostUserId, guestUserId]
     : [guestUserId, hostUserId];
+}
+
+// =============================================================================
+// BOT UNITS FROM TEMPLATE
+// =============================================================================
+
+import type { KingdomTemplateDefinition } from "../../../shared/data/kingdom-templates";
+
+/**
+ * Cria unidades de BOT a partir de um template de reino
+ * Retorna apenas o Regente como unidade BOT (para batalha 1v1)
+ */
+export function createBotUnitsFromTemplate(
+  template: KingdomTemplateDefinition,
+  botUserId: string,
+  botKingdom: KingdomInfo
+): DBUnit[] {
+  const regent = template.regent;
+
+  // Criar um DBUnit fake a partir do template do regente
+  const regentUnit: DBUnit = {
+    id: `bot_regent_${Date.now()}`,
+    name: `🤖 ${regent.name}`,
+    avatar: regent.avatar || "1",
+    category: "REGENT",
+    troopSlot: null,
+    level: 1,
+    classCode: null, // BOT não tem classe específica
+    classFeatures: regent.initialSkillId
+      ? JSON.stringify([regent.initialSkillId])
+      : "[]",
+    equipment: "[]",
+    combat: regent.combat,
+    speed: regent.speed,
+    focus: regent.focus,
+    armor: regent.armor,
+    vitality: regent.vitality,
+    damageReduction: null,
+    size: "NORMAL",
+  };
+
+  return [regentUnit];
 }

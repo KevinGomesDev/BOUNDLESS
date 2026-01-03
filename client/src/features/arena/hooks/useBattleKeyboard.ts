@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from "react";
-import type { ArenaUnit } from "../types/arena.types";
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 interface UseBattleKeyboardOptions {
-  selectedUnit: ArenaUnit | null;
+  selectedUnit: BattleUnit | null;
   isMyTurn: boolean;
   canMove: boolean;
   onMoveDirection: (dx: number, dy: number) => void;

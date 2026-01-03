@@ -14,15 +14,37 @@ import {
   PauseMenu,
 } from "./battle";
 import { FullScreenLoading } from "@/components/FullScreenLoading";
-import { BattleChat } from "../../chat";
-import type { ArenaUnit } from "../types/arena.types";
+import { ChatProvider, useChat } from "../../chat";
+import { ChatBox } from "../../chat/components/ChatBox";
+import type { BattleUnit } from "../../../../../shared/types/battle.types";
 
 /**
- * ArenaBattleView - Tela completa de batalha da Arena
- * Inclui o grid canvas, painel de unidade, controles e logs
+ * ArenaBattleView - Wrapper com ChatProvider
  */
 export const ArenaBattleView: React.FC = () => {
   const { user } = useAuth();
+  const {
+    state: { battle },
+  } = useArena();
+
+  // Precisa do battleId para o ChatProvider
+  if (!battle || !user) {
+    return <FullScreenLoading message="Preparando a arena de batalha..." />;
+  }
+
+  return (
+    <ChatProvider context="BATTLE" contextId={battle.battleId}>
+      <ArenaBattleViewInner />
+    </ChatProvider>
+  );
+};
+
+/**
+ * ArenaBattleViewInner - Conteúdo da batalha (dentro do ChatProvider)
+ */
+const ArenaBattleViewInner: React.FC = () => {
+  const { user } = useAuth();
+  const { state: chatState } = useChat();
   const canvasRef = useRef<ArenaBattleCanvasRef>(null);
   const {
     state: {
@@ -64,11 +86,19 @@ export const ArenaBattleView: React.FC = () => {
   // Handler para atalhos de teclado (ESC = menu pausa, Espaço = finalizar turno)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar se estiver digitando em um input/textarea
+      const target = e.target as HTMLElement;
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
       if (e.key === "Escape" && !isPauseMenuOpen) {
         setIsPauseMenuOpen(true);
       }
       // Espaço finaliza o turno se for meu turno e tenho unidade selecionada
-      if (e.key === " " && battle && user) {
+      // MAS não se estiver digitando no chat
+      if (e.key === " " && battle && user && !isTyping) {
         e.preventDefault(); // Evitar scroll da página
         const isMyTurn = battle.currentPlayerId === user.id;
         const myUnit = units.find((u) => u.ownerId === user.id && u.isAlive);
@@ -89,9 +119,10 @@ export const ArenaBattleView: React.FC = () => {
   useEffect(() => {
     autoEndTriggeredRef.current = false;
     cameraCenteredRef.current = null; // Permitir centralizar novamente no novo turno
-    // Limpar toda a seleção quando o turno muda
-    setSelectedUnitId(null);
+    beginActionCalledRef.current = null; // Resetar para permitir novo beginAction
+    // Limpar ação pendente quando o turno muda
     setPendingAction(null);
+    // NÃO limpar selectedUnitId aqui - será gerenciado pelo próximo useEffect
   }, [battle?.currentPlayerId, battle?.round]);
 
   // Auto-selecionar a unidade do turno atual quando muda de turno ou monta
@@ -102,60 +133,71 @@ export const ArenaBattleView: React.FC = () => {
     if (!battle || !user) return;
 
     const isMyTurnNow = battle.currentPlayerId === user.id;
-
-    // Reset do ref quando não é mais meu turno
-    if (!isMyTurnNow) {
-      beginActionCalledRef.current = null;
-      return;
-    }
+    const turnKey = `${battle.currentPlayerId}-${battle.round}`;
 
     // Encontrar minhas unidades vivas
     const myAliveUnits = units.filter(
       (u) => u.ownerId === user.id && u.isAlive
     );
-    if (myAliveUnits.length === 0) return;
 
-    // Só selecionar automaticamente se for a ÚLTIMA unidade viva
-    // Se tiver múltiplas, o jogador deve escolher
-    if (myAliveUnits.length === 1) {
-      setSelectedUnitId(myAliveUnits[0].id);
+    // Se não é meu turno, limpar seleção (a não ser que queira ver info da unidade)
+    if (!isMyTurnNow) {
+      beginActionCalledRef.current = null;
+      // Limpar seleção quando turno muda para outro jogador
+      if (selectedUnitId) {
+        const selectedIsEnemy =
+          units.find((u) => u.id === selectedUnitId)?.ownerId !== user.id;
+        if (!selectedIsEnemy) {
+          // Se está selecionada uma unidade minha mas não é meu turno, manter para visualização
+        }
+      }
+      return;
     }
 
-    // Guiar câmera para a unidade selecionada APENAS UMA VEZ por turno
-    // Usa a combinação currentPlayerId+round como chave para detectar novo turno
-    const turnKey = `${battle.currentPlayerId}-${battle.round}`;
-    if (cameraCenteredRef.current !== turnKey) {
-      cameraCenteredRef.current = turnKey;
-      // Se só tem uma unidade, centralizar nela
-      if (myAliveUnits.length === 1) {
+    // === É MEU TURNO ===
+
+    // Se só tem uma unidade viva, sempre selecionar ela
+    if (myAliveUnits.length === 1) {
+      const myUnit = myAliveUnits[0];
+
+      // Selecionar a unidade
+      if (selectedUnitId !== myUnit.id) {
+        console.log(
+          `[ArenaBattleView] 🎯 Auto-selecionando única unidade: ${myUnit.name}`
+        );
+        setSelectedUnitId(myUnit.id);
+      }
+
+      // Guiar câmera APENAS UMA VEZ por turno
+      if (cameraCenteredRef.current !== turnKey) {
+        cameraCenteredRef.current = turnKey;
+        setTimeout(() => {
+          canvasRef.current?.centerOnUnit(myUnit.id);
+        }, 100);
+      }
+
+      // Iniciar ação se ainda não iniciou
+      const hasNoActiveUnit = !battle.activeUnitId;
+      const unitNotStarted = !myUnit.hasStartedAction;
+      const notCalledYet = beginActionCalledRef.current !== turnKey;
+
+      if (hasNoActiveUnit && unitNotStarted && notCalledYet) {
+        console.log(
+          `[ArenaBattleView] 🎬 Auto-iniciando ação para ${myUnit.name}`
+        );
+        beginActionCalledRef.current = turnKey;
+        setTimeout(() => {
+          beginAction(myUnit.id);
+        }, 100);
+      }
+    } else if (myAliveUnits.length > 1) {
+      // Múltiplas unidades - jogador deve escolher
+      // Apenas centralizar câmera na primeira se ainda não centralizou
+      if (cameraCenteredRef.current !== turnKey) {
+        cameraCenteredRef.current = turnKey;
         setTimeout(() => {
           canvasRef.current?.centerOnUnit(myAliveUnits[0].id);
         }, 100);
-      }
-    }
-
-    // Se ainda não há unidade ativa E só tem uma unidade → iniciar automaticamente
-    // Se tiver múltiplas unidades, o jogador deve selecionar uma primeiro
-    if (myAliveUnits.length === 1) {
-      const myAliveUnit = myAliveUnits[0];
-      const hasNoActiveUnit = !battle.activeUnitId;
-      const shouldBeginAction =
-        hasNoActiveUnit &&
-        !myAliveUnit.hasStartedAction &&
-        myAliveUnit.movesLeft === 0 &&
-        myAliveUnit.actionsLeft === 0 &&
-        (myAliveUnit.attacksLeftThisTurn ?? 0) === 0 &&
-        beginActionCalledRef.current !== turnKey;
-
-      if (shouldBeginAction) {
-        console.log(
-          `[ArenaBattleView] 🎬 Auto-iniciando ação para ${myAliveUnit.name} (turnKey: ${turnKey})`
-        );
-        beginActionCalledRef.current = turnKey;
-        // Pequeno delay para garantir que o estado está sincronizado
-        setTimeout(() => {
-          beginAction(myAliveUnit.id);
-        }, 50);
       }
     }
   }, [
@@ -165,6 +207,7 @@ export const ArenaBattleView: React.FC = () => {
     user?.id,
     units,
     beginAction,
+    selectedUnitId,
   ]);
 
   // Auto-encerrar turno quando movimentos E ações acabarem
@@ -238,7 +281,7 @@ export const ArenaBattleView: React.FC = () => {
   }, [arenaError]);
 
   // Handler para centralizar mapa em uma unidade (chamado pelo InitiativePanel)
-  const handleInitiativeUnitClick = useCallback((unit: ArenaUnit) => {
+  const handleInitiativeUnitClick = useCallback((unit: BattleUnit) => {
     canvasRef.current?.centerOnUnit(unit.id);
   }, []);
 
@@ -383,7 +426,7 @@ export const ArenaBattleView: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyboardMove]);
 
-  const handleUnitClick = (unit: ArenaUnit) => {
+  const handleUnitClick = (unit: BattleUnit) => {
     console.log(
       "%c[ArenaBattleView] 🎯 Clique em unidade",
       "color: #06b6d4; font-weight: bold;",
@@ -423,6 +466,18 @@ export const ArenaBattleView: React.FC = () => {
 
     // Comportamento padrão: selecionar unidade
     if (unit.ownerId === user.id) {
+      // Toggle: clicar na mesma unidade desseleciona
+      if (selectedUnitId === unit.id) {
+        console.log(
+          "%c[ArenaBattleView] 🔄 Desselecionando unidade (toggle)",
+          "color: #f59e0b;",
+          { unitId: unit.id }
+        );
+        setSelectedUnitId(null);
+        setPendingAction(null);
+        return;
+      }
+
       console.log(
         "%c[ArenaBattleView] ✅ Selecionando minha unidade",
         "color: #22c55e;",
@@ -441,11 +496,18 @@ export const ArenaBattleView: React.FC = () => {
       // → iniciar ação desta unidade
       const hasNoActiveUnit = !battle.activeUnitId;
       const hasNotStarted = !unit.hasStartedAction && unit.movesLeft === 0;
-      if (isMyTurn && hasNoActiveUnit && hasNotStarted) {
+
+      // Caso especial: após reconexão, unidade pode ter hasStartedAction mas sem activeUnitId
+      const needsReactivation = unit.hasStartedAction && hasNoActiveUnit;
+
+      if (
+        isMyTurn &&
+        ((hasNoActiveUnit && hasNotStarted) || needsReactivation)
+      ) {
         console.log(
-          "%c[ArenaBattleView] ▶️ Iniciando ação da unidade (primeira do turno)",
+          "%c[ArenaBattleView] ▶️ Iniciando/Reativando ação da unidade",
           "color: #f59e0b;",
-          { unitId: unit.id }
+          { unitId: unit.id, needsReactivation }
         );
         beginAction(unit.id);
       } else if (
@@ -485,9 +547,14 @@ export const ArenaBattleView: React.FC = () => {
 
     if (!selectedUnit || !isMyTurn) {
       console.log(
-        "%c[ArenaBattleView] ⚠️ Movimento inválido - sem unidade ou não é meu turno",
+        "%c[ArenaBattleView] ⚠️ Clique em célula vazia - desselecionando",
         "color: #f59e0b;"
       );
+      // Desselecionar ao clicar fora quando não pode mover
+      if (selectedUnitId) {
+        setSelectedUnitId(null);
+        setPendingAction(null);
+      }
       return;
     }
 
@@ -643,6 +710,7 @@ export const ArenaBattleView: React.FC = () => {
               onObstacleClick={handleObstacleClick}
               unitDirection={unitDirection}
               pendingAction={pendingAction}
+              activeBubbles={chatState.activeBubbles}
             />
           </div>
         </div>
@@ -677,11 +745,79 @@ export const ArenaBattleView: React.FC = () => {
       )}
 
       {/* Chat de Batalha - Abre com Enter */}
-      <BattleChat
-        battleId={battle.battleId}
-        currentUnitId={battle.activeUnitId}
-        units={units}
-        currentUserId={user.id}
+      <BattleChatUI
+        currentUnitId={selectedUnitId || battle.activeUnitId || myUnits[0]?.id}
+      />
+    </div>
+  );
+};
+
+/**
+ * Componente interno do Chat (sem Provider, usado dentro do ArenaBattleViewInner)
+ */
+const BattleChatUI: React.FC<{
+  currentUnitId?: string | null;
+}> = ({ currentUnitId }) => {
+  const { state, openChat, closeChat, toggleChat } = useChat();
+
+  // Handler para tecla Enter
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        toggleChat();
+      }
+    },
+    [toggleChat]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
+  if (!state.isOpen) {
+    return (
+      <div className="fixed bottom-4 right-4 z-40">
+        <button
+          onClick={openChat}
+          className="
+            flex items-center gap-2 px-3 py-1.5
+            bg-citadel-obsidian/80 backdrop-blur-sm
+            border border-metal-iron/30 rounded-lg
+            text-parchment-dark hover:text-parchment-light
+            hover:border-metal-bronze/50
+            transition-all text-xs
+          "
+          title="Pressione Enter para abrir o chat"
+        >
+          <span>💬</span>
+          <span className="hidden sm:inline">Enter para chat</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed bottom-4 right-4 z-40 w-72">
+      <ChatBox
+        currentUnitId={currentUnitId || undefined}
+        variant="compact"
+        placeholder="Mensagem... (Enter para enviar)"
+        maxHeight="150px"
+        title="Chat de Batalha"
+        onClose={closeChat}
       />
     </div>
   );

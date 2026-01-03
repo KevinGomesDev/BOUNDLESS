@@ -61,7 +61,6 @@ export {
 export type {
   ArenaLobby,
   ArenaLobbyStatus,
-  ArenaUnit,
   ArenaGrid,
   ArenaKingdom,
   ArenaBattle,

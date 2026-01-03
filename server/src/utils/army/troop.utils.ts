@@ -24,6 +24,7 @@ export interface TroopTemplateData {
   slotIndex: number; // 0-4
   name: string;
   description?: string; // História/descrição opcional da tropa
+  avatar?: string; // ID do sprite (ex: "1")
   passiveId: string;
   resourceType: keyof PlayerResources;
   combat: number;
@@ -150,6 +151,7 @@ export async function createTroopTemplatesForKingdom(
         slotIndex: t.slotIndex,
         name: t.name.trim(),
         description: t.description || null,
+        avatar: t.avatar || null,
         passiveId: t.passiveId,
         resourceType: t.resourceType,
         combat: t.combat,

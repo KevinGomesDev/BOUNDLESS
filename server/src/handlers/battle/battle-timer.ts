@@ -27,6 +27,7 @@ import {
   emitBattleEndEvents,
   processNewRound,
 } from "../../logic/round-control";
+import { checkAndProcessBotTurn } from "./battle-bot";
 
 function hasConnectedPlayers(battle: Battle): boolean {
   const lobby = battleLobbies.get(battle.lobbyId);
@@ -291,4 +292,7 @@ async function handleTimerExpired(battle: Battle): Promise<void> {
 
   startBattleTurnTimer(battle);
   await saveBattleToDB(battle);
+
+  // Verificar se é turno do BOT e processar automaticamente
+  checkAndProcessBotTurn(battle);
 }

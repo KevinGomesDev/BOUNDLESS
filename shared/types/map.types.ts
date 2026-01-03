@@ -1,22 +1,13 @@
 // shared/types/map.types.ts
 // Tipos de Mapa compartilhados entre Frontend e Backend
 
-import type { TerritorySize } from "../config/global.config";
+import type { TerritorySize, TerrainType } from "../config/global.config";
 
-/**
- * Tipos de terreno do mapa mundial
- */
-export type TerrainName =
-  | "ICE"
-  | "MOUNTAIN"
-  | "FOREST"
-  | "PLAINS"
-  | "WASTELAND"
-  | "DESERT"
-  | "OCEAN";
+// Re-export TerrainType e TerritorySize for convenience
+export type { TerritorySize, TerrainType };
 
-// Re-export TerritorySize for convenience
-export type { TerritorySize };
+// Alias legado para compatibilidade
+export type TerrainName = TerrainType;
 
 /**
  * Tipo do território (terra ou água)
@@ -33,7 +24,7 @@ export interface Territory {
   centerX: number;
   centerY: number;
   type: TerritoryType;
-  terrainType: TerrainName;
+  terrainType: TerrainType;
   polygonData: string;
   size: TerritorySize;
   areaSlots: number;
@@ -44,7 +35,6 @@ export interface Territory {
   constructionCount: number;
   fortressCount: number;
   isDisabled: boolean;
-  // Legacy fields (deprecated, use structures array instead)
   name?: string;
   structures?: unknown[];
   units?: unknown[];

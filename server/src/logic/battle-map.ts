@@ -1,20 +1,17 @@
 // server/src/logic/battle-map.ts
-// Lógica para geração de mapas de batalha (clima, terreno, obstáculos)
+// Lógica para geração de mapas de batalha (terreno, obstáculos)
 
 import type {
-  WeatherType,
-  BattleTerrainType,
+  TerrainType,
   TerritorySize,
   BattleObstacle,
   BattleMapConfig,
 } from "../../../shared/types/battle.types";
 import {
-  getRandomWeather,
   getRandomTerrain,
   getRandomTerritorySize,
   getObstacleCount,
-  BATTLE_TERRAIN_DEFINITIONS,
-  WEATHER_DEFINITIONS,
+  TERRAIN_DEFINITIONS,
 } from "../../../shared/types/battle.types";
 import type { ArenaMapConfig } from "../../../shared/types/arena.types";
 import { OBSTACLE_CONFIG } from "../../../shared/config/global.config";
@@ -31,7 +28,7 @@ function generateObstacleId(): string {
 interface GenerateObstaclesParams {
   gridWidth: number;
   gridHeight: number;
-  terrainType: BattleTerrainType;
+  terrainType: TerrainType;
   territorySize: TerritorySize;
   excludePositions?: { x: number; y: number }[]; // Posições onde NÃO colocar obstáculos
 }
@@ -51,7 +48,7 @@ export function generateObstacles(
   } = params;
 
   const obstacleCount = getObstacleCount(territorySize);
-  const terrain = BATTLE_TERRAIN_DEFINITIONS[terrainType];
+  const terrain = TERRAIN_DEFINITIONS[terrainType];
   const obstacles: BattleObstacle[] = [];
 
   // Criar set de posições excluídas para lookup rápido
@@ -120,8 +117,7 @@ export function generateObstacles(
 interface GenerateBattleMapParams {
   gridWidth: number;
   gridHeight: number;
-  weather?: WeatherType;
-  terrainType?: BattleTerrainType;
+  terrainType?: TerrainType;
   territorySize?: TerritorySize;
   unitPositions?: { x: number; y: number }[]; // Posições das unidades
 }
@@ -161,15 +157,13 @@ export function generateBattleMap(
   const {
     gridWidth: gw,
     gridHeight: gh,
-    weather = getRandomWeather(),
     terrainType = getRandomTerrain(),
     territorySize = getRandomTerritorySize(),
     unitPositions: positions = [],
   } = params;
 
-  // Obter definições de clima e terreno
-  const weatherDef = WEATHER_DEFINITIONS[weather];
-  const terrainDef = BATTLE_TERRAIN_DEFINITIONS[terrainType];
+  // Obter definição de terreno
+  const terrainDef = TERRAIN_DEFINITIONS[terrainType];
 
   // Gerar obstáculos
   const obstacles = generateObstacles({
@@ -181,13 +175,10 @@ export function generateBattleMap(
   });
 
   return {
-    weather,
-    weatherEmoji: weatherDef.emoji,
-    weatherName: weatherDef.name,
-    weatherEffect: weatherDef.effect,
-    weatherCssFilter: weatherDef.cssFilter,
     terrainType,
     terrainName: terrainDef.name,
+    terrainEmoji: terrainDef.emoji,
+    terrainColors: terrainDef.colors,
     territorySize,
     obstacles,
   };
