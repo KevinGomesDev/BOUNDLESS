@@ -25,7 +25,7 @@ export interface ConditionEffects {
 
   // === MODIFICADORES DE ATRIBUTOS ===
   combatMod?: number;
-  acuityMod?: number;
+  speedMod?: number;
   focusMod?: number;
   armorMod?: number;
   vitalityMod?: number;

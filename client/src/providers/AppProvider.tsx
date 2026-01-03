@@ -12,7 +12,6 @@ import { KingdomProvider } from "../features/kingdom";
 import { MatchProvider } from "../features/match";
 import { ArenaProvider } from "../features/arena";
 import { EventProvider } from "../features/events";
-import { DiceRollProvider } from "../features/dice-roll";
 
 interface AppProviderProps {
   children: React.ReactNode;
@@ -28,8 +27,7 @@ interface AppProviderProps {
  * 4. EventProvider - Sistema de eventos/toasts
  * 5. KingdomProvider - Gerenciamento de reinos
  * 6. MatchProvider - Gerenciamento de partidas
- * 7. DiceRollProvider - Sistema de rolagem de dados
- * 8. ArenaProvider - Gerenciamento de arena PvP
+ * 7. ArenaProvider - Gerenciamento de arena PvP
  */
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   return (
@@ -39,9 +37,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           <EventProvider>
             <KingdomProvider>
               <MatchProvider>
-                <DiceRollProvider>
-                  <ArenaProvider>{children}</ArenaProvider>
-                </DiceRollProvider>
+                <ArenaProvider>{children}</ArenaProvider>
               </MatchProvider>
             </KingdomProvider>
           </EventProvider>

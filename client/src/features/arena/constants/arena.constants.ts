@@ -106,7 +106,7 @@ export const ACTIONS_INFO: Record<
  */
 export const ATTRIBUTE_TOOLTIPS: Record<string, string> = {
   combat: "Bônus de ataque corpo-a-corpo",
-  acuity: "Bônus de iniciativa e percepção",
+  speed: "Velocidade - determina chance de esquiva e ordem de turno",
   focus: "Bônus para habilidades mágicas",
   armor: "Redução de dano recebido",
   vitality: "Pontos de vida máximos = Vitality × 2",

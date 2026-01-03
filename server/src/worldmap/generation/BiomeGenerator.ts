@@ -1,5 +1,5 @@
 // server/src/worldmap/generation/BiomeGenerator.ts
-import { TERRAIN_TYPES, TerrainType } from "../data/terrains";
+import { TERRAIN_TYPES, TerrainType } from "../../../../shared/data/terrains";
 import { MathUtils } from "../../utils/math";
 
 interface BioSeed {

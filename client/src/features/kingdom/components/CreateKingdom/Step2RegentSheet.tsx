@@ -16,13 +16,13 @@ interface Step2RegentSheetProps {
   setSelectedSkillId: (value: string) => void;
   attributes: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
   };
   updateAttribute: (
-    key: "combat" | "acuity" | "focus" | "armor" | "vitality",
+    key: "combat" | "speed" | "focus" | "armor" | "vitality",
     value: number
   ) => void;
   totalPoints: number;

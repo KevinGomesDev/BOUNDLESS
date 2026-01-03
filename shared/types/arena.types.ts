@@ -43,7 +43,7 @@ export interface ArenaUnit {
   equipment: string[];
   // Stats
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -260,38 +260,35 @@ export interface UnitAttackedResponse {
   battleId: string;
   attackerUnitId: string;
   targetUnitId: string;
-  // Legado (manter para compatibilidade)
-  diceCount: number;
-  rolls: number[];
+  targetObstacleId?: string;
+  targetType: "unit" | "corpse" | "obstacle";
+  // Dano e resultado
   damage: number;
   damageType: string;
   targetHpAfter: number;
-  targetProtection: number;
   attackerActionsLeft: number;
-  attackerAttacksLeftThisTurn: number; // Ataques extras restantes
-  // Dados detalhados de rolagem
-  missed?: boolean;
-  attackDiceCount: number;
-  attackRolls: number[];
-  attackSuccesses: number;
+  attackerAttacksLeftThisTurn: number;
+  missed: boolean;
   rawDamage: number;
-  defenseDiceCount: number;
-  defenseRolls: number[];
-  defenseSuccesses: number;
   damageReduction: number;
   finalDamage: number;
   targetPhysicalProtection: number;
   targetMagicalProtection: number;
   targetDefeated: boolean;
-  // Dados do atacante para o painel visual
+  obstacleDestroyed?: boolean;
+  obstacleId?: string;
+  // Dados de esquiva (novo sistema)
+  dodgeChance?: number;
+  dodgeRoll?: number;
+  // Dados do atacante para exibição
   attackerName: string;
   attackerIcon: string;
   attackerCombat: number;
-  // Dados do defensor para o painel visual
+  // Dados do defensor para exibição
   targetName: string;
   targetIcon: string;
   targetCombat: number;
-  targetAcuity: number; // Acuity é usado para defesa
+  targetSpeed: number;
 }
 
 export interface BattleEndedResponse {

@@ -1,6 +1,6 @@
 // src/utils/conquest.utils.ts
 
-import { EVENTS, EventDef } from "../data/events";
+import { EVENTS, EventDef } from "../../../shared/data/events";
 import { rollD6Test, AdvantageMod } from "../logic/dice-system";
 import {
   ALL_ATTRIBUTE_KEYS,

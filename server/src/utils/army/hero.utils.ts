@@ -9,7 +9,7 @@ import {
   HERO_ATTRIBUTE_POINTS_PER_LEVEL,
 } from "../../types";
 import { spendResources } from "../turn.utils";
-import { getClassByCode } from "../../data/classes.data";
+import { getClassByCode } from "../../../../shared/data/classes.data";
 import { getResourceName } from "../../../../shared/config/global.config";
 
 // ... (calculateHeroLevelUpCost, calculateHeroRecruitmentCost, canHeroLevelUp e levelUpHero permanecem iguais) ...
@@ -120,7 +120,7 @@ export async function levelUpHero(
   playerId: string,
   attributeDistribution: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -158,7 +158,7 @@ export async function levelUpHero(
   // Valida distribuição de pontos (4 para Herói)
   const totalDistributed =
     attributeDistribution.combat +
-    attributeDistribution.acuity +
+    attributeDistribution.speed +
     attributeDistribution.focus +
     attributeDistribution.armor +
     attributeDistribution.vitality;
@@ -176,7 +176,7 @@ export async function levelUpHero(
     data: {
       level: newLevel,
       combat: unit.combat + attributeDistribution.combat,
-      acuity: unit.acuity + attributeDistribution.acuity,
+      speed: unit.speed + attributeDistribution.speed,
       focus: unit.focus + attributeDistribution.focus,
       armor: unit.armor + attributeDistribution.armor,
       vitality: unit.vitality + attributeDistribution.vitality,
@@ -204,7 +204,7 @@ export async function recruitHero(
     heroClass: string; // Código da classe (ex: "CLERIC", "WIZARD")
     attributeDistribution: {
       combat: number;
-      acuity: number;
+      speed: number;
       focus: number;
       armor: number;
       vitality: number;
@@ -253,9 +253,9 @@ export async function recruitHero(
   }
 
   // Valida distribuição de pontos (15 pontos iniciais)
-  const { combat, acuity, focus, armor, vitality } =
+  const { combat, speed, focus, armor, vitality } =
     heroData.attributeDistribution;
-  const totalPoints = combat + acuity + focus + armor + vitality;
+  const totalPoints = combat + speed + focus + armor + vitality;
 
   if (totalPoints !== 15) {
     return {
@@ -303,7 +303,7 @@ export async function recruitHero(
       classCode: heroClass.code, // Código da classe (dados em data/classes.data.ts)
       classFeatures: "[]",
       combat,
-      acuity,
+      speed,
       focus,
       armor,
       vitality,

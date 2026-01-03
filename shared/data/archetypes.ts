@@ -1,7 +1,7 @@
-// src/data/archetypes.ts
+// shared/data/archetypes.ts
 // Definições de arquétipos de classe e suas propriedades
 
-import type { PlayerResources } from "../types";
+import type { PlayerResources } from "../types/match.types";
 
 export type ClassArchetype =
   | "MAGICA"

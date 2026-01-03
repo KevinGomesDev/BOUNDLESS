@@ -1,12 +1,12 @@
-// src/data/crises.ts
-import { CrisisType } from "../types";
+// shared/data/crises.ts
+import type { CrisisType } from "../types/match.types";
 
 // Interface auxiliar apenas para este arquivo
 interface CrisisDefinition {
   type: CrisisType;
   stats: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -22,7 +22,7 @@ export const CRISIS_DEFINITIONS: Record<CrisisType, CrisisDefinition> = {
     type: "KAIJU",
     stats: {
       combat: 10,
-      acuity: 20,
+      speed: 20,
       focus: 15,
       armor: 25,
       vitality: 30,
@@ -36,7 +36,7 @@ export const CRISIS_DEFINITIONS: Record<CrisisType, CrisisDefinition> = {
     type: "WALKERS",
     stats: {
       combat: 10,
-      acuity: 10,
+      speed: 10,
       focus: 10,
       armor: 10,
       vitality: 10,
@@ -51,7 +51,7 @@ export const CRISIS_DEFINITIONS: Record<CrisisType, CrisisDefinition> = {
     type: "AMORPHOUS",
     stats: {
       combat: 10,
-      acuity: 10,
+      speed: 10,
       focus: 10,
       armor: 50,
       vitality: 50,

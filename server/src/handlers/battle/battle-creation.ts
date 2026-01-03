@@ -52,7 +52,7 @@ export async function createAndStartBattle({
       "arena"
     );
 
-  // Determinar ordem de ação baseada na soma de Acuity
+  // Determinar ordem de ação baseada na soma de speed
   const actionOrder = determineActionOrder(
     allUnits,
     lobby.hostUserId,

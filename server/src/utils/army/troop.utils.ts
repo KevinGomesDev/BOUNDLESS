@@ -2,7 +2,7 @@
 
 import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { TROOP_SKILLS_MAP } from "../../data/skills.data";
+import { TROOP_SKILLS_MAP } from "../../../../shared/data/skills.data";
 import {
   TROOP_RECRUITMENT_BASE_COST,
   TROOP_LEVELUP_COSTS,
@@ -27,7 +27,7 @@ export interface TroopTemplateData {
   passiveId: string;
   resourceType: keyof PlayerResources;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -39,7 +39,7 @@ export function validateTroopAttributes(data: TroopTemplateData): {
   message?: string;
 } {
   const total =
-    data.combat + data.acuity + data.focus + data.armor + data.vitality;
+    data.combat + data.speed + data.focus + data.armor + data.vitality;
 
   if (total !== 10) {
     return {
@@ -50,7 +50,7 @@ export function validateTroopAttributes(data: TroopTemplateData): {
 
   const attrs = [
     data.combat,
-    data.acuity,
+    data.speed,
     data.focus,
     data.armor,
     data.vitality,
@@ -153,7 +153,7 @@ export async function createTroopTemplatesForKingdom(
         passiveId: t.passiveId,
         resourceType: t.resourceType,
         combat: t.combat,
-        acuity: t.acuity,
+        speed: t.speed,
         focus: t.focus,
         armor: t.armor,
         vitality: t.vitality,
@@ -303,7 +303,7 @@ export async function recruitTroop(
         avatar: template.avatar, // Sprite da tropa definido no template
         classFeatures: JSON.stringify([template.passiveId]),
         combat: template.combat + bonusPerAttr + (remainder > 0 ? 1 : 0),
-        acuity: template.acuity + bonusPerAttr + (remainder > 1 ? 1 : 0),
+        speed: template.speed + bonusPerAttr + (remainder > 1 ? 1 : 0),
         focus: template.focus + bonusPerAttr + (remainder > 2 ? 1 : 0),
         armor: template.armor + bonusPerAttr + (remainder > 3 ? 1 : 0),
         vitality: template.vitality + bonusPerAttr + (remainder > 4 ? 1 : 0),
@@ -331,7 +331,7 @@ export async function getTroopCategoryInfo(
   level: number;
   stats: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -387,7 +387,7 @@ export async function getTroopCategoryInfo(
     level,
     stats: {
       combat: template.combat + bonusPerAttr + (remainder > 0 ? 1 : 0),
-      acuity: template.acuity + bonusPerAttr + (remainder > 1 ? 1 : 0),
+      speed: template.speed + bonusPerAttr + (remainder > 1 ? 1 : 0),
       focus: template.focus + bonusPerAttr + (remainder > 2 ? 1 : 0),
       armor: template.armor + bonusPerAttr + (remainder > 3 ? 1 : 0),
       vitality: template.vitality + bonusPerAttr + (remainder > 4 ? 1 : 0),
@@ -485,7 +485,7 @@ export async function upgradeTroopCategory(
       data: {
         level: currentLevel + 1,
         combat: info.stats.combat,
-        acuity: info.stats.acuity,
+        speed: info.stats.speed,
         focus: info.stats.focus,
         armor: info.stats.armor,
         vitality: info.stats.vitality,

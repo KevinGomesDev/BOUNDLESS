@@ -2,13 +2,13 @@
 import { Socket, Server } from "socket.io";
 import { prisma } from "../lib/prisma";
 import { CrisisState, CrisisType } from "../types";
-import { CRISIS_DEFINITIONS } from "../data/crises";
-import { TERRAIN_TYPES } from "../worldmap/data/terrains";
+import { CRISIS_DEFINITIONS } from "../../../shared/data/crises";
+import { TERRAIN_TYPES } from "../../../shared/data/terrains";
 import { MapGenerator } from "../worldmap/generation/MapGenerator";
 import {
   BUILDABLE_STRUCTURES,
   STRUCTURE_DEFINITIONS,
-} from "../data/structures";
+} from "../../../shared/data/structures";
 import {
   getAvailableStructures,
   getTerritoryConstructionInfo,

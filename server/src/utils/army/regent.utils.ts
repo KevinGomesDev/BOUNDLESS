@@ -91,7 +91,7 @@ export async function levelUpRegent(
   playerId: string,
   attributeDistribution: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -129,7 +129,7 @@ export async function levelUpRegent(
   // Valida distribuição de pontos (6 para Regente)
   const totalDistributed =
     attributeDistribution.combat +
-    attributeDistribution.acuity +
+    attributeDistribution.speed +
     attributeDistribution.focus +
     attributeDistribution.armor +
     attributeDistribution.vitality;
@@ -147,7 +147,7 @@ export async function levelUpRegent(
     data: {
       level: newLevel,
       combat: unit.combat + attributeDistribution.combat,
-      acuity: unit.acuity + attributeDistribution.acuity,
+      speed: unit.speed + attributeDistribution.speed,
       focus: unit.focus + attributeDistribution.focus,
       armor: unit.armor + attributeDistribution.armor,
       vitality: unit.vitality + attributeDistribution.vitality,
@@ -181,7 +181,7 @@ export async function recruitRegent(
   playerId: string,
   attributeDistribution: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -244,7 +244,7 @@ export async function recruitRegent(
   // Valida distribuição de pontos (30 para novo Regente)
   const totalDistributed =
     attributeDistribution.combat +
-    attributeDistribution.acuity +
+    attributeDistribution.speed +
     attributeDistribution.focus +
     attributeDistribution.armor +
     attributeDistribution.vitality;
@@ -288,7 +288,7 @@ export async function recruitRegent(
       category: "REGENT",
       level: 1,
       combat: attributeDistribution.combat,
-      acuity: attributeDistribution.acuity,
+      speed: attributeDistribution.speed,
       focus: attributeDistribution.focus,
       armor: attributeDistribution.armor,
       vitality: attributeDistribution.vitality,

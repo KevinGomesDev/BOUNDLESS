@@ -78,7 +78,7 @@ export interface SkillCombatUnit {
   name: string;
   category: string;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;

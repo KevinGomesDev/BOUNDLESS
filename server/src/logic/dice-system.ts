@@ -204,7 +204,7 @@ export function rollD6Test(
  * @returns Resultado do confronto
  *
  * @example
- * // Guerreiro (Combate 5) tenta derrubar Ladrão (Acuidade 4)
+ * // Guerreiro (Combate 5) tenta derrubar Ladrão (Velocidade 4)
  * // Guerreiro tem terreno alto (+1), Ladrão está na lama (-1)
  * const result = rollContestedTest(5, 4, 1, -1);
  */
@@ -256,28 +256,6 @@ export function calculateDamageFromSuccesses(
 }
 
 /**
- * Calcula redução de dano pela defesa
- * Se defenseMultiplier = 0: redução = sucessos
- * Se defenseMultiplier = 1: redução = sucessos * acuidade
- *
- * @param successes Número de sucessos da rolagem de defesa
- * @param acuity Atributo de agilidade/percepção do defensor
- */
-export function calculateDefenseReduction(
-  successes: number,
-  acuity: number
-): number {
-  // Usa DEFENSE_CONFIG.defenseMultiplier de global.config.ts
-  if (DEFENSE_CONFIG.defenseMultiplier === 0) {
-    return Math.max(0, successes);
-  }
-  return Math.max(
-    0,
-    Math.floor(successes * acuity * DEFENSE_CONFIG.defenseMultiplier)
-  );
-}
-
-/**
  * Calcula proteção física baseada em Armor
  * Fórmula configurada em shared/config/global.config.ts
  * Default: Armor * 2
@@ -313,25 +291,6 @@ export function rollD6Simple(times: number): number[] {
     results.push(rollSingleD6());
   }
   return results;
-}
-
-/**
- * Rola 1 dado D6 simples
- * @deprecated Use rollD6Test para o novo sistema
- */
-export function rollSingleD6Simple(): number {
-  return rollSingleD6();
-}
-
-/**
- * Conta sucessos em um array de dados (sistema antigo)
- * @deprecated Use rollD6Test que já retorna totalSuccesses
- */
-export function countSuccessesLegacy(
-  dice: number[],
-  threshold: number = 4
-): number {
-  return dice.filter((d) => d >= threshold).length;
 }
 
 // =============================================================================

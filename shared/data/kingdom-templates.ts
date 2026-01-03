@@ -1,7 +1,7 @@
-// src/data/kingdom-templates.ts
+// shared/data/kingdom-templates.ts
 // Templates de Reinos pré-definidos com Regente e Exércitos
 
-import { Alignment, Race } from "@prisma/client";
+import type { Alignment, Race } from "../types/kingdom.types";
 
 export interface TroopTemplateDefinition {
   slotIndex: number;
@@ -11,7 +11,7 @@ export interface TroopTemplateDefinition {
   passiveId: string;
   resourceType: string;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -23,7 +23,7 @@ export interface RegentDefinition {
   avatar?: string; // ID do sprite (ex: "[1].png")
   initialSkillId?: string; // Skill inicial escolhida no nível 1
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -64,7 +64,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
     avatar: "1",
     initialSkillId: "HEAL", // Skill de Cleric (curar aliados)
     combat: 6,
-    acuity: 4,
+    speed: 4,
     focus: 6,
     armor: 5,
     vitality: 9,
@@ -79,7 +79,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
       passiveId: "INVESTIDA",
       resourceType: "minerio",
       combat: 4,
-      acuity: 2,
+      speed: 2,
       focus: 1,
       armor: 2,
       vitality: 1,
@@ -93,7 +93,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
       passiveId: "ESCUDO_PROTETOR",
       resourceType: "devocao",
       combat: 2,
-      acuity: 1,
+      speed: 1,
       focus: 3,
       armor: 3,
       vitality: 1,
@@ -107,7 +107,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
       passiveId: "EMBOSCADA",
       resourceType: "suprimentos",
       combat: 3,
-      acuity: 4,
+      speed: 4,
       focus: 1,
       armor: 1,
       vitality: 1,
@@ -121,7 +121,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
       passiveId: "FURTIVIDADE",
       resourceType: "suprimentos",
       combat: 2,
-      acuity: 2,
+      speed: 2,
       focus: 1,
       armor: 2,
       vitality: 3,
@@ -135,7 +135,7 @@ Seraphina jurou erradicar a corrupção que se espalha pelas terras selvagens, m
       passiveId: "ESCUDO_PROTETOR",
       resourceType: "devocao",
       combat: 1,
-      acuity: 2,
+      speed: 2,
       focus: 5,
       armor: 1,
       vitality: 1,
@@ -167,7 +167,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
     avatar: "9",
     initialSkillId: "FIREBALL", // Skill de Wizard
     combat: 2,
-    acuity: 5,
+    speed: 5,
     focus: 11,
     armor: 3,
     vitality: 9,
@@ -182,7 +182,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
       passiveId: "EMBOSCADA",
       resourceType: "suprimentos",
       combat: 4,
-      acuity: 4,
+      speed: 4,
       focus: 1,
       armor: 0,
       vitality: 1,
@@ -196,7 +196,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
       passiveId: "ESCUDO_PROTETOR",
       resourceType: "arcana",
       combat: 2,
-      acuity: 1,
+      speed: 1,
       focus: 1,
       armor: 4,
       vitality: 2,
@@ -210,7 +210,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
       passiveId: "FURTIVIDADE",
       resourceType: "arcana",
       combat: 3,
-      acuity: 3,
+      speed: 3,
       focus: 2,
       armor: 0,
       vitality: 2,
@@ -224,7 +224,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
       passiveId: "TIRO_RAPIDO",
       resourceType: "devocao",
       combat: 1,
-      acuity: 2,
+      speed: 2,
       focus: 4,
       armor: 1,
       vitality: 2,
@@ -238,7 +238,7 @@ Malachar não busca poder — ele já o tem. O que ele deseja é conhecimento ab
       passiveId: "ESCUDO_PROTETOR",
       resourceType: "arcana",
       combat: 3,
-      acuity: 0,
+      speed: 0,
       focus: 1,
       armor: 2,
       vitality: 4,
@@ -270,7 +270,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
     avatar: "7",
     initialSkillId: "RECKLESS_ATTACK", // Skill de Barbarian
     combat: 8,
-    acuity: 4,
+    speed: 4,
     focus: 5,
     armor: 6,
     vitality: 7,
@@ -285,7 +285,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
       passiveId: "TIRO_RAPIDO",
       resourceType: "arcana",
       combat: 4,
-      acuity: 3,
+      speed: 3,
       focus: 2,
       armor: 1,
       vitality: 0,
@@ -299,7 +299,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
       passiveId: "EMBOSCADA",
       resourceType: "minerio",
       combat: 2,
-      acuity: 3,
+      speed: 3,
       focus: 2,
       armor: 1,
       vitality: 2,
@@ -313,7 +313,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
       passiveId: "ESCUDO_PROTETOR",
       resourceType: "experiencia",
       combat: 3,
-      acuity: 2,
+      speed: 2,
       focus: 1,
       armor: 3,
       vitality: 1,
@@ -327,7 +327,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
       passiveId: "TIRO_RAPIDO",
       resourceType: "devocao",
       combat: 1,
-      acuity: 2,
+      speed: 2,
       focus: 5,
       armor: 1,
       vitality: 1,
@@ -341,7 +341,7 @@ Diferente de muitos dragões vermelhos, Ignatharax não é movido por ganância 
       passiveId: "INVESTIDA",
       resourceType: "minerio",
       combat: 3,
-      acuity: 2,
+      speed: 2,
       focus: 1,
       armor: 2,
       vitality: 2,

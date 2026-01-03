@@ -5,7 +5,6 @@ import {
 import {
   scanConditionsForAction,
   applyConditionScanResult,
-  getMinAttackSuccesses,
   getExtraAttacksFromConditions,
 } from "./conditions";
 import {
@@ -15,18 +14,13 @@ import {
   getAdjacentPositions,
 } from "../../../shared/types/skills.types";
 import type { BattleObstacle } from "../../../shared/types/battle.types";
-import { OBSTACLE_CONFIG } from "../../../shared/config/global.config";
 import {
-  rollD6Test,
-  rollContestedTest,
-  calculateDamageFromSuccesses,
-  calculateDefenseReduction,
-  combineAdvantages,
+  OBSTACLE_CONFIG,
+  DEFENSE_CONFIG,
+} from "../../../shared/config/global.config";
+import {
   calculatePhysicalProtection,
   calculateMagicalProtection,
-  AdvantageMod,
-  DiceRollResult,
-  ContestedRollResult as DiceContestedResult,
 } from "./dice-system";
 
 export interface CombatUnit {
@@ -36,7 +30,7 @@ export interface CombatUnit {
   name: string;
   category: string;
   combat: number;
-  acuity: number; // Movement = floor(acuity / 2), minimum 1
+  speed: number; // Movement = floor(speed / 2), minimum 1
   focus: number;
   armor: number;
   vitality: number;
@@ -72,31 +66,22 @@ export interface MoveActionResult {
 export interface AttackActionResult {
   success: boolean;
   error?: string;
-  missed?: boolean; // True se o ataque errou (ex: dodge)
-  // Tipo de alvo
+  missed?: boolean; // True se o ataque foi esquivado
+  dodged?: boolean; // True se o alvo esquivou (sinônimo de missed)
   targetType?: "unit" | "corpse" | "obstacle";
-  // Rolagem de ataque
-  attackDiceCount?: number;
-  attackRolls?: number[];
-  attackSuccesses?: number;
   rawDamage?: number;
-  // Rolagem de defesa (0 para obstáculos/cadáveres)
-  defenseDiceCount?: number;
-  defenseRolls?: number[];
-  defenseSuccesses?: number;
   damageReduction?: number;
-  // Resultado final
   finalDamage?: number;
   damageType?: string;
   targetHpAfter?: number;
   targetPhysicalProtection?: number;
   targetMagicalProtection?: number;
   targetDefeated?: boolean;
-  // Para obstáculos
   obstacleDestroyed?: boolean;
   obstacleId?: string;
-  // Para múltiplos ataques (extraAttacks)
   attacksLeftThisTurn?: number; // Ataques restantes após este
+  dodgeChance?: number; // % de chance de esquiva
+  dodgeRoll?: number; // Rolagem de 1-100
 }
 
 export interface DashActionResult {
@@ -110,9 +95,9 @@ export interface DodgeActionResult {
   error?: string;
 }
 
-// Calcula movimento base: retorna acuidade completa (mínimo 1)
-export function calculateBaseMovement(acuity: number): number {
-  return Math.max(1, acuity);
+// Calcula movimento base: retorna Velocidade completa (mínimo 1)
+export function calculateBaseMovement(speed: number): number {
+  return Math.max(1, speed);
 }
 
 export function executeMoveAction(
@@ -219,8 +204,9 @@ export interface AttackParams {
 
 /**
  * Executa ataque unificado: unidade, cadáver ou obstáculo
- * - Unidade viva: rola ataque E defesa
- * - Cadáver/Obstáculo: rola apenas ataque (sem defesa)
+ * NOVO SISTEMA SEM DADOS:
+ * - Dano = Combat × Multiplicador (do ATTACK_CONFIG)
+ * - Esquiva = 1D100 vs Speed × dodgeMultiplier (máximo maxDodgeChance)
  */
 export function executeAttackAction(
   attacker: CombatUnit,
@@ -236,12 +222,9 @@ export function executeAttackAction(
   }
 
   // === SISTEMA DE MÚLTIPLOS ATAQUES (extraAttacks) ===
-  // Se attacksLeftThisTurn > 0, significa que já gastou a ação e tem ataques extras
-  // Se attacksLeftThisTurn === 0, precisa gastar ação para iniciar sequência de ataques
   const hasAttacksRemaining = attacker.attacksLeftThisTurn > 0;
 
   if (!hasAttacksRemaining) {
-    // Primeira vez atacando - precisa ter ação disponível
     if (attacker.actionsLeft <= 0) {
       return { success: false, error: "No actions left this turn" };
     }
@@ -259,7 +242,6 @@ export function executeAttackAction(
   let targetType: "unit" | "corpse" | "obstacle";
 
   if (obstacle) {
-    // Atacando obstáculo
     targetX = obstacle.posX;
     targetY = obstacle.posY;
     targetType = "obstacle";
@@ -280,54 +262,35 @@ export function executeAttackAction(
 
   // === CONSUMO DE AÇÃO E ATAQUES EXTRAS ===
   if (!hasAttacksRemaining) {
-    // Primeiro ataque: consumir ação e calcular total de ataques
     attacker.actionsLeft = Math.max(0, attacker.actionsLeft - 1);
-
-    // Calcular ataques extras baseado nas condições
-    // RECKLESS_ATTACK só dá extra se não tiver proteção
     const hasProtection = attacker.physicalProtection > 0;
     const extraAttacks = getExtraAttacksFromConditions(
       attacker.conditions,
       hasProtection
     );
-
-    // Total = 1 (ataque base) + extras
-    // Já vamos executar 1 agora, então setamos os restantes
-    attacker.attacksLeftThisTurn = extraAttacks; // Se 0, não sobra nenhum
+    attacker.attacksLeftThisTurn = extraAttacks;
   } else {
-    // Ataque subsequente: apenas decrementar contador
     attacker.attacksLeftThisTurn = Math.max(
       0,
       attacker.attacksLeftThisTurn - 1
     );
   }
 
-  // === ROLAGEM DE ATAQUE ===
-  const attackDiceCount = Math.max(1, attacker.combat);
-  const attackRoll = rollD6Test(attackDiceCount, 0);
-
-  // Verificar mínimo de acertos garantidos (ex: WILD_FURY garante mínimo 2)
-  const minSuccesses = getMinAttackSuccesses(attacker.conditions);
-  const attackSuccesses = Math.max(attackRoll.totalSuccesses, minSuccesses);
-
-  const rawDamage = calculateDamageFromSuccesses(
-    attackSuccesses,
-    attacker.combat
-  );
+  // === CÁLCULO DE DANO (SEM DADOS) ===
+  // Dano = Combat × Multiplicador + bônus de condições
+  const bonusDamage = attackerScan.modifiers.bonusDamage || 0;
+  const rawDamage = Math.max(1, attacker.combat) + bonusDamage;
 
   // === LÓGICA ESPECÍFICA POR TIPO DE ALVO ===
 
   if (targetType === "obstacle" && obstacle) {
-    // Atacando obstáculo - sem defesa, dano vai direto no HP do obstáculo
     const obstacleHp = obstacle.hp ?? OBSTACLE_CONFIG.defaultHp;
     const newHp = Math.max(0, obstacleHp - rawDamage);
     const destroyed = newHp <= 0;
 
-    // Atualizar obstáculo
     obstacle.hp = newHp;
     obstacle.destroyed = destroyed;
 
-    // Aplicar expiração de condições do atacante
     attacker.conditions = applyConditionScanResult(
       attacker.conditions,
       attackerScan
@@ -336,13 +299,7 @@ export function executeAttackAction(
     return {
       success: true,
       targetType: "obstacle",
-      attackDiceCount,
-      attackRolls: attackRoll.allRolls,
-      attackSuccesses,
       rawDamage,
-      defenseDiceCount: 0,
-      defenseRolls: [],
-      defenseSuccesses: 0,
       damageReduction: 0,
       finalDamage: rawDamage,
       damageType,
@@ -355,7 +312,6 @@ export function executeAttackAction(
   }
 
   if (targetType === "corpse" && target) {
-    // Atacando cadáver - sem defesa, marca como removido se dano >= HP do cadáver
     const corpseHp = OBSTACLE_CONFIG.corpseHp;
     const destroyed = rawDamage >= corpseHp;
 
@@ -363,7 +319,6 @@ export function executeAttackAction(
       target.conditions.push("CORPSE_REMOVED");
     }
 
-    // Aplicar expiração de condições do atacante
     attacker.conditions = applyConditionScanResult(
       attacker.conditions,
       attackerScan
@@ -372,13 +327,7 @@ export function executeAttackAction(
     return {
       success: true,
       targetType: "corpse",
-      attackDiceCount,
-      attackRolls: attackRoll.allRolls,
-      attackSuccesses,
       rawDamage,
-      defenseDiceCount: 0,
-      defenseRolls: [],
-      defenseSuccesses: 0,
       damageReduction: 0,
       finalDamage: rawDamage,
       damageType,
@@ -393,15 +342,19 @@ export function executeAttackAction(
     return { success: false, error: "Target unit is not alive" };
   }
 
-  // Varredura de condições do alvo (para dodge, damage reduction, etc)
+  // Varredura de condições do alvo
   const targetScan = scanConditionsForAction(target.conditions, "attack");
 
-  // Verificar se alvo esquiva
-  if (
-    targetScan.modifiers.dodgeChance > 0 &&
-    Math.random() * 100 < targetScan.modifiers.dodgeChance
-  ) {
-    // Aplicar expiração de condições mesmo em miss
+  // === SISTEMA DE ESQUIVA (1D100) ===
+  // Chance = Speed × dodgeMultiplier + bônus de condições (cap: maxDodgeChance)
+  const baseDodgeChance =
+    target.speed * DEFENSE_CONFIG.dodgeMultiplier +
+    (targetScan.modifiers.dodgeChance || 0);
+  const dodgeChance = Math.min(baseDodgeChance, DEFENSE_CONFIG.maxDodgeChance);
+  const dodgeRoll = Math.floor(Math.random() * 100) + 1; // 1-100
+
+  if (dodgeRoll <= dodgeChance) {
+    // Alvo esquivou!
     attacker.conditions = applyConditionScanResult(
       attacker.conditions,
       attackerScan
@@ -409,14 +362,9 @@ export function executeAttackAction(
     return {
       success: true,
       missed: true,
+      dodged: true,
       targetType: "unit",
-      attackDiceCount: 0,
-      attackRolls: [],
-      attackSuccesses: 0,
       rawDamage: 0,
-      defenseDiceCount: 0,
-      defenseRolls: [],
-      defenseSuccesses: 0,
       damageReduction: 0,
       finalDamage: 0,
       damageType,
@@ -425,32 +373,23 @@ export function executeAttackAction(
       targetMagicalProtection: target.magicalProtection,
       targetDefeated: false,
       attacksLeftThisTurn: attacker.attacksLeftThisTurn,
+      dodgeChance,
+      dodgeRoll,
     };
   }
 
-  // === ROLAGEM DE DEFESA (apenas para unidades vivas) ===
-  const defenseDiceCount = Math.max(1, target.acuity);
-  const defenseRoll = rollD6Test(defenseDiceCount, 0);
-  const defenseSuccesses = defenseRoll.totalSuccesses;
+  // === APLICAR DANO ===
+  // Redução de dano apenas por condições (não mais por dados)
+  const damageReduction = targetScan.modifiers.damageReduction || 0;
+  const damageToApply = Math.max(0, rawDamage - damageReduction);
 
-  // Redução de dano = Sucessos * (Acuity / 2) do defensor
-  const damageReductionFromDefense = calculateDefenseReduction(
-    defenseSuccesses,
-    target.acuity
-  );
-
-  // Aplicar redução de dano por condições do alvo + defesa
-  const totalDamageReduction =
-    targetScan.modifiers.damageReduction + damageReductionFromDefense;
-  let damageToApply = Math.max(0, rawDamage - totalDamageReduction);
-
-  // DEBUG: Log antes de aplicar proteção
-  console.log("[COMBAT] Aplicando dano:", {
+  console.log("[COMBAT] Aplicando dano (novo sistema):", {
+    rawDamage,
+    damageReduction,
     damageToApply,
     damageType,
-    targetPhysicalProtection: target.physicalProtection,
-    targetMagicalProtection: target.magicalProtection,
-    targetCurrentHp: target.currentHp,
+    dodgeChance,
+    dodgeRoll,
   });
 
   // Aplicar dano na proteção apropriada
@@ -461,15 +400,6 @@ export function executeAttackAction(
     damageToApply,
     damageType
   );
-
-  // DEBUG: Log após aplicar proteção
-  console.log("[COMBAT] Resultado proteção:", {
-    newPhysicalProtection: protectionResult.newPhysicalProtection,
-    newMagicalProtection: protectionResult.newMagicalProtection,
-    newHp: protectionResult.newHp,
-    damageAbsorbed: protectionResult.damageAbsorbed,
-    damageToHp: protectionResult.damageToHp,
-  });
 
   target.physicalProtection = protectionResult.newPhysicalProtection;
   target.magicalProtection = protectionResult.newMagicalProtection;
@@ -491,17 +421,8 @@ export function executeAttackAction(
   return {
     success: true,
     targetType: "unit",
-    // Ataque
-    attackDiceCount,
-    attackRolls: attackRoll.allRolls,
-    attackSuccesses,
     rawDamage,
-    // Defesa
-    defenseDiceCount,
-    defenseRolls: defenseRoll.allRolls,
-    defenseSuccesses,
-    damageReduction: damageReductionFromDefense,
-    // Resultado
+    damageReduction,
     finalDamage: damageToApply,
     damageType,
     targetHpAfter: target.currentHp,
@@ -509,6 +430,8 @@ export function executeAttackAction(
     targetMagicalProtection: target.magicalProtection,
     targetDefeated,
     attacksLeftThisTurn: attacker.attacksLeftThisTurn,
+    dodgeChance,
+    dodgeRoll,
   };
 }
 
@@ -531,7 +454,7 @@ export function executeDashAction(unit: CombatUnit): DashActionResult {
 
   unit.actionsLeft = Math.max(0, unit.actionsLeft - 1);
   // SOMA movimentos extras ao invés de resetar
-  unit.movesLeft = unit.movesLeft + calculateBaseMovement(unit.acuity);
+  unit.movesLeft = unit.movesLeft + calculateBaseMovement(unit.speed);
   unit.conditions = applyConditionScanResult(unit.conditions, scan);
 
   return {
@@ -628,10 +551,16 @@ export function getAvailableActions(unit: CombatUnit): string[] {
 export interface ContestedRollResult {
   success: boolean;
   error?: string;
+  // Campos legados (opcionais para compatibilidade)
   attackerRolls?: number[];
   defenderRolls?: number[];
   attackerSuccesses?: number;
   defenderSuccesses?: number;
+  // Novos campos para sistema sem dados
+  attackerRoll?: number;
+  attackerChance?: number;
+  defenderRoll?: number;
+  defenderChance?: number;
 }
 
 export interface HelpActionResult {
@@ -648,8 +577,6 @@ export interface ProtectActionResult {
 export interface ThrowActionResult {
   success: boolean;
   error?: string;
-  rolls?: number[];
-  successes?: number;
   finalX?: number;
   finalY?: number;
   collided?: boolean;
@@ -725,11 +652,46 @@ export function executeProtectAction(unit: CombatUnit): ProtectActionResult {
   return { success: true };
 }
 
-// Derrubar: combate resistido contra acuidade; aplica DERRUBADA
+// =============================================================================
+// AÇÕES ESPECIAIS - SISTEMA SEM DADOS
+// =============================================================================
+// Usam teste de 1D100 vs atributo × modificador
+
+/**
+ * Resultado de teste resistido simplificado
+ */
+export interface SimpleContestedResult {
+  success: boolean;
+  error?: string;
+  attackerRoll?: number; // 1-100
+  attackerChance?: number; // % de sucesso
+  defenderRoll?: number; // 1-100
+  defenderChance?: number; // % de resistência
+}
+
+/**
+ * Executa um teste resistido simplificado (Combat vs Speed)
+ * Atacante precisa rolar acima de: 50 - (Combat × 5) + (targetSpeed × 3)
+ * Resultado: 1D100 < (Combat × 5) - (targetSpeed × 3) + 50
+ */
+function simpleContestedCheck(
+  attackerCombat: number,
+  targetSpeed: number
+): { success: boolean; roll: number; chance: number } {
+  // Chance = 50 + (Combat × 5) - (Speed × 3), clamped 5-95
+  const chance = Math.min(
+    95,
+    Math.max(5, 50 + attackerCombat * 5 - targetSpeed * 3)
+  );
+  const roll = Math.floor(Math.random() * 100) + 1;
+  return { success: roll <= chance, roll, chance };
+}
+
+// Derrubar: teste Combat vs Speed; aplica DERRUBADA
 export function executeKnockdownAction(
   attacker: CombatUnit,
   target: CombatUnit
-): ContestedRollResult {
+): SimpleContestedResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode derrubar" };
   }
@@ -741,27 +703,24 @@ export function executeKnockdownAction(
     return { success: false, error: "Alvo deve estar adjacente" };
   }
 
-  const contestedResult = rollContestedTest(attacker.combat, target.acuity);
+  const result = simpleContestedCheck(attacker.combat, target.speed);
 
-  const success = contestedResult.attackerWins;
-  if (success && !target.conditions.includes("DERRUBADA")) {
+  if (result.success && !target.conditions.includes("DERRUBADA")) {
     target.conditions.push("DERRUBADA");
   }
 
   return {
-    success,
-    attackerRolls: contestedResult.attackerResult.allRolls,
-    defenderRolls: contestedResult.defenderResult.allRolls,
-    attackerSuccesses: contestedResult.attackerResult.totalSuccesses,
-    defenderSuccesses: contestedResult.defenderResult.totalSuccesses,
+    success: result.success,
+    attackerRoll: result.roll,
+    attackerChance: result.chance,
   };
 }
 
-// Desarmar: combate resistido contra acuidade; aplica DISARMED
+// Desarmar: teste Combat vs Speed; aplica DISARMED
 export function executeDisarmAction(
   attacker: CombatUnit,
   target: CombatUnit
-): ContestedRollResult {
+): SimpleContestedResult {
   if (!attacker.isAlive) {
     return { success: false, error: "Unidade morta não pode desarmar" };
   }
@@ -773,23 +732,20 @@ export function executeDisarmAction(
     return { success: false, error: "Alvo deve estar adjacente" };
   }
 
-  const contestedResult = rollContestedTest(attacker.combat, target.acuity);
+  const result = simpleContestedCheck(attacker.combat, target.speed);
 
-  const success = contestedResult.attackerWins;
-  if (success && !target.conditions.includes("DISARMED")) {
+  if (result.success && !target.conditions.includes("DISARMED")) {
     target.conditions.push("DISARMED");
   }
 
   return {
-    success,
-    attackerRolls: contestedResult.attackerResult.allRolls,
-    defenderRolls: contestedResult.defenderResult.allRolls,
-    attackerSuccesses: contestedResult.attackerResult.totalSuccesses,
-    defenderSuccesses: contestedResult.defenderResult.totalSuccesses,
+    success: result.success,
+    attackerRoll: result.roll,
+    attackerChance: result.chance,
   };
 }
 
-// Agarrar: combate resistido contra acuidade; ambos ficam AGARRADO
+// Agarrar: teste Combat vs Speed; ambos ficam AGARRADO
 export function executeGrabAction(
   attacker: CombatUnit,
   target: CombatUnit
@@ -805,10 +761,9 @@ export function executeGrabAction(
     return { success: false, error: "Alvo deve estar adjacente" };
   }
 
-  const contestedResult = rollContestedTest(attacker.combat, target.acuity);
+  const result = simpleContestedCheck(attacker.combat, target.speed);
 
-  const grabbed = contestedResult.attackerWins;
-  if (grabbed) {
+  if (result.success) {
     if (!attacker.conditions.includes("AGARRADO")) {
       attacker.conditions.push("AGARRADO");
     }
@@ -819,15 +774,11 @@ export function executeGrabAction(
 
   return {
     success: true,
-    grabbed,
-    attackerRolls: contestedResult.attackerResult.allRolls,
-    defenderRolls: contestedResult.defenderResult.allRolls,
-    attackerSuccesses: contestedResult.attackerResult.totalSuccesses,
-    defenderSuccesses: contestedResult.defenderResult.totalSuccesses,
+    grabbed: result.success,
   };
 }
 
-// Arremessar: teste Combate CS:4; empurra em direção, dano físico nos envolvidos
+// Arremessar: usa Combat para determinar distância, dano fixo
 export function executeThrowAction(
   attacker: CombatUnit,
   target: CombatUnit,
@@ -854,10 +805,9 @@ export function executeThrowAction(
     return { success: false, error: "Direção inválida" };
   }
 
-  const rollResult = rollD6Test(attacker.combat, 0);
-  const successes = rollResult.totalSuccesses;
-
-  let steps = successes;
+  // Distância = Combat (mínimo 1, máximo 5)
+  const distance = Math.min(5, Math.max(1, attacker.combat));
+  let steps = distance;
   let finalX = target.posX;
   let finalY = target.posY;
   let collided = false;
@@ -866,13 +816,11 @@ export function executeThrowAction(
     const nx = finalX + dx;
     const ny = finalY + dy;
 
-    // Limites do grid
     if (nx < 0 || ny < 0 || nx >= gridWidth || ny >= gridHeight) {
       collided = true;
       break;
     }
 
-    // Colisão com unidade viva ou cadáver
     const unitAt = allUnits.find(
       (u) => u.posX === nx && u.posY === ny && u.id !== target.id
     );
@@ -889,40 +837,38 @@ export function executeThrowAction(
     steps--;
   }
 
-  // Mover alvo
   target.posX = finalX;
   target.posY = finalY;
 
-  // Dano em ambos igual aos sucessos
+  // Dano = Combat do atacante
+  const damage = attacker.combat;
   let attackerDamage = 0;
   let targetDamage = 0;
 
-  if (successes > 0) {
-    // Aplicar dano no atacante (colisão causa dano físico)
+  if (damage > 0) {
     const attackerResult = applyDualProtectionDamage(
       attacker.physicalProtection,
       attacker.magicalProtection,
       attacker.currentHp,
-      successes,
+      damage,
       "FISICO"
     );
     attacker.physicalProtection = attackerResult.newPhysicalProtection;
     attacker.magicalProtection = attackerResult.newMagicalProtection;
     attacker.currentHp = attackerResult.newHp;
-    attackerDamage = successes;
+    attackerDamage = damage;
 
-    // Aplicar dano no alvo (colisão causa dano físico)
     const targetResult = applyDualProtectionDamage(
       target.physicalProtection,
       target.magicalProtection,
       target.currentHp,
-      successes,
+      damage,
       "FISICO"
     );
     target.physicalProtection = targetResult.newPhysicalProtection;
     target.magicalProtection = targetResult.newMagicalProtection;
     target.currentHp = targetResult.newHp;
-    targetDamage = successes;
+    targetDamage = damage;
 
     if (attacker.currentHp <= 0) attacker.isAlive = false;
     if (target.currentHp <= 0) target.isAlive = false;
@@ -930,8 +876,6 @@ export function executeThrowAction(
 
   return {
     success: true,
-    rolls: rollResult.allRolls,
-    successes,
     finalX,
     finalY,
     collided,
@@ -940,7 +884,7 @@ export function executeThrowAction(
   };
 }
 
-// Fuga: teste de Acuidade resistido pela Acuidade do inimigo mais próximo
+// Fuga: teste de Speed vs Speed do inimigo
 export function executeFleeAction(
   unit: CombatUnit,
   nearestEnemy: CombatUnit
@@ -949,34 +893,21 @@ export function executeFleeAction(
     return { success: false, error: "Unidade morta não pode fugir" };
   }
 
-  // HELP_NEXT aplica +1 vantagem
-  const hasHelp = unit.conditions.includes("HELP_NEXT");
-  const advantageMod: AdvantageMod = hasHelp ? 1 : 0;
-
-  if (hasHelp) {
-    unit.conditions = unit.conditions.filter((c) => c !== "HELP_NEXT");
-  }
-
-  const contestedResult = rollContestedTest(
-    unit.acuity,
-    nearestEnemy.acuity,
-    advantageMod,
-    0
+  // Chance = 50 + (mySpeed × 5) - (enemySpeed × 3)
+  const chance = Math.min(
+    95,
+    Math.max(5, 50 + unit.speed * 5 - nearestEnemy.speed * 3)
   );
-
-  const fled = contestedResult.attackerWins;
+  const roll = Math.floor(Math.random() * 100) + 1;
+  const fled = roll <= chance;
 
   return {
     success: true,
     fled,
-    attackerRolls: contestedResult.attackerResult.allRolls,
-    defenderRolls: contestedResult.defenderResult.allRolls,
-    attackerSuccesses: contestedResult.attackerResult.totalSuccesses,
-    defenderSuccesses: contestedResult.defenderResult.totalSuccesses,
   };
 }
 
-// Conjurar: teste de Foco CD:4
+// Conjurar: sucesso baseado em Focus (sempre funciona, Focus determina potência)
 export function executeCastAction(
   unit: CombatUnit,
   spellId: string
@@ -985,31 +916,20 @@ export function executeCastAction(
     return { success: false, error: "Unidade morta não pode conjurar" };
   }
 
-  // HELP_NEXT aplica +1 vantagem
-  const hasHelp = unit.conditions.includes("HELP_NEXT");
-  const advantageMod: AdvantageMod = hasHelp ? 1 : 0;
-
-  if (hasHelp) {
-    unit.conditions = unit.conditions.filter((c) => c !== "HELP_NEXT");
-  }
-
-  const rollResult = rollD6Test(unit.focus, advantageMod);
-
+  // No novo sistema, conjurar sempre funciona
+  // O Focus determina a potência do feitiço (usado pelo executor da skill)
   return {
     success: true,
-    rolls: rollResult.allRolls,
-    successes: rollResult.totalSuccesses,
-    threshold: rollResult.successThreshold,
+    successes: unit.focus, // Focus direto como "potência"
+    threshold: 0,
   };
 }
-
-// executeAttackObstacle foi removido - use executeAttackAction com o parâmetro obstacle
 
 // =============================================================================
 // SISTEMA DE SKILLS - Re-exportar do arquivo dedicado
 // =============================================================================
 
-import { findSkillByCode } from "../data/skills.data";
+import { findSkillByCode } from "../../../shared/data/skills.data";
 import {
   getManhattanDistance as getSkillManhattanDistance,
   DEFAULT_RANGE_VALUES,
@@ -1149,11 +1069,12 @@ export function executeSkillAction(
     return { success: false, error: validation.error };
   }
 
-  // Delegar para o executor centralizado
+  // Delegar para o executor centralizado (passa isArena para dobrar cooldown)
   return executeSkill(
     caster as SkillCombatUnit,
     skillCode,
     target as SkillCombatUnit | null,
-    allUnits as SkillCombatUnit[]
+    allUnits as SkillCombatUnit[],
+    isArena
   );
 }

@@ -1,7 +1,10 @@
 // src/utils/army/summon.utils.ts
 import { prisma } from "../../lib/prisma";
-import { TROOP_SKILLS } from "../../data/skills.data";
-import { HERO_CLASSES, getSkillsForClass } from "../../data/classes.data";
+import { TROOP_SKILLS } from "../../../../shared/data/skills.data";
+import {
+  HERO_CLASSES,
+  getSkillsForClass,
+} from "../../../../shared/data/classes.data";
 import { rollExplodingD6Once } from "../dice";
 
 function pickRandom<T>(arr: T[]): T {
@@ -13,7 +16,7 @@ function generateCreatureStats(level: number) {
   const rollPlusLevel = () => rollExplodingD6Once() + level;
   return {
     combat: rollPlusLevel(),
-    acuity: rollPlusLevel(),
+    speed: rollPlusLevel(),
     focus: rollPlusLevel(),
     armor: rollPlusLevel(),
     vitality: rollPlusLevel(),
@@ -67,7 +70,7 @@ export async function createSummonedCreature(params: {
           )
         ),
         combat: stats.combat,
-        acuity: stats.acuity,
+        speed: stats.speed,
         focus: stats.focus,
         armor: stats.armor,
         vitality: stats.vitality,

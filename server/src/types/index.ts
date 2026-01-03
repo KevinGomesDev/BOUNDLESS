@@ -8,7 +8,7 @@ import {
   MAX_FORTRESSES_PER_TERRITORY,
   MOVEMENT_COST_BETWEEN_TERRITORIES,
   MOVEMENT_WITHIN_TERRITORY_COST,
-} from "../data/turns";
+} from "../../../shared/data/turns";
 import {
   REGENT_LEVELUP_BASE_COST,
   REGENT_LEVELUP_INCREMENT,
@@ -25,13 +25,13 @@ import {
   TROOP_LEVELUP_COSTS,
   MAX_TROOP_LEVEL,
   TROOP_ATTRIBUTE_POINTS_PER_LEVEL,
-} from "../data/units";
+} from "../../../shared/data/units";
 import {
   TributeDecision,
   CRISIS_METER_START,
   CRISIS_METER_MAX,
   CRISIS_METER_TRIGGERED_AT_TURN,
-} from "../data/crisis";
+} from "../../../shared/data/crisis";
 import {
   SkillCategory,
   SkillCostTier,
@@ -44,7 +44,7 @@ import {
   ClassArchetype,
   TroopCategory,
   TROOP_RESOURCE_MAP,
-} from "../data/archetypes";
+} from "../../../shared/data/archetypes";
 
 // ============ RE-EXPORT SHARED TYPES ============
 export type {
@@ -90,7 +90,7 @@ export interface CrisisState {
   // Dados Vitais (Muda conforme o tipo)
   stats: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;
@@ -129,7 +129,7 @@ export enum UnitCategory {
 
 export interface UnitStats {
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -209,7 +209,7 @@ export {
   MAX_FORTRESSES_PER_TERRITORY,
   MOVEMENT_COST_BETWEEN_TERRITORIES,
   MOVEMENT_WITHIN_TERRITORY_COST,
-} from "../data/turns";
+} from "../../../shared/data/turns";
 export {
   REGENT_LEVELUP_BASE_COST,
   REGENT_LEVELUP_INCREMENT,
@@ -226,13 +226,13 @@ export {
   TROOP_LEVELUP_COSTS,
   MAX_TROOP_LEVEL,
   TROOP_ATTRIBUTE_POINTS_PER_LEVEL,
-} from "../data/units";
+} from "../../../shared/data/units";
 export {
   TributeDecision,
   CRISIS_METER_START,
   CRISIS_METER_MAX,
   CRISIS_METER_TRIGGERED_AT_TURN,
-} from "../data/crisis";
+} from "../../../shared/data/crisis";
 export {
   SkillCategory,
   SkillCostTier,
@@ -254,4 +254,4 @@ export {
   ClassArchetype,
   TroopCategory,
   TROOP_RESOURCE_MAP,
-} from "../data/archetypes";
+} from "../../../shared/data/archetypes";

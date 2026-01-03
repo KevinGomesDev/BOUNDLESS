@@ -11,7 +11,7 @@ import {
   getManhattanDistance,
   isAdjacentOmnidirectional,
 } from "../../../shared/types/skills.types";
-import { findSkillByCode } from "../data/skills.data";
+import { findSkillByCode } from "../../../shared/data/skills.data";
 
 // =============================================================================
 // TIPOS LOCAIS
@@ -64,14 +64,22 @@ export const SKILL_EXECUTORS: Record<string, SkillExecutorFn> = {
 // =============================================================================
 
 /**
+ * Multiplica\u00e7\u00e3o de cooldown em Arena
+ * Skills na Arena t\u00eam cooldown dobrado
+ */
+export const ARENA_COOLDOWN_MULTIPLIER = 2;
+
+/**
  * Executa uma skill pelo seu functionName
  * Gerencia consumo de ação e cooldown automaticamente
+ * @param isArena - Se true, cooldowns são dobrados
  */
 export function executeSkill(
   caster: SkillCombatUnit,
   skillCode: string,
   target: SkillCombatUnit | null,
-  allUnits: SkillCombatUnit[]
+  allUnits: SkillCombatUnit[],
+  isArena: boolean = false
 ): SkillExecutionResult {
   const skill = findSkillByCode(skillCode);
   if (!skill) {
@@ -112,12 +120,15 @@ export function executeSkill(
     }
     result.casterActionsLeft = caster.actionsLeft;
 
-    // Aplicar cooldown
+    // Aplicar cooldown (dobrado em Arena)
     if (skill.cooldown && skill.cooldown > 0) {
       if (!caster.skillCooldowns) {
         caster.skillCooldowns = {};
       }
-      caster.skillCooldowns[skillCode] = skill.cooldown;
+      const cooldownValue = isArena
+        ? skill.cooldown * ARENA_COOLDOWN_MULTIPLIER
+        : skill.cooldown;
+      caster.skillCooldowns[skillCode] = cooldownValue;
     }
 
     result.skillCode = skillCode;

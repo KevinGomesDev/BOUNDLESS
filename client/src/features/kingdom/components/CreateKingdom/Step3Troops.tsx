@@ -45,13 +45,13 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
   const currentTemplate = templates[activeSlot];
   const currentTotal =
     currentTemplate.combat +
-    currentTemplate.acuity +
+    currentTemplate.speed +
     currentTemplate.focus +
     currentTemplate.armor +
     currentTemplate.vitality;
 
   const allTemplatesValid = templates.every((t) => {
-    const total = t.combat + t.acuity + t.focus + t.armor + t.vitality;
+    const total = t.combat + t.speed + t.focus + t.armor + t.vitality;
     return t.name && t.passiveId && t.resourceType && total === 10;
   });
 
@@ -64,7 +64,7 @@ export const Step3Troops: React.FC<Step3TroopsProps> = ({
       <div className="bg-slate-700/30 rounded">
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
           {templates.map((t, i) => {
-            const total = t.combat + t.acuity + t.focus + t.armor + t.vitality;
+            const total = t.combat + t.speed + t.focus + t.armor + t.vitality;
             const isValid =
               t.name && t.passiveId && t.resourceType && total === 10;
             return (

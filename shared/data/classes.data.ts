@@ -1,8 +1,8 @@
-// server/src/data/classes.data.ts
+// shared/data/classes.data.ts
 // Definições estáticas de todas as classes do jogo
 // FONTE DE VERDADE para classes de heróis/regentes
 
-import type { HeroClassDefinition } from "../../../shared/types/skills.types";
+import type { HeroClassDefinition } from "../types/skills.types";
 import { WARRIOR_SKILLS, CLERIC_SKILLS, WIZARD_SKILLS } from "./skills.data";
 
 // =============================================================================

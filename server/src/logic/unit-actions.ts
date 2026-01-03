@@ -1,7 +1,7 @@
 // Ações padrão que toda unidade possui
 export const DEFAULT_UNIT_ACTIONS = ["attack", "move", "dash", "dodge"];
 
-import { findSkillByCode } from "../data/skills.data";
+import { findSkillByCode } from "../../../shared/data/skills.data";
 
 export interface UnitActionContext {
   battleType?: "arena" | "match";
@@ -10,7 +10,7 @@ export interface UnitActionContext {
 
 export interface UnitStats {
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;

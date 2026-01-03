@@ -37,7 +37,7 @@ export type ResourceType = ResourceKey;
 // Usa AttributeKey do global.config para garantir consistência
 export interface BaseAttributes {
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -82,7 +82,7 @@ export interface TroopTemplate {
   passiveId: string;
   resourceType: ResourceType;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -96,7 +96,7 @@ export interface CreateTroopTemplateData {
   passiveId: string;
   resourceType: ResourceType;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -123,7 +123,7 @@ export interface Unit {
   classCode?: string; // Heróis possuem classe, Regentes NÃO
   classFeatures?: string[]; // Skills aprendidas (Regentes escolhem de qualquer classe)
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -140,7 +140,7 @@ export interface RegentData {
   description?: string;
   avatar?: string;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;

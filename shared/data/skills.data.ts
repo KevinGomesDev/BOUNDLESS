@@ -1,8 +1,8 @@
-// server/src/data/skills.data.ts
+// shared/data/skills.data.ts
 // Definições estáticas de todas as skills do jogo
 // FONTE DE VERDADE para habilidades de classes
 
-import type { SkillDefinition } from "../../../shared/types/skills.types";
+import type { SkillDefinition } from "../types/skills.types";
 
 // =============================================================================
 // BÁRBARO - Skills (PHYSICAL / FOOD)
@@ -367,4 +367,102 @@ export function getActiveSkills(): SkillDefinition[] {
  */
 export function getTroopSkills(): SkillDefinition[] {
   return TROOP_SKILLS;
+}
+
+// =============================================================================
+// INFORMAÇÕES VISUAIS DE SKILLS (para frontend)
+// =============================================================================
+
+/**
+ * Mapeamento de ícones para cada skill (baseado no tipo/range)
+ */
+const SKILL_ICONS: Record<string, string> = {
+  // Warrior
+  EXTRA_ATTACK: "⚔️",
+  SECOND_WIND: "💨",
+  ACTION_SURGE: "⚡",
+  // Cleric
+  HEAL: "💚",
+  CELESTIAL_EXPULSION: "✨",
+  BLESS: "🙏",
+  // Wizard
+  ARCANE_MASTERY: "📖",
+  FIREBALL: "🔥",
+  TELEPORT: "🌀",
+  // Barbarian
+  WILD_FURY: "😡",
+  RECKLESS_ATTACK: "💥",
+  TOTAL_DESTRUCTION: "💀",
+  // Rogue
+  SNEAK_ATTACK: "🗡️",
+  CUNNING_ACTION: "🎭",
+  ASSASSINATE: "☠️",
+  // Ranger
+  HUNTERS_MARK: "🎯",
+  NATURAL_EXPLORER: "🌲",
+  VOLLEY: "🏹",
+};
+
+/**
+ * Mapeamento de cores para cada tipo de skill
+ */
+const SKILL_COLORS: Record<string, string> = {
+  // Warrior - amber
+  EXTRA_ATTACK: "amber",
+  SECOND_WIND: "emerald",
+  ACTION_SURGE: "yellow",
+  // Cleric - emerald
+  HEAL: "emerald",
+  CELESTIAL_EXPULSION: "cyan",
+  BLESS: "sky",
+  // Wizard - purple
+  ARCANE_MASTERY: "purple",
+  FIREBALL: "orange",
+  TELEPORT: "indigo",
+  // Barbarian - red
+  WILD_FURY: "red",
+  RECKLESS_ATTACK: "red",
+  TOTAL_DESTRUCTION: "red",
+  // Rogue - gray
+  SNEAK_ATTACK: "gray",
+  CUNNING_ACTION: "gray",
+  ASSASSINATE: "gray",
+  // Ranger - green
+  HUNTERS_MARK: "emerald",
+  NATURAL_EXPLORER: "emerald",
+  VOLLEY: "emerald",
+};
+
+/**
+ * Informações visuais de uma skill para UI
+ */
+export interface SkillInfo {
+  icon: string;
+  name: string;
+  description: string;
+  color: string;
+  requiresTarget?: boolean;
+}
+
+/**
+ * Obtém informações visuais de uma skill pelo código
+ * Retorna fallback se a skill não for encontrada
+ */
+export function getSkillInfo(skillCode: string): SkillInfo | null {
+  const skill = findSkillByCode(skillCode);
+  if (!skill) return null;
+
+  // Determina se requer target baseado no range/targetType
+  const requiresTarget =
+    skill.range === "ADJACENT" ||
+    skill.range === "RANGED" ||
+    skill.range === "AREA";
+
+  return {
+    icon: SKILL_ICONS[skillCode] || "✨",
+    name: skill.name,
+    description: skill.description,
+    color: SKILL_COLORS[skillCode] || "purple",
+    requiresTarget,
+  };
 }

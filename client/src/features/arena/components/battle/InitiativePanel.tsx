@@ -26,8 +26,8 @@ export const InitiativePanel: React.FC<InitiativePanelProps> = ({
     enemyUnits,
     myKingdomName,
     enemyKingdomName,
-    myTotalAcuity,
-    enemyTotalAcuity,
+    myTotalSpeed,
+    enemyTotalSpeed,
   } = useMemo(() => {
     const myUnits = units.filter((u) => u.ownerId === currentUserId);
     const enemyUnits = units.filter((u) => u.ownerId !== currentUserId);
@@ -41,21 +41,21 @@ export const InitiativePanel: React.FC<InitiativePanelProps> = ({
       ? battle.guestKingdom.name
       : battle.hostKingdom.name;
 
-    // Calcular Acuity total (determina quem age primeiro)
-    const myTotalAcuity = myUnits
+    // Calcular Speed total (determina quem age primeiro)
+    const myTotalSpeed = myUnits
       .filter((u) => u.isAlive)
-      .reduce((sum, u) => sum + u.acuity, 0);
-    const enemyTotalAcuity = enemyUnits
+      .reduce((sum, u) => sum + u.speed, 0);
+    const enemyTotalSpeed = enemyUnits
       .filter((u) => u.isAlive)
-      .reduce((sum, u) => sum + u.acuity, 0);
+      .reduce((sum, u) => sum + u.speed, 0);
 
     return {
       myUnits,
       enemyUnits,
       myKingdomName,
       enemyKingdomName,
-      myTotalAcuity,
-      enemyTotalAcuity,
+      myTotalSpeed,
+      enemyTotalSpeed,
     };
   }, [units, currentUserId, battle.hostKingdom, battle.guestKingdom]);
 
@@ -238,26 +238,26 @@ export const InitiativePanel: React.FC<InitiativePanelProps> = ({
       <div className="bg-citadel-granite/50 rounded-lg border border-metal-iron/50 p-2">
         <div className="text-center text-[10px] text-parchment-dark">
           <span className="text-amber-400 font-semibold">Ordem de Turno:</span>{" "}
-          O jogador com maior soma de Acuidade age primeiro.
+          O jogador com maior soma de Velocidade age primeiro.
         </div>
         <div className="flex justify-around mt-1 text-[10px]">
           <span
             className={`${
-              myTotalAcuity >= enemyTotalAcuity
+              myTotalSpeed >= enemyTotalSpeed
                 ? "text-emerald-400 font-bold"
                 : "text-parchment-dark"
             }`}
           >
-            Você: {myTotalAcuity} ACU
+            Você: {myTotalSpeed} VEL
           </span>
           <span
             className={`${
-              enemyTotalAcuity > myTotalAcuity
+              enemyTotalSpeed > myTotalSpeed
                 ? "text-red-400 font-bold"
                 : "text-parchment-dark"
             }`}
           >
-            Inimigo: {enemyTotalAcuity} ACU
+            Inimigo: {enemyTotalSpeed} VEL
           </span>
         </div>
       </div>

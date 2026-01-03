@@ -10,9 +10,9 @@ import {
   UnitDescriptionSchema,
   TroopTemplateDescriptionSchema,
 } from "../lib/validation/kingdom.schemas";
-import { RACE_DEFINITIONS } from "../data/races";
-import { ALIGNMENT_DEFINITIONS } from "../data/alignments";
-import { getTroopSkills } from "../data/skills.data";
+import { RACE_DEFINITIONS } from "../../../shared/data/races";
+import { ALIGNMENT_DEFINITIONS } from "../../../shared/data/alignments";
+import { getTroopSkills } from "../../../shared/data/skills.data";
 import {
   createTroopTemplatesForKingdom,
   TroopTemplateData,
@@ -20,7 +20,7 @@ import {
 import {
   getKingdomTemplateById,
   getKingdomTemplatesSummary,
-} from "../data/kingdom-templates";
+} from "../../../shared/data/kingdom-templates";
 
 const MAP_SIZE = 100;
 const ERROR_EVENT = "kingdom:error";
@@ -102,7 +102,7 @@ export const registerKingdomHandlers = (io: Server, socket: Socket) => {
               category: "REGENT",
               level: 1,
               combat: regentAttrs.combat,
-              acuity: regentAttrs.acuity,
+              speed: regentAttrs.speed,
               focus: regentAttrs.focus,
               armor: regentAttrs.armor,
               vitality: regentAttrs.vitality,
@@ -394,7 +394,7 @@ export const registerKingdomHandlers = (io: Server, socket: Socket) => {
               category: "REGENT",
               level: 1,
               combat: template.regent.combat,
-              acuity: template.regent.acuity,
+              speed: template.regent.speed,
               focus: template.regent.focus,
               armor: template.regent.armor,
               vitality: template.regent.vitality,
@@ -416,7 +416,7 @@ export const registerKingdomHandlers = (io: Server, socket: Socket) => {
             passiveId: t.passiveId,
             resourceType: t.resourceType,
             combat: t.combat,
-            acuity: t.acuity,
+            speed: t.speed,
             focus: t.focus,
             armor: t.armor,
             vitality: t.vitality,

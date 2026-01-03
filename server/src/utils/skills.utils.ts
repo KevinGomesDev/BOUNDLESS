@@ -9,7 +9,7 @@ import {
   getSkillByCode,
   getSkillsForClass,
   getAllClassesSummary,
-} from "../data/classes.data";
+} from "../../../shared/data/classes.data";
 import {
   SkillCategory,
   SkillCostTier,

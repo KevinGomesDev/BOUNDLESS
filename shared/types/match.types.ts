@@ -9,6 +9,11 @@ import type { Territory } from "./map.types";
 export type MatchStatus = "WAITING" | "PREPARATION" | "ACTIVE" | "FINISHED";
 
 /**
+ * Tipos de Crise (eventos de ameaça global)
+ */
+export type CrisisType = "KAIJU" | "WALKERS" | "AMORPHOUS";
+
+/**
  * Tipos de turno na partida
  */
 export type TurnType =

@@ -192,15 +192,21 @@ export const useArenaSectionActions = () => {
   }, [kingdoms, selectedKingdom]);
 
   const handleCreate = async () => {
+    console.log("[ArenaSection] handleCreate called", {
+      selectedKingdom,
+      hasKingdoms: kingdoms.length > 0,
+    });
     if (!selectedKingdom || !authState.user?.id) {
       alert("Selecione um reino primeiro");
       return;
     }
     const canJoin = await canJoinSession(authState.user.id);
+    console.log("[ArenaSection] canJoinSession result:", canJoin);
     if (!canJoin) {
       alert(sessionState.canJoinReason || "Você já está em uma sessão ativa");
       return;
     }
+    console.log("[ArenaSection] Creating lobby with kingdom:", selectedKingdom);
     setIsCreating(true);
     createLobby(selectedKingdom);
     setTimeout(() => setIsCreating(false), 1000);

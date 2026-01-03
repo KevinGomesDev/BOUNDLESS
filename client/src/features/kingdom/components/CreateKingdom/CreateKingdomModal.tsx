@@ -114,7 +114,7 @@ export const CreateKingdomModal: React.FC<CreateKingdomModalProps> = ({
           passiveId: t.passiveId,
           resourceType: t.resourceType,
           combat: t.combat,
-          acuity: t.acuity,
+          speed: t.speed,
           focus: t.focus,
           armor: t.armor,
           vitality: t.vitality,

@@ -8,7 +8,7 @@ import {
   executeSkillAction,
   type CombatUnit,
 } from "../../logic/combat-actions";
-import { findSkillByCode } from "../../data/skills.data";
+import { findSkillByCode } from "../../../../shared/data/skills.data";
 import {
   processUnitTurnEndConditions,
   advanceToNextPlayer,
@@ -20,7 +20,7 @@ import {
   emitExhaustionEndEvents,
 } from "../../logic/round-control";
 import {
-  getEffectiveAcuityWithConditions,
+  getEffectiveSpeedWithConditions,
   getMaxMarksByCategory,
 } from "../../utils/battle.utils";
 import {
@@ -109,11 +109,11 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
         return;
       }
 
-      const effectiveAcuity = getEffectiveAcuityWithConditions(
-        unit.acuity,
+      const effectiveSpeed = getEffectiveSpeedWithConditions(
+        unit.speed,
         unit.conditions
       );
-      unit.movesLeft = effectiveAcuity;
+      unit.movesLeft = effectiveSpeed;
       unit.actionsLeft = 1;
       unit.hasStartedAction = true;
       battle.activeUnitId = unitId;
@@ -134,7 +134,7 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
       socket.emit("battle:action_started", {
         battleId,
         unitId,
-        movesLeft: effectiveAcuity,
+        movesLeft: effectiveSpeed,
         actionsLeft: unit.actionsLeft,
         currentHp: unit.currentHp,
         isAlive: unit.isAlive,
@@ -464,13 +464,7 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
             attackerActionsLeft: attacker.actionsLeft,
             attackerAttacksLeftThisTurn: result.attacksLeftThisTurn ?? 0,
             missed: result.missed ?? false,
-            attackDiceCount: result.attackDiceCount ?? 0,
-            attackRolls: result.attackRolls ?? [],
-            attackSuccesses: result.attackSuccesses ?? 0,
             rawDamage: result.rawDamage ?? 0,
-            defenseDiceCount: result.defenseDiceCount ?? 0,
-            defenseRolls: result.defenseRolls ?? [],
-            defenseSuccesses: result.defenseSuccesses ?? 0,
             damageReduction: result.damageReduction ?? 0,
             finalDamage: result.finalDamage ?? 0,
             targetPhysicalProtection: result.targetPhysicalProtection ?? 0,
@@ -484,14 +478,53 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
             targetName: target?.name ?? obstacle?.id ?? "Obstáculo",
             targetIcon: target ? "🛡️" : "🪨",
             targetCombat: target?.combat ?? 0,
-            targetAcuity: target?.acuity ?? 0,
+            targetSpeed: target?.speed ?? 0,
+            dodgeChance: result.dodgeChance ?? 0,
+            dodgeRoll: result.dodgeRoll ?? 0,
           });
+
+          // === COMBAT TOASTS ===
+          // Toast de esquiva
+          if (result.missed && result.dodged && target) {
+            io.to(lobby.lobbyId).emit("battle:toast", {
+              battleId,
+              type: "success",
+              title: "💨 Esquivou!",
+              message: `${target.name} desviou do ataque de ${attacker.name}!`,
+              duration: 2500,
+            });
+          }
+
+          // Toast de dano ao alvo
+          if (!result.missed && target && (result.finalDamage ?? 0) > 0) {
+            // Determinar se foi em proteção ou HP
+            const damageReduction = result.damageReduction ?? 0;
+            const hpDamage = (result.finalDamage ?? 0) - damageReduction;
+
+            if (damageReduction > 0 && hpDamage <= 0) {
+              // Todo o dano absorvido pela proteção
+              io.to(lobby.lobbyId).emit("battle:toast", {
+                battleId,
+                type: "warning",
+                title: "🛡️ Proteção!",
+                message: `${target.name} absorveu ${damageReduction} de dano de ${attacker.name}`,
+                duration: 2000,
+              });
+            } else if (hpDamage > 0) {
+              io.to(lobby.lobbyId).emit("battle:toast", {
+                battleId,
+                type: "error",
+                title: "💔 Dano!",
+                message: `${attacker.name} causou ${result.finalDamage} de dano a ${target.name}`,
+                duration: 2000,
+              });
+            }
+          }
 
           // Emitir toast se houver ataques extras disponíveis
           if ((result.attacksLeftThisTurn ?? 0) > 0) {
             io.to(lobby.lobbyId).emit("battle:toast", {
               battleId,
-              targetUserId: attacker.ownerId,
               type: "info",
               title: "⚔️ Ataques Extras!",
               message: `${attacker.name} pode atacar mais ${result.attacksLeftThisTurn} vez(es)!`,

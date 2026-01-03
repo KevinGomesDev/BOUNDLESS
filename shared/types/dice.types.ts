@@ -118,7 +118,7 @@ export interface MultiTargetAttackResult {
  * - Explosões são recursivas (6 no explosão também explode)
  *
  * QUANTIDADE DE DADOS
- * - Definida pelo atributo relevante (Combat, Acuity, Focus, etc.)
+ * - Definida pelo atributo relevante (Combat, speed, Focus, etc.)
  *
  * TESTES RESISTIDOS
  * - Atacante e defensor rolam simultaneamente
@@ -127,7 +127,7 @@ export interface MultiTargetAttackResult {
  *
  * CÁLCULO DE DANO/DEFESA
  * - Dano = Sucessos * Combat (ver ATTACK_CONFIG em balance.config.ts)
- * - Defesa = Sucessos * (Acuity / 2) (ver DEFENSE_CONFIG em balance.config.ts)
+ * - Defesa = Sucessos * (speed / 2) (ver DEFENSE_CONFIG em balance.config.ts)
  * - Dano Final = Dano - Defesa (mínimo 0)
  *
  * PROTEÇÕES (ver balance.config.ts para multiplicadores)

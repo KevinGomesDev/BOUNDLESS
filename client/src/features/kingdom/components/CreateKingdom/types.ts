@@ -27,7 +27,7 @@ export interface RegentFormData {
   avatar?: string; // Nome do arquivo sprite
   attributes: {
     combat: number;
-    acuity: number;
+    speed: number;
     focus: number;
     armor: number;
     vitality: number;

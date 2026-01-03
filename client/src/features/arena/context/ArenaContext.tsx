@@ -9,7 +9,7 @@ import React, {
 import { socketService } from "../../../services/socket.service";
 import { useAuth } from "../../auth";
 import { useSession } from "../../../core";
-import { useDiceRoll } from "../../dice-roll";
+import { useEvents } from "../../events";
 import { arenaReducer, initialArenaState } from "./arenaReducer";
 import { arenaLog, battleLog, lobbyLog } from "../utils";
 import type {
@@ -27,7 +27,6 @@ import type {
   ArenaLobbyStatus,
   ArenaUnit,
 } from "../types/arena.types";
-import type { DiceRollPanelData, RollOutcome } from "../../dice-roll";
 
 export const ArenaContext = createContext<ArenaContextType | null>(null);
 
@@ -39,27 +38,16 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(arenaReducer, initialArenaState);
   const { user } = useAuth();
   const { clearSession } = useSession();
-  const { openRollPanel, isOpen: isDiceRollOpen } = useDiceRoll();
+  const { showToast } = useEvents();
+
+  // Ref para acessar showToast no handler de socket
+  const showToastRef = React.useRef(showToast);
+  showToastRef.current = showToast;
 
   // Ref para acessar valores atuais nos handlers sem causar re-render do useEffect
   // IMPORTANTE: Atualizar sincronamente durante render, NÃO em useEffect!
   const stateRef = React.useRef(state);
   stateRef.current = state; // Atualiza a cada render
-
-  // Ref para acessar openRollPanel no handler de socket
-  const openRollPanelRef = React.useRef(openRollPanel);
-  openRollPanelRef.current = openRollPanel;
-
-  // Ref para estado do dice roll panel (para evitar dependência no useEffect)
-  const isDiceRollOpenRef = React.useRef(isDiceRollOpen);
-  isDiceRollOpenRef.current = isDiceRollOpen;
-
-  // Ref para armazenar resultado da batalha pendente (quando painel de dados está aberto)
-  const pendingBattleEndRef = React.useRef<BattleEndedResponse | null>(null);
-
-  // Ref para rastrear unidades que terão morte atualizada no onComplete do painel de dados
-  // Isso evita que handleUnitDefeated atualize a morte antes da animação completar
-  const pendingDeathUnitsRef = React.useRef<Set<string>>(new Set());
 
   // Setup socket event listeners
   useEffect(() => {
@@ -312,151 +300,35 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         targetUnitId: data.targetUnitId,
         damage: data.damage,
         targetHpAfter: data.targetHpAfter,
-        targetProtection: data.targetProtection,
         damageType: data.damageType,
-        rolls: data.rolls,
-        diceCount: data.diceCount,
         attackerActionsLeft: data.attackerActionsLeft,
+        missed: data.missed,
       });
 
-      // === ABRIR PAINEL VISUAL DE ROLAGEM ===
-      // Montar DiceRollResult para ataque
-      const attackRoll = {
-        diceCount: data.attackDiceCount,
-        advantageMod: 0 as const,
-        successThreshold: 4,
-        diceResults: data.attackRolls.map((value) => ({
-          value,
-          isSuccess: value >= 4,
-          isExplosion: value === 6,
-        })),
-        totalSuccesses: data.attackSuccesses,
-        allRolls: data.attackRolls,
-        success: data.attackSuccesses > 0,
-        explosionCount: data.attackRolls.filter((v) => v === 6).length,
-      };
-
-      // Montar DiceRollResult para defesa
-      const defenseRoll = {
-        diceCount: data.defenseDiceCount,
-        advantageMod: 0 as const,
-        successThreshold: 4,
-        diceResults: data.defenseRolls.map((value) => ({
-          value,
-          isSuccess: value >= 4,
-          isExplosion: value === 6,
-        })),
-        totalSuccesses: data.defenseSuccesses,
-        allRolls: data.defenseRolls,
-        success: data.defenseSuccesses > 0,
-        explosionCount: data.defenseRolls.filter((v) => v === 6).length,
-      };
-
-      // Montar outcome
-      const outcome: RollOutcome = {
-        attackerSuccesses: data.attackSuccesses,
-        defenderSuccesses: data.defenseSuccesses,
-        netSuccesses: data.attackSuccesses - data.defenseSuccesses,
-        damageDealt: data.rawDamage,
-        damageBlocked: data.damageReduction,
-        finalDamage: data.finalDamage,
-        isCritical: data.attackSuccesses >= 5,
-        isHit: data.finalDamage > 0,
-        isDodge: data.missed ?? false,
-        isPartialBlock: data.defenseSuccesses > 0 && data.finalDamage > 0,
-      };
-
-      // Montar dados do painel
-      const panelData: DiceRollPanelData = {
-        battleId: data.battleId,
-        actionId: `attack-${Date.now()}`,
-        actionType: "attack",
-        attacker: {
-          id: data.attackerUnitId,
-          name: data.attackerName,
-          icon: data.attackerIcon,
-          combat: data.attackerCombat,
-          diceCount: data.attackDiceCount,
-          advantageMod: 0,
-          modifiers: [],
-        },
-        defender: {
+      // Atualizar HP e proteções do alvo
+      dispatch({
+        type: "UPDATE_UNIT",
+        payload: {
           id: data.targetUnitId,
-          name: data.targetName,
-          icon: data.targetIcon,
-          combat: data.targetCombat,
-          diceCount: data.defenseDiceCount,
-          advantageMod: 0,
-          modifiers: [],
+          currentHp: data.targetHpAfter,
+          physicalProtection: data.targetPhysicalProtection,
+          magicalProtection: data.targetMagicalProtection,
+          ...(data.targetDefeated ? { isAlive: false } : {}),
         },
-        attackRoll,
-        defenseRoll,
-        outcome,
-        damageType: data.damageType as "FISICO" | "MAGICO" | "VERDADEIRO",
-      };
+      });
 
-      // === DADOS PARA ATUALIZAÇÃO APÓS ANIMAÇÃO ===
-      const targetWillDie = data.targetHpAfter <= 0;
-      const targetId = data.targetUnitId;
-      const attackerId = data.attackerUnitId;
-      const newHp = data.targetHpAfter;
-      const newPhysicalProtection = data.targetPhysicalProtection;
-      const newMagicalProtection = data.targetMagicalProtection;
-      const newAttackerActionsLeft = data.attackerActionsLeft;
-      const newAttackerAttacksLeftThisTurn = data.attackerAttacksLeftThisTurn;
-
-      // Se o alvo vai morrer, marcar como pendente (para ignorar handleUnitDefeated)
-      if (targetWillDie) {
-        pendingDeathUnitsRef.current.add(targetId);
-      }
-
-      // Abrir o painel visual - estado será atualizado APÓS animação completar
-      openRollPanelRef.current({
-        data: panelData,
-        autoPlay: true,
-        speedMultiplier: 1,
-        onComplete: () => {
-          // Atualizar HP e proteções do alvo APÓS animação
-          dispatch({
-            type: "UPDATE_UNIT",
-            payload: {
-              id: targetId,
-              currentHp: newHp,
-              physicalProtection: newPhysicalProtection,
-              magicalProtection: newMagicalProtection,
-              ...(targetWillDie ? { isAlive: false } : {}),
-            },
-          });
-
-          // Atualizar ações e ataques extras do atacante
-          dispatch({
-            type: "UPDATE_UNIT",
-            payload: {
-              id: attackerId,
-              actionsLeft: newAttackerActionsLeft,
-              attacksLeftThisTurn: newAttackerAttacksLeftThisTurn,
-            },
-          });
-
-          // Limpar pendência de morte
-          if (targetWillDie) {
-            pendingDeathUnitsRef.current.delete(targetId);
-          }
+      // Atualizar ações e ataques extras do atacante
+      dispatch({
+        type: "UPDATE_UNIT",
+        payload: {
+          id: data.attackerUnitId,
+          actionsLeft: data.attackerActionsLeft,
+          attacksLeftThisTurn: data.attackerAttacksLeftThisTurn,
         },
       });
     };
 
     const handleUnitDefeated = (data: { battleId: string; unitId: string }) => {
-      // Se a morte está pendente de animação, ignorar este evento
-      // (a morte será aplicada no onComplete do painel de dados)
-      if (pendingDeathUnitsRef.current.has(data.unitId)) {
-        console.log(
-          "[ARENA-CLIENT] 💀 Morte pendente de animação, ignorando:",
-          data.unitId
-        );
-        return;
-      }
-
       console.log("[ARENA-CLIENT] 💀 UNIDADE DERROTADA:", data.unitId);
       battleLog("💀", "UNIDADE DERROTADA!", {
         battleId: data.battleId,
@@ -656,24 +528,8 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
         winnerId: data.winnerId,
         reason: data.reason,
         finalUnitsCount: data.finalUnits?.length,
-        isDiceRollOpen: isDiceRollOpenRef.current,
       });
 
-      // Se o painel de dados está aberto, enfileirar resultado para processar depois
-      if (isDiceRollOpenRef.current) {
-        console.log(
-          "[ARENA-CLIENT] ⏳ Painel de dados aberto, enfileirando resultado da batalha"
-        );
-        pendingBattleEndRef.current = data;
-        return;
-      }
-
-      // Processar resultado imediatamente
-      processBattleEnded(data);
-    };
-
-    // Função para processar resultado da batalha (pode ser chamada imediatamente ou depois do painel de dados fechar)
-    const processBattleEnded = (data: BattleEndedResponse) => {
       battleLog("🏆", "BATALHA FINALIZADA!", {
         battleId: data.battleId,
         winnerId: data.winnerId,
@@ -783,33 +639,45 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       });
     };
 
-    // Handler para toasts de batalha (ataques extras, etc)
+    // Handler para toasts de batalha (esquiva, dano, ataques extras, etc)
     const handleBattleToast = (data: {
       battleId: string;
-      targetUserId: string;
       type: "info" | "success" | "warning" | "error";
       title: string;
       message: string;
       duration?: number;
     }) => {
-      // Só mostrar toast para o jogador alvo
-      if (data.targetUserId === user.id) {
-        battleLog("🔔", "TOAST", {
-          type: data.type,
-          title: data.title,
-          message: data.message,
-        });
-        // Usar dispatch de erro como toast temporário (será mostrado na UI)
-        // Podemos melhorar isso depois com um sistema de toasts dedicado
-        dispatch({
-          type: "SET_ERROR",
-          payload: `${data.title}: ${data.message}`,
-        });
-        // Limpar após a duração
-        setTimeout(() => {
-          dispatch({ type: "SET_ERROR", payload: null });
-        }, data.duration ?? 3000);
-      }
+      // Mostrar toast para todos os jogadores
+      battleLog("🔔", "TOAST", {
+        type: data.type,
+        title: data.title,
+        message: data.message,
+      });
+
+      // Mapear tipo do toast para severidade do evento
+      const severityMap: Record<
+        string,
+        "INFO" | "SUCCESS" | "WARNING" | "DANGER"
+      > = {
+        info: "INFO",
+        success: "SUCCESS",
+        warning: "WARNING",
+        error: "DANGER",
+      };
+
+      // Usar o sistema de eventos existente para mostrar toast
+      showToastRef.current({
+        id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date(),
+        context: "BATTLE",
+        scope: "INDIVIDUAL",
+        category: "COMBAT",
+        severity: severityMap[data.type] || "INFO",
+        battleId: data.battleId,
+        targetUserIds: [user.id],
+        message: `${data.title} ${data.message}`,
+        code: "COMBAT_TOAST",
+      });
     };
 
     // Handler for session restoration (reconnection)
@@ -985,50 +853,6 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
 
     return () => clearTimeout(timer);
   }, [user?.id]);
-
-  // Efeito para processar resultado de batalha pendente quando o painel de dados fecha
-  // Isso garante que o modal de vitória só apareça depois da animação dos dados
-  useEffect(() => {
-    // Se o painel de dados fechou e temos um resultado pendente, processar agora
-    if (!isDiceRollOpen && pendingBattleEndRef.current) {
-      console.log(
-        "[ARENA-CLIENT] 🎲 Painel de dados fechou, processando resultado pendente"
-      );
-      const pendingData = pendingBattleEndRef.current;
-      pendingBattleEndRef.current = null;
-
-      // Processar o resultado da batalha agora
-      battleLog("🏆", "BATALHA FINALIZADA (após animação)!", {
-        battleId: pendingData.battleId,
-        winnerId: pendingData.winnerId,
-        reason: pendingData.reason,
-        finalUnitsCount: pendingData.finalUnits?.length,
-      });
-
-      dispatch({
-        type: "SET_BATTLE_RESULT",
-        payload: {
-          battleId: pendingData.battleId,
-          winnerId: pendingData.winnerId,
-          winnerKingdomId: pendingData.winnerKingdomId,
-          reason: pendingData.reason,
-          surrenderedBy: pendingData.surrenderedBy,
-          disconnectedBy: pendingData.disconnectedBy,
-          finalUnits: pendingData.finalUnits || [...stateRef.current.units],
-        },
-      });
-
-      dispatch({
-        type: "SET_BATTLE",
-        payload: stateRef.current.battle
-          ? { ...stateRef.current.battle, status: "ENDED" }
-          : null,
-      });
-
-      dispatch({ type: "SET_REMATCH_PENDING", payload: false });
-      dispatch({ type: "SET_OPPONENT_WANTS_REMATCH", payload: false });
-    }
-  }, [isDiceRollOpen]);
 
   const createLobby = useCallback(
     (kingdomId: string) => {

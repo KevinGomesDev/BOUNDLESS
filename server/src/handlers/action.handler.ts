@@ -146,7 +146,7 @@ export const registerActionHandlers = (io: Server, socket: Socket) => {
         // Pegar atributos do líder para os testes
         const leaderAttributes: Record<ConquestAttribute, number> = {
           combat: leader?.combat ?? 1,
-          acuity: leader?.acuity ?? 1,
+          speed: leader?.speed ?? 1,
           focus: leader?.focus ?? 1,
           armor: leader?.armor ?? 1,
           vitality: leader?.vitality ?? 1,

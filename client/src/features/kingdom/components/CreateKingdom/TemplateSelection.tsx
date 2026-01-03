@@ -283,7 +283,7 @@ const TemplateDetailsView: React.FC<TemplateDetailsViewProps> = ({
                   <div className="bg-citadel-slate/30 rounded p-1">
                     <div className="text-blue-400">👁️</div>
                     <div className="text-parchment-light font-bold">
-                      {regent.acuity ?? 0}
+                      {regent.speed ?? 0}
                     </div>
                   </div>
                   <div className="bg-citadel-slate/30 rounded p-1">

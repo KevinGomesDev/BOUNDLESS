@@ -35,7 +35,7 @@ export const ResourceTypeSchema = z.enum([
 
 export const BaseAttributesSchema = z.object({
   combat: z.number().min(1).max(30),
-  acuity: z.number().min(1).max(30),
+  speed: z.number().min(1).max(30),
   focus: z.number().min(1).max(30),
   armor: z.number().min(1).max(30),
   vitality: z.number().min(1).max(30),
@@ -45,7 +45,7 @@ export const BaseAttributesSchema = z.object({
 export const RegentAttributesSchema = z
   .object({
     combat: z.number().min(0).max(30),
-    acuity: z.number().min(0).max(30),
+    speed: z.number().min(0).max(30),
     focus: z.number().min(0).max(30),
     armor: z.number().min(0).max(30),
     vitality: z.number().min(0).max(30),
@@ -53,7 +53,7 @@ export const RegentAttributesSchema = z
   .refine(
     (data) => {
       const total =
-        data.combat + data.acuity + data.focus + data.armor + data.vitality;
+        data.combat + data.speed + data.focus + data.armor + data.vitality;
       return total === 30;
     },
     { message: "Atributos do regente devem somar exatamente 30 pontos" }
@@ -83,7 +83,7 @@ export const CreateTroopTemplateSchema = z.object({
   passiveId: z.string().min(1, "Passiva é obrigatória"),
   resourceType: ResourceTypeSchema,
   combat: z.number().min(1).max(15),
-  acuity: z.number().min(1).max(15),
+  speed: z.number().min(1).max(15),
   focus: z.number().min(1).max(15),
   armor: z.number().min(1).max(15),
   vitality: z.number().min(1).max(15),

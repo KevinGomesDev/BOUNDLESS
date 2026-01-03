@@ -7,7 +7,7 @@
 // =============================================================================
 // Altere aqui para mudar o nome dos atributos em toda a aplicação
 
-export type AttributeKey = "combat" | "acuity" | "focus" | "armor" | "vitality";
+export type AttributeKey = "combat" | "speed" | "focus" | "armor" | "vitality";
 
 export interface AttributeDefinition {
   key: AttributeKey;
@@ -27,12 +27,13 @@ export const ATTRIBUTE_NAMES: Record<AttributeKey, AttributeDefinition> = {
     description: "Determina dados de ataque e dano. Dano = Sucessos × Combate.",
     color: "text-red-400",
   },
-  acuity: {
-    key: "acuity",
-    name: "Acuidade",
-    shortName: "ACU",
-    icon: "👁️",
-    description: "Dados de defesa e movimento. Defesa = Sucessos × Acuidade.",
+  speed: {
+    key: "speed",
+    name: "Velocidade",
+    shortName: "VEL",
+    icon: "💨",
+    description:
+      "Determina chance de esquiva e movimento. Esquiva = Speed × 3%.",
     color: "text-blue-400",
   },
   focus: {
@@ -75,7 +76,7 @@ export function getAttributeDefinition(key: AttributeKey): AttributeDefinition {
 /** Lista de todas as chaves de atributos */
 export const ALL_ATTRIBUTE_KEYS: AttributeKey[] = [
   "combat",
-  "acuity",
+  "speed",
   "focus",
   "armor",
   "vitality",
@@ -562,7 +563,7 @@ export function getRandomTerritorySize(): TerritorySize {
 export const ATTACK_CONFIG = {
   /**
    * Atributo usado para determinar quantidade de dados no ataque
-   * Valores possíveis: "combat" | "acuity" | "focus"
+   * Valores possíveis: "combat" | "speed" | "focus"
    */
   attribute: "combat" as const,
 
@@ -585,23 +586,58 @@ export const ATTACK_CONFIG = {
 
 export const DEFENSE_CONFIG = {
   /**
-   * Atributo usado para determinar quantidade de dados na defesa
-   * Valores possíveis: "combat" | "acuity" | "focus"
+   * Atributo usado para determinar chance de esquiva
+   * Valores possíveis: "combat" | "speed" | "focus"
    */
-  attribute: "acuity" as const,
+  attribute: "speed" as const,
 
   /**
-   * Multiplicador de redução por sucesso
-   * Fórmula: Sucessos * (Atributo * multiplier)
-   * Ex: multiplier = 1 significa Sucessos * Acuidade
+   * Multiplicador de chance de esquiva
+   * Fórmula: Atributo * multiplier = % de esquiva
+   * Ex: Speed 5 * 3 = 15% de chance
    */
-  defenseMultiplier: 0,
+  dodgeMultiplier: 3,
 
   /**
-   * Mínimo de dados para rolar (mesmo com atributo 0)
+   * Chance máxima de esquiva (cap)
    */
-  minDice: 1,
+  maxDodgeChance: 75,
 } as const;
+
+// =============================================================================
+// CONFIGURAÇÃO DE DANO DE MAGIA
+// =============================================================================
+
+export type MagicDamageTier = "LOW" | "MEDIUM" | "HIGH";
+
+export const MAGIC_DAMAGE_CONFIG: Record<MagicDamageTier, number> = {
+  /**
+   * Dano comum: Focus * 1.5
+   */
+  LOW: 1.5,
+
+  /**
+   * Dano alto: Focus * 2
+   */
+  MEDIUM: 2,
+
+  /**
+   * Dano extremo: Focus * 4
+   */
+  HIGH: 4,
+} as const;
+
+/**
+ * Calcula dano de magia baseado no tier
+ * @param focus Atributo Focus do conjurador
+ * @param tier Tier do dano (LOW, MEDIUM, HIGH)
+ */
+export function calculateMagicDamage(
+  focus: number,
+  tier: MagicDamageTier
+): number {
+  return Math.floor(focus * MAGIC_DAMAGE_CONFIG[tier]);
+}
 
 // =============================================================================
 // CONFIGURAÇÃO DE ACTION MARKS (EXAUSTÃO)
@@ -816,7 +852,7 @@ export const MOVEMENT_CONFIG = {
   /**
    * Atributo base para calcular movimento
    */
-  attribute: "acuity" as const,
+  attribute: "speed" as const,
 
   /**
    * Divisor do atributo (1 = valor completo, 2 = metade)
@@ -882,16 +918,11 @@ export const DICE_CONFIG = {
 // HELPER: Obter valor do atributo por nome
 // =============================================================================
 
-export type AttributeName =
-  | "combat"
-  | "acuity"
-  | "focus"
-  | "armor"
-  | "vitality";
+export type AttributeName = "combat" | "speed" | "focus" | "armor" | "vitality";
 
 export interface UnitAttributes {
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -912,54 +943,24 @@ export function getAttributeValue(
 // =============================================================================
 
 /**
- * Calcula quantidade de dados de ataque
+ * Calcula a chance de esquiva de uma unidade
+ * Fórmula: Speed × dodgeMultiplier (cap: maxDodgeChance)
  */
-export function getAttackDiceCount(unit: UnitAttributes): number {
-  const attrValue = getAttributeValue(unit, ATTACK_CONFIG.attribute);
-  return Math.max(ATTACK_CONFIG.minDice, attrValue);
-}
-
-/**
- * Calcula quantidade de dados de defesa
- */
-export function getDefenseDiceCount(unit: UnitAttributes): number {
-  const attrValue = getAttributeValue(unit, DEFENSE_CONFIG.attribute);
-  return Math.max(DEFENSE_CONFIG.minDice, attrValue);
-}
-
-/**
- * Calcula dano bruto a partir de sucessos
- * Se damageMultiplier = 0: dano = sucessos
- * Se damageMultiplier = 1: dano = sucessos * atributo
- */
-export function calculateDamage(
-  successes: number,
-  unit: UnitAttributes
-): number {
-  if (ATTACK_CONFIG.damageMultiplier === 0) {
-    return Math.max(0, successes);
-  }
-  const attrValue = getAttributeValue(unit, ATTACK_CONFIG.attribute);
-  return Math.max(0, successes * attrValue * ATTACK_CONFIG.damageMultiplier);
-}
-
-/**
- * Calcula redução de dano a partir de sucessos de defesa
- * Se defenseMultiplier = 0: redução = sucessos
- * Se defenseMultiplier = 1: redução = sucessos * atributo
- */
-export function calculateDefenseReduction(
-  successes: number,
-  unit: UnitAttributes
-): number {
-  if (DEFENSE_CONFIG.defenseMultiplier === 0) {
-    return Math.max(0, successes);
-  }
-  const attrValue = getAttributeValue(unit, DEFENSE_CONFIG.attribute);
-  return Math.max(
-    0,
-    Math.floor(successes * attrValue * DEFENSE_CONFIG.defenseMultiplier)
+export function getDodgeChance(unit: UnitAttributes): number {
+  const speed = getAttributeValue(unit, "speed");
+  return Math.min(
+    DEFENSE_CONFIG.maxDodgeChance,
+    speed * DEFENSE_CONFIG.dodgeMultiplier
   );
+}
+
+/**
+ * Calcula dano de ataque físico direto
+ * Fórmula: Combat (valor direto, sem dados)
+ */
+export function calculateDamage(unit: UnitAttributes): number {
+  const attrValue = getAttributeValue(unit, ATTACK_CONFIG.attribute);
+  return Math.max(1, attrValue);
 }
 
 /**

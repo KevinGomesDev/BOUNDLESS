@@ -1,5 +1,5 @@
-// src/data/structures.ts
-import { ResourceType } from "../types";
+// shared/data/structures.ts
+import type { ResourceType } from "../types/kingdom.types";
 
 interface StructureDefinition {
   id: string;

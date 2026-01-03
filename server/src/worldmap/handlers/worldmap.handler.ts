@@ -1,7 +1,7 @@
 // server/src/worldmap/handlers/worldmap.handler.ts
 import { Socket, Server } from "socket.io";
 import { prisma } from "../../lib/prisma";
-import { TERRAIN_TYPES } from "../data/terrains";
+import { TERRAIN_TYPES } from "../../../../shared/data/terrains";
 
 export const registerWorldMapHandlers = (io: Server, socket: Socket) => {
   // --- 1. DADOS ESTÁTICOS DE TERRENOS ---

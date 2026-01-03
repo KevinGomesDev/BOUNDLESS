@@ -167,7 +167,7 @@ export const SKILL_CONDITIONS: Record<string, ConditionDefinition> = {
     color: "#eab308",
     effects: {
       combatMod: 1,
-      acuityMod: 1,
+      speedMod: 1,
       focusMod: 1,
     },
   },

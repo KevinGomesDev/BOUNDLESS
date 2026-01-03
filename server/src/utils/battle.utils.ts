@@ -50,16 +50,16 @@ export function validateGridMove(
   return { valid: true, cost: dist };
 }
 
-// Calcula acuidade efetiva dada lista de condições
-export function getEffectiveAcuityWithConditions(
-  baseAcuity: number,
+// Calcula Velocidade efetiva dada lista de condições
+export function getEffectiveSpeedWithConditions(
+  baseSpeed: number,
   conditions: string[]
 ): number {
-  let acuity = baseAcuity;
-  if (conditions.includes("ELETRIFICADA")) acuity *= 2;
-  if (conditions.includes("CONGELADA")) acuity = Math.min(1, acuity);
-  if (conditions.includes("DERRUBADA")) acuity = 0;
-  return acuity;
+  let speed = baseSpeed;
+  if (conditions.includes("ELETRIFICADA")) speed *= 2;
+  if (conditions.includes("CONGELADA")) speed = Math.min(1, speed);
+  if (conditions.includes("DERRUBADA")) speed = 0;
+  return speed;
 }
 
 // Aplica efeito de queimando ao usar uma ação

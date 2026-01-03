@@ -14,7 +14,7 @@ import {
   updateUserStats,
 } from "./battle-persistence";
 import {
-  getEffectiveAcuityWithConditions,
+  getEffectiveSpeedWithConditions,
   getMaxMarksByCategory,
 } from "../../utils/battle.utils";
 import type { Battle } from "./battle-types";

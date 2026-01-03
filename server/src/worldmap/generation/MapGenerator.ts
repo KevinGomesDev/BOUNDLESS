@@ -1,6 +1,6 @@
 // server/src/worldmap/generation/MapGenerator.ts
 import { BiomeGenerator } from "./BiomeGenerator";
-import { TERRAIN_TYPES, TerrainType } from "../data/terrains";
+import { TERRAIN_TYPES, TerrainType } from "../../../../shared/data/terrains";
 
 /**
  * Estrutura de um território gerado

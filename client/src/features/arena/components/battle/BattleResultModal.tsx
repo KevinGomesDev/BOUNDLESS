@@ -100,8 +100,8 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
             <p className="text-parchment-light">{unit.combat}</p>
           </div>
           <div className="text-center">
-            <span className="text-parchment-dark">👁️</span>
-            <p className="text-parchment-light">{unit.acuity}</p>
+            <span className="text-parchment-dark">�</span>
+            <p className="text-parchment-light">{unit.speed}</p>
           </div>
           <div className="text-center">
             <span className="text-parchment-dark">🎯</span>

@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import type { ArenaUnit } from "../../types/arena.types";
 import { getConditionInfo } from "../../constants";
 import { ATTRIBUTE_NAMES } from "../../../../../../shared/config/global.config";
-import { useDiceRoll, DiceRollPanel } from "../../../dice-roll";
+import { getSkillInfo } from "../../../../../../shared/data/skills.data";
 
 // =============================================================================
 // COMPONENTES INTERNOS
@@ -295,10 +295,10 @@ const ATTRIBUTE_TOOLTIPS: Record<
     name: ATTRIBUTE_NAMES.combat.name,
     description: ATTRIBUTE_NAMES.combat.description,
   },
-  acuity: {
-    icon: ATTRIBUTE_NAMES.acuity.icon,
-    name: ATTRIBUTE_NAMES.acuity.name,
-    description: ATTRIBUTE_NAMES.acuity.description,
+  speed: {
+    icon: ATTRIBUTE_NAMES.speed.icon,
+    name: ATTRIBUTE_NAMES.speed.name,
+    description: ATTRIBUTE_NAMES.speed.description,
   },
   focus: {
     icon: ATTRIBUTE_NAMES.focus.icon,
@@ -541,13 +541,6 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
   // Só mostra ações se a unidade selecionada É a unidade ativa do turno
   const isActiveUnit = selectedUnit?.id === activeUnitId;
 
-  // Hook para rolagem de dados
-  const {
-    panelData,
-    isOpen: isDiceRollVisible,
-    closeRollPanel,
-  } = useDiceRoll();
-
   return (
     <div className="w-80 xl:w-96 flex-shrink-0 p-2 flex flex-col gap-2 overflow-y-auto overflow-x-hidden">
       {/* Painel da Unidade Selecionada */}
@@ -603,7 +596,7 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
           {/* Atributos - Grid com tooltips hover */}
           <div className="grid grid-cols-5 gap-1 mb-3">
             <AttributeTooltip attribute="combat" value={selectedUnit.combat} />
-            <AttributeTooltip attribute="acuity" value={selectedUnit.acuity} />
+            <AttributeTooltip attribute="speed" value={selectedUnit.speed} />
             <AttributeTooltip attribute="focus" value={selectedUnit.focus} />
             <AttributeTooltip attribute="armor" value={selectedUnit.armor} />
             <AttributeTooltip
@@ -629,10 +622,7 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
                 {/* Movimentos - Bolinhas Azuis */}
                 <div className="flex flex-col items-center">
                   <MovementDots
-                    total={Math.max(
-                      selectedUnit.movesLeft,
-                      selectedUnit.acuity
-                    )}
+                    total={Math.max(selectedUnit.movesLeft, selectedUnit.speed)}
                     remaining={selectedUnit.movesLeft}
                   />
                   <span className="text-parchment-dark text-[10px] mt-1">
@@ -693,8 +683,13 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
                   {selectedUnit.actions
                     ?.filter((actionKey) => actionKey !== "move")
                     .map((actionKey) => {
-                      const actionInfo = ACTIONS_INFO[actionKey];
-                      if (!actionInfo) return null;
+                      // Primeiro tenta ACTIONS_INFO, depois getSkillInfo
+                      let actionInfo = ACTIONS_INFO[actionKey];
+                      if (!actionInfo) {
+                        const skillInfo = getSkillInfo(actionKey);
+                        if (!skillInfo) return null;
+                        actionInfo = skillInfo;
+                      }
 
                       const isTargetAction = actionInfo.requiresTarget;
                       const isActive = pendingAction === actionKey;
@@ -783,14 +778,6 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
           </p>
         </div>
       )}
-
-      {/* Painel de Rolagem de Dados - Aparece abaixo do painel de unidade */}
-      <DiceRollPanel
-        data={panelData}
-        isVisible={isDiceRollVisible}
-        onClose={closeRollPanel}
-        autoCloseDelay={3000}
-      />
     </div>
   );
 };

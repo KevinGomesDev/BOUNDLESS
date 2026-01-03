@@ -172,7 +172,7 @@ export interface ConditionModifiers {
   bonusDamagePercent: number;
   // Atributos
   combatMod: number;
-  acuityMod: number;
+  speedMod: number;
   focusMod: number;
   armorMod: number;
   vitalityMod: number;
@@ -205,7 +205,7 @@ function createEmptyModifiers(): ConditionModifiers {
     bonusDamage: 0,
     bonusDamagePercent: 0,
     combatMod: 0,
-    acuityMod: 0,
+    speedMod: 0,
     focusMod: 0,
     armorMod: 0,
     vitalityMod: 0,
@@ -260,7 +260,7 @@ export function scanConditionsForAction(
       "bonusDamage",
       "bonusDamagePercent",
       "combatMod",
-      "acuityMod",
+      "speedMod",
       "focusMod",
       "armorMod",
       "vitalityMod",
@@ -518,7 +518,7 @@ export function getMinAttackSuccesses(conditions: string[]): number {
 //
 // MODIFICADORES DE ATRIBUTOS (soma/subtrai do base):
 //   combatMod      - Modifica Combat
-//   acuityMod      - Modifica Acuity
+//   speedMod      - Modifica speed
 //   focusMod       - Modifica Focus
 //   armorMod       - Modifica Armor
 //   vitalityMod    - Modifica Vitality

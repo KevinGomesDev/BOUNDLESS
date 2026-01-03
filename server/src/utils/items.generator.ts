@@ -13,8 +13,8 @@ function randomId(): string {
 const BASE_TYPES: Array<{ type: string; attribute: AttributeKey }> = [
   { type: "Espada", attribute: "combat" },
   { type: "Machado", attribute: "combat" },
-  { type: "Arco", attribute: "acuity" },
-  { type: "Adaga", attribute: "acuity" },
+  { type: "Arco", attribute: "speed" },
+  { type: "Adaga", attribute: "speed" },
   { type: "Tomo", attribute: "focus" },
   { type: "Cajado", attribute: "focus" },
   { type: "Manto", attribute: "armor" },

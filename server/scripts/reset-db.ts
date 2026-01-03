@@ -20,58 +20,71 @@ async function resetDatabase() {
   // Start with the most dependent tables first.
 
   // === BATTLE RELATED ===
-  console.log("[RESET] Deleting battle logs...");
   const logsDeleted = await prisma.battleLog.deleteMany();
-  console.log(`  -> ${logsDeleted.count} battle logs deleted`);
+  if (logsDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${logsDeleted.count} battle logs`);
+  }
 
-  console.log("[RESET] Deleting battle units...");
   const battleUnitsDeleted = await prisma.battleUnit.deleteMany();
-  console.log(`  -> ${battleUnitsDeleted.count} battle units deleted`);
+  if (battleUnitsDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${battleUnitsDeleted.count} battle units`);
+  }
 
-  console.log("[RESET] Deleting battles...");
   const battlesDeleted = await prisma.battle.deleteMany();
-  console.log(`  -> ${battlesDeleted.count} battles deleted`);
+  if (battlesDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${battlesDeleted.count} battles`);
+  }
 
-  console.log("[RESET] Deleting arena lobbies...");
   const lobbiesDeleted = await prisma.arenaLobby.deleteMany();
-  console.log(`  -> ${lobbiesDeleted.count} arena lobbies deleted`);
+  if (lobbiesDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${lobbiesDeleted.count} arena lobbies`);
+  }
 
   // === MATCH RELATED ===
-  console.log("[RESET] Deleting game events...");
   const eventsDeleted = await prisma.gameEvent.deleteMany();
-  console.log(`  -> ${eventsDeleted.count} game events deleted`);
+  if (eventsDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${eventsDeleted.count} game events`);
+  }
 
-  console.log("[RESET] Deleting units...");
   const unitsDeleted = await prisma.unit.deleteMany();
-  console.log(`  -> ${unitsDeleted.count} units deleted`);
+  if (unitsDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${unitsDeleted.count} units`);
+  }
 
-  console.log("[RESET] Deleting structures...");
   const structuresDeleted = await prisma.structure.deleteMany();
-  console.log(`  -> ${structuresDeleted.count} structures deleted`);
+  if (structuresDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${structuresDeleted.count} structures`);
+  }
 
-  console.log("[RESET] Deleting territories...");
   const territoriesDeleted = await prisma.territory.deleteMany();
-  console.log(`  -> ${territoriesDeleted.count} territories deleted`);
+  if (territoriesDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${territoriesDeleted.count} territories`);
+  }
 
-  console.log("[RESET] Deleting match players...");
   const matchPlayersDeleted = await prisma.matchPlayer.deleteMany();
-  console.log(`  -> ${matchPlayersDeleted.count} match players deleted`);
+  if (matchPlayersDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${matchPlayersDeleted.count} match players`);
+  }
 
-  console.log("[RESET] Deleting matches...");
   const matchesDeleted = await prisma.match.deleteMany();
-  console.log(`  -> ${matchesDeleted.count} matches deleted`);
+  if (matchesDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${matchesDeleted.count} matches`);
+  }
 
   // === KINGDOM RELATED ===
-  console.log("[RESET] Deleting troop templates...");
   const troopTemplatesDeleted = await prisma.troopTemplate.deleteMany();
-  console.log(`  -> ${troopTemplatesDeleted.count} troop templates deleted`);
+  if (troopTemplatesDeleted.count > 0) {
+    console.log(
+      `[RESET] Deleted ${troopTemplatesDeleted.count} troop templates`
+    );
+  }
 
-  console.log("[RESET] Deleting kingdoms...");
   const kingdomsDeleted = await prisma.kingdom.deleteMany();
-  console.log(`  -> ${kingdomsDeleted.count} kingdoms deleted`);
+  if (kingdomsDeleted.count > 0) {
+    console.log(`[RESET] Deleted ${kingdomsDeleted.count} kingdoms`);
+  }
 
   // === RESET USER STATS (optional - keep accounts but reset stats) ===
-  console.log("[RESET] Resetting user statistics...");
   const usersUpdated = await prisma.user.updateMany({
     data: {
       arenaWins: 0,
@@ -80,7 +93,9 @@ async function resetDatabase() {
       matchLosses: 0,
     },
   });
-  console.log(`  -> ${usersUpdated.count} users stats reset`);
+  if (usersUpdated.count > 0) {
+    console.log(`[RESET] Reset stats for ${usersUpdated.count} users`);
+  }
 
   console.log(
     "\n[RESET] ✅ Done! All game data deleted. User accounts preserved."

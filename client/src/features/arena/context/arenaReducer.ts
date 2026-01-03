@@ -123,14 +123,6 @@ export const arenaActions = {
     type: "UPDATE_UNIT",
     payload: unit,
   }),
-  addLog: (log: ArenaState["logs"][number]): ArenaAction => ({
-    type: "ADD_LOG",
-    payload: log,
-  }),
-  setLogs: (logs: ArenaState["logs"]): ArenaAction => ({
-    type: "SET_LOGS",
-    payload: logs,
-  }),
   setIsHost: (isHost: boolean): ArenaAction => ({
     type: "SET_IS_HOST",
     payload: isHost,

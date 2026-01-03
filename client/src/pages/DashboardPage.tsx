@@ -44,40 +44,54 @@ const CriarPartidaBtn: React.FC<{
   onClick: () => void;
   disabled?: boolean;
   isLoading?: boolean;
-}> = ({ onClick, disabled, isLoading }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className="px-2 py-0.5 text-[10px] font-semibold
-               bg-gradient-to-b from-war-crimson to-war-blood
-               border border-metal-iron/50 rounded
-               hover:from-war-ember hover:to-war-crimson
-               disabled:from-citadel-slate disabled:to-citadel-granite
-               text-parchment-light transition-all disabled:cursor-not-allowed"
-  >
-    {isLoading ? "..." : "Criar Partida"}
-  </button>
-);
+}> = ({ onClick, disabled, isLoading }) => {
+  const handleClick = () => {
+    console.log("[CriarPartidaBtn] Button clicked", { disabled, isLoading });
+    onClick();
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={disabled}
+      className="px-2 py-0.5 text-[10px] font-semibold
+                 bg-gradient-to-b from-war-crimson to-war-blood
+                 border border-metal-iron/50 rounded
+                 hover:from-war-ember hover:to-war-crimson
+                 disabled:from-citadel-slate disabled:to-citadel-granite
+                 text-parchment-light transition-all disabled:cursor-not-allowed"
+    >
+      {isLoading ? "..." : "Criar Partida"}
+    </button>
+  );
+};
 
 /** Botão compacto para header - Criar Arena */
 const CriarArenaBtn: React.FC<{
   onClick: () => void;
   disabled?: boolean;
   isLoading?: boolean;
-}> = ({ onClick, disabled, isLoading }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className="px-2 py-0.5 text-[10px] font-semibold
-               bg-gradient-to-b from-purple-600 to-purple-800
-               border border-metal-iron/50 rounded
-               hover:from-purple-500 hover:to-purple-700
-               disabled:from-citadel-slate disabled:to-citadel-granite
-               text-parchment-light transition-all disabled:cursor-not-allowed"
-  >
-    {isLoading ? "..." : "Criar Arena"}
-  </button>
-);
+}> = ({ onClick, disabled, isLoading }) => {
+  const handleClick = () => {
+    console.log("[CriarArenaBtn] Button clicked", { disabled, isLoading });
+    onClick();
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={disabled}
+      className="px-2 py-0.5 text-[10px] font-semibold
+                 bg-gradient-to-b from-purple-600 to-purple-800
+                 border border-metal-iron/50 rounded
+                 hover:from-purple-500 hover:to-purple-700
+                 disabled:from-citadel-slate disabled:to-citadel-granite
+                 text-parchment-light transition-all disabled:cursor-not-allowed"
+    >
+      {isLoading ? "..." : "Criar Arena"}
+    </button>
+  );
+};
 
 // =============================================================================
 // COMPONENTE PRINCIPAL

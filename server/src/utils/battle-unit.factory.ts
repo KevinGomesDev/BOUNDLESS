@@ -2,7 +2,7 @@
 // Factory para criação de BattleUnits - elimina duplicação de código
 
 import { determineUnitActions } from "../logic/unit-actions";
-import { findSkillByCode } from "../data/skills.data";
+import { findSkillByCode } from "../../../shared/data/skills.data";
 import {
   PHYSICAL_PROTECTION_CONFIG,
   MAGICAL_PROTECTION_CONFIG,
@@ -26,7 +26,7 @@ interface DBUnit {
   classFeatures: string | null;
   equipment: string | null;
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -49,7 +49,7 @@ export interface BattleUnit {
   classFeatures: string[];
   equipment: string[];
   combat: number;
-  acuity: number;
+  speed: number;
   focus: number;
   armor: number;
   vitality: number;
@@ -111,7 +111,7 @@ export function createBattleUnit(
   const unitActions = determineUnitActions(
     {
       combat: dbUnit.combat,
-      acuity: dbUnit.acuity,
+      speed: dbUnit.speed,
       focus: dbUnit.focus,
       armor: dbUnit.armor,
       vitality: dbUnit.vitality,
@@ -147,7 +147,7 @@ export function createBattleUnit(
     classFeatures, // Já foi parseado acima
     equipment: JSON.parse(dbUnit.equipment || "[]"),
     combat: dbUnit.combat,
-    acuity: dbUnit.acuity,
+    speed: dbUnit.speed,
     focus: dbUnit.focus,
     armor: dbUnit.armor,
     vitality: dbUnit.vitality,
@@ -327,7 +327,7 @@ export function getArenaBattleGridSize(): {
 }
 
 /**
- * Calcula a iniciativa total de um jogador (soma de Acuity de todas as suas unidades)
+ * Calcula a iniciativa total de um jogador (soma de speed de todas as suas unidades)
  */
 export function calculatePlayerInitiative(
   units: BattleUnit[],
@@ -335,12 +335,12 @@ export function calculatePlayerInitiative(
 ): number {
   return units
     .filter((u) => u.ownerId === playerId && u.isAlive)
-    .reduce((sum, u) => sum + u.acuity, 0);
+    .reduce((sum, u) => sum + u.speed, 0);
 }
 
 /**
- * Determina a ordem de ação dos jogadores baseada na soma de Acuity das unidades
- * Jogador com maior total de Acuity age primeiro
+ * Determina a ordem de ação dos jogadores baseada na soma de speed das unidades
+ * Jogador com maior total de speed age primeiro
  */
 export function determineActionOrder(
   units: BattleUnit[],

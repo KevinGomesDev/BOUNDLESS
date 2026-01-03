@@ -37,8 +37,6 @@ export async function emitAttackHitEvent(
     targetId: target.id,
     targetName: target.name,
     data: {
-      attackDiceCount: result.attackDiceCount,
-      attackRolls: result.attackRolls,
       rawDamage: result.rawDamage,
       finalDamage: result.finalDamage,
       damageType: result.damageType,
