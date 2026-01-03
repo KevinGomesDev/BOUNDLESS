@@ -221,6 +221,132 @@ export const CONDITIONS_INFO: Record<string, ConditionInfo> = {
     description: "2 ataques à distância por turno, -1 dano cada.",
     color: "#10b981",
   },
+
+  // =========================================================================
+  // CONDIÇÕES DE RAÇA
+  // =========================================================================
+  PELE_AMORFA: {
+    icon: "🫠",
+    name: "Pele Amorfa",
+    description: "Reduz todos os tipos de danos recebidos em 1.",
+    color: "#8e44ad",
+  },
+  FURIA_DA_MATILHA: {
+    icon: "🐺",
+    name: "Fúria da Matilha",
+    description:
+      "Quando aliado Besta morre, todas as Bestas aliadas ganham +1D na próxima rolagem.",
+    color: "#8b4513",
+  },
+  FURIA_DA_MATILHA_ATIVA: {
+    icon: "🐺",
+    name: "Fúria da Matilha (Ativa)",
+    description: "+1D na próxima rolagem (aliado Besta morreu).",
+    color: "#c0392b",
+  },
+  LUZ_SAGRADA: {
+    icon: "✨",
+    name: "Luz Sagrada",
+    description:
+      "Causa o dobro de dano em Diabos, Monstruosidades e Mortos-Vivos.",
+    color: "#ffd700",
+  },
+  PESO_DE_FERRO: {
+    icon: "🤖",
+    name: "Peso de Ferro",
+    description: "Não pode ser arremessado, agarrado ou derrubado.",
+    color: "#95a5a6",
+  },
+  SANGUE_ARCANO: {
+    icon: "🐉",
+    name: "Sangue Arcano",
+    description: "Reduz o custo de Arcana para Magias em 2.",
+    color: "#c0392b",
+  },
+  AFINIDADE_ELEMENTAL: {
+    icon: "🌊",
+    name: "Afinidade Elemental",
+    description: "Imune a um elemento, vulnerável a outro.",
+    color: "#e67e22",
+  },
+  GRACA_FEERICA: {
+    icon: "🧚",
+    name: "Graça Feérica",
+    description: "Imune a efeitos negativos de Climas.",
+    color: "#9b59b6",
+  },
+  CHAMAS_DO_INFERNO: {
+    icon: "😈",
+    name: "Chamas do Inferno",
+    description: "Causa o dobro de dano em Celestiais, Humanoides e Fadas.",
+    color: "#8b0000",
+  },
+  ESTATURA_COLOSSAL: {
+    icon: "🗿",
+    name: "Estatura Colossal",
+    description: "Ocupa dobro do espaço e aumenta alcance em 1 quadrado.",
+    color: "#7f8c8d",
+  },
+  VINGANCA_FINAL: {
+    icon: "⚔️",
+    name: "Vingança Final",
+    description: "Pode atacar imediatamente ao ter Vitalidade zerada.",
+    color: "#3498db",
+  },
+  SEDE_DE_SANGUE: {
+    icon: "👹",
+    name: "Sede de Sangue",
+    description: "Ao matar, pode atacar novamente ou usar Corrida.",
+    color: "#2c3e50",
+  },
+  ADERENCIA_ACIDA: {
+    icon: "🟢",
+    name: "Aderência Ácida",
+    description: "Unidades agarradas sofrem 2 de dano físico por turno.",
+    color: "#27ae60",
+  },
+  AGARRADO_POR_GOSMA: {
+    icon: "🟢",
+    name: "Agarrado por Gosma",
+    description: "Preso em gosma ácida. Sofre 2 de dano físico por turno.",
+    color: "#27ae60",
+  },
+  RAIZES_PROFUNDAS: {
+    icon: "🌿",
+    name: "Raízes Profundas",
+    description: "Em Batalhas Defensivas, +1D em todas as rolagens.",
+    color: "#2ecc71",
+  },
+  DRENAR_VIDA: {
+    icon: "🧟",
+    name: "Drenar Vida",
+    description: "Ao render um inimigo, recupera 4 de Vitalidade.",
+    color: "#1a1a2e",
+  },
+  COLMEIA_PRODUTIVA: {
+    icon: "🐝",
+    name: "Colmeia Produtiva",
+    description: "Produção Passiva de um Recurso escolhido aumenta em 2.",
+    color: "#d4ac0d",
+  },
+
+  // =========================================================================
+  // CONDIÇÕES DE SPELLS
+  // =========================================================================
+  EMPOWERED: {
+    icon: "⚡",
+    name: "Potencializado",
+    description:
+      "Todos os atributos aumentados temporariamente. Será seguido por Exaustão.",
+    color: "#fbbf24",
+  },
+  EXHAUSTED: {
+    icon: "💤",
+    name: "Exausto",
+    description:
+      "Penalidade em todos os atributos após o efeito de Potencializar.",
+    color: "#6b7280",
+  },
 };
 
 /**

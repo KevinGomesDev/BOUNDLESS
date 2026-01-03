@@ -181,6 +181,7 @@ model Unit {
   // Classe do Herói (código string, ex: BARBARIAN, WARRIOR) - Regentes NÃO possuem classe
   classCode      String?      // Código da classe (dados em server/src/data/classes.data.ts)
   classFeatures  String       @default("[]") // IDs das skills aprendidas (Regentes escolhem de qualquer classe)
+  spells         String       @default("[]") // Códigos das spells disponíveis (concedidas via eventos/skills)
   combat         Int
   speed          Int
   focus          Int
@@ -314,6 +315,7 @@ model BattleUnit {
   classCode   String?     // Código da classe (ex: BARBARIAN, WARRIOR)
   classFeatures String    @default("[]") // Skills aprendidas (JSON)
   equipment   String      @default("[]") // Itens equipados (JSON)
+  spells      String      @default("[]") // Códigos das spells disponíveis (JSON)
   combat      Int         @default(1)
   speed       Int         @default(1)
   focus       Int         @default(1)

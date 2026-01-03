@@ -8,6 +8,7 @@ import type {
   ConditionInfo,
 } from "../../../shared/types/conditions.types";
 import { SKILL_CONDITIONS } from "./skill-conditions";
+import { RACE_CONDITIONS } from "./race-conditions";
 
 // Re-exportar tipos para uso em outros arquivos do server
 export type {
@@ -112,10 +113,11 @@ const COMBAT_CONDITIONS: Record<string, ConditionDefinition> = {
   },
 };
 
-// CONDITIONS unifica condições de combate e condições de skills
+// CONDITIONS unifica condições de combate, skills e raça
 export const CONDITIONS: Record<string, ConditionDefinition> = {
   ...COMBAT_CONDITIONS,
   ...SKILL_CONDITIONS,
+  ...RACE_CONDITIONS,
 };
 
 // Helper para obter mapa de cores das condições (usado pelo arena-config)

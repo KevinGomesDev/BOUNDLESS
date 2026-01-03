@@ -88,6 +88,7 @@ export interface BattleUnit {
   category: string;
   troopSlot?: number;
   level: number;
+  race: string;
   classCode?: string;
   classFeatures: string[];
   equipment: string[];
@@ -111,6 +112,7 @@ export interface BattleUnit {
   magicalProtection: number;
   maxMagicalProtection: number;
   conditions: string[];
+  spells: string[]; // Lista de códigos de spells disponíveis
   hasStartedAction: boolean;
   actions: string[];
   grabbedByUnitId?: string;

@@ -1,6 +1,9 @@
 // src/utils/conquest.utils.ts
 
-import { EVENTS, EventDef } from "../../../shared/data/events";
+import {
+  TERRITORY_CHALLENGES,
+  TerritoryChallenge,
+} from "../../../shared/data/events";
 import {
   ALL_ATTRIBUTE_KEYS,
   AttributeKey,
@@ -23,9 +26,9 @@ export function pickRandomAttributes(count: number): ConquestAttribute[] {
 }
 
 // Pick a random event
-export function pickRandomEvent(): EventDef {
-  const idx = Math.floor(Math.random() * EVENTS.length);
-  return EVENTS[idx];
+export function pickRandomEvent(): TerritoryChallenge {
+  const idx = Math.floor(Math.random() * TERRITORY_CHALLENGES.length);
+  return TERRITORY_CHALLENGES[idx];
 }
 
 // Attribute test result
@@ -62,7 +65,7 @@ export function testAttribute(
 export interface ConquestEventResult {
   eventTriggered: boolean;
   eventTriggerRoll: number;
-  event: EventDef | null;
+  event: TerritoryChallenge | null;
   attributeTests: AttributeTestResult[];
   overallSuccess: boolean;
   crisisIncrease: number;

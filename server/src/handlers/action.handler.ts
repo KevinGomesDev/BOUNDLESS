@@ -195,9 +195,7 @@ export const registerActionHandlers = (io: Server, socket: Socket) => {
                 triggerRoll: conquestResult.eventTriggerRoll,
                 eventId: conquestResult.event?.id,
                 eventName: conquestResult.event?.name,
-                eventEffect: conquestResult.overallSuccess
-                  ? conquestResult.event?.successEffect
-                  : null,
+                eventDescription: conquestResult.event?.description,
                 tests: conquestResult.attributeTests.map((t) => ({
                   attribute: t.attribute,
                   rolls: t.rolls,

@@ -6,6 +6,7 @@ export interface RaceDefinition {
   description: string; // Flavor text
   passiveName: string;
   passiveEffect: string; // Regra mecânica
+  passiveConditionId: string; // ID da condição a aplicar
   color: number; // Cor temática (apenas para UI)
 }
 
@@ -16,6 +17,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     description: "Criaturas distorcidas que desafiam a lógica natural.",
     passiveName: "Pele Amorfa",
     passiveEffect: "Reduz todos os tipos de danos recebidos em 1.",
+    passiveConditionId: "PELE_AMORFA",
     color: 0x8e44ad, // Roxo
   },
   {
@@ -25,6 +27,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Fúria da Matilha",
     passiveEffect:
       "Quando uma Unidade Besta aliada morre, todas as Unidades Bestas aliadas recebem +1D na sua próxima rolagem.",
+    passiveConditionId: "FURIA_DA_MATILHA",
     color: 0x8b4513, // Marrom
   },
   {
@@ -34,6 +37,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Luz Sagrada",
     passiveEffect:
       "Causa o dobro de dano em Diabos, Monstruosidades e Mortos-Vivos.",
+    passiveConditionId: "LUZ_SAGRADA",
     color: 0xffd700, // Dourado
   },
   {
@@ -42,6 +46,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     description: "Máquinas de guerra sem alma e sem medo.",
     passiveName: "Peso de Ferro",
     passiveEffect: "Não pode ser arremessada, agarrada ou derrubada.",
+    passiveConditionId: "PESO_DE_FERRO",
     color: 0x95a5a6, // Cinza
   },
   {
@@ -50,6 +55,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     description: "Criaturas ancestrais de poder arcano imenso.",
     passiveName: "Sangue Arcano",
     passiveEffect: "Reduz o custo de Arcana para Magias em 2.",
+    passiveConditionId: "SANGUE_ARCANO",
     color: 0xc0392b, // Vermelho escuro
   },
   {
@@ -59,6 +65,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Afinidade Elemental",
     passiveEffect:
       "Escolha dois Elementos entre Fogo, Raio e Gelo. Imune a um tipo, e vulnerável a outro (recebe o dobro do dano).",
+    passiveConditionId: "AFINIDADE_ELEMENTAL",
     color: 0xe67e22, // Laranja
   },
   {
@@ -67,6 +74,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     description: "Seres mágicos dos reinos encantados.",
     passiveName: "Graça Feérica",
     passiveEffect: "Imune a efeitos negativos de Climas.",
+    passiveConditionId: "GRACA_FEERICA",
     color: 0x9b59b6, // Lilás
   },
   {
@@ -75,6 +83,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     description: "Demônios ardilosos dos planos infernais.",
     passiveName: "Chamas do Inferno",
     passiveEffect: "Causa o dobro de dano em Celestiais, Humanoides e Fadas.",
+    passiveConditionId: "CHAMAS_DO_INFERNO",
     color: 0x8b0000, // Vermelho sangue
   },
   {
@@ -84,6 +93,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Estatura Colossal",
     passiveEffect:
       "Ocupa o dobro do espaço em mapas e aumenta o alcance de tudo em 1 quadrado.",
+    passiveConditionId: "ESTATURA_COLOSSAL",
     color: 0x7f8c8d, // Cinza pedra
   },
   {
@@ -94,6 +104,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Vingança Final",
     passiveEffect:
       "Quando tem sua Vitalidade zerada, pode realizar um ataque contra o alvo que a zerou imediatamente.",
+    passiveConditionId: "VINGANCA_FINAL",
     color: 0x3498db, // Azul
   },
   {
@@ -103,6 +114,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Sede de Sangue",
     passiveEffect:
       "Ao matar um inimigo, pode realizar um ataque contra um alvo imediatamente ou usar a ação Corrida.",
+    passiveConditionId: "SEDE_DE_SANGUE",
     color: 0x2c3e50, // Azul escuro
   },
   {
@@ -112,6 +124,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Aderência Ácida",
     passiveEffect:
       "Quando agarra uma Unidade, a Unidade agarrada sofre 2 de Dano Físico todo Turno.",
+    passiveConditionId: "ADERENCIA_ACIDA",
     color: 0x27ae60, // Verde
   },
   {
@@ -121,6 +134,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Raízes Profundas",
     passiveEffect:
       "Quando está em uma Batalha Defensiva, todas as rolagens recebem +1D.",
+    passiveConditionId: "RAIZES_PROFUNDAS",
     color: 0x2ecc71, // Verde claro
   },
   {
@@ -130,6 +144,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Drenar Vida",
     passiveEffect:
       "Ao render um inimigo, recupera 4 de Vitalidade imediatamente.",
+    passiveConditionId: "DRENAR_VIDA",
     color: 0x1a1a2e, // Preto azulado
   },
   {
@@ -139,6 +154,7 @@ export const RACE_DEFINITIONS: RaceDefinition[] = [
     passiveName: "Colméia Produtiva",
     passiveEffect:
       "Escolha um Recurso. A Produção Passiva desse Recurso sobe em 2. Não pode ser alterado após início de Campanha.",
+    passiveConditionId: "COLMEIA_PRODUTIVA",
     color: 0xd4ac0d, // Amarelo mostarda
   },
 ];
@@ -155,4 +171,12 @@ export function getRaceById(id: string): RaceDefinition | undefined {
  */
 export function getAllRaces(): RaceDefinition[] {
   return RACE_DEFINITIONS;
+}
+
+/**
+ * Obtém o ID da condição passiva de uma raça
+ */
+export function getRacePassiveCondition(raceId: string): string | undefined {
+  const race = getRaceById(raceId);
+  return race?.passiveConditionId;
 }

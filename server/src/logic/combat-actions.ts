@@ -362,6 +362,9 @@ export function executeAttackAction(
   const damageToApply = Math.max(0, rawDamage - damageReduction);
 
   console.log("[COMBAT] Aplicando dano (novo sistema):", {
+    targetName: target.name,
+    targetRace: target.race,
+    targetConditions: target.conditions,
     rawDamage,
     damageReduction,
     damageToApply,

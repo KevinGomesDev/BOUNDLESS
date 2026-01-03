@@ -1,230 +1,260 @@
-# Battle Realm - Instruções de Desenvolvimento
+# Battle Realm - Guia de Desenvolvimento
 
-## Stack
+## 🎯 Regras Fundamentais
 
-- **Client:** React 18 + Vite + TypeScript + TailwindCSS
-- **Server:** Node.js + Express + Socket.IO + Prisma + PostgreSQL
-- **Shared:** Tipos TypeScript compartilhados
+### ✅ FAZER
 
-## Estrutura
+- Tipos compartilhados em `shared/types/`
+- Backend calcula, frontend exibe
+- Reutilizar tipos existentes (NUNCA duplicar)
+- Deletar código não usado (não comentar)
+- Socket events: `{domain}:{action}` pattern
+
+### ❌ NÃO FAZER
+
+- Lógica de jogo no frontend
+- Criar tipos novos sem verificar se já existem
+- Comentar código antigo (deletar)
+- Executar `npm run build/dev` (assumir que estão rodando)
+- Manter arquivos/imports não usados
+- Não crie Docs
+
+---
+
+## 📁 Estrutura de Arquivos
 
 ```
-client/src/features/{feature}/   # Componentes, context, hooks por feature
-server/src/handlers/             # Socket event handlers
-server/src/logic/                # Lógica de jogo pura
-server/src/services/             # Business logic com I/O
-server/src/data/                 # Dados estáticos (classes, skills)
-shared/types/                    # Tipos compartilhados (CRÍTICO!)
+shared/
+  types/              # Tipos TypeScript compartilhados (CRÍTICO!)
+  data/               # Dados estáticos (skills, classes, races)
+  config/             # Configurações globais
+
+server/src/
+  handlers/           # Socket event handlers
+  logic/              # Lógica pura (combat, conditions, round-control)
+  services/           # Business logic com I/O
+  spells/             # Sistema de magias (executors, utils)
+  utils/              # Utilities e factories
+
+client/src/
+  features/{feature}/ # Componentes, context, hooks por feature
 ```
 
 ---
 
-## Regras Críticas
+## 🔧 Quick Reference
 
-### 1. Shared Types
-
-Tipos usados por client E server → `shared/types/`
-
-```typescript
-import type { BattleUnit } from "../../../shared/types";
-```
-
-### 2. Backend = Fonte de Verdade
-
-Server calcula tudo (dano, movimento, validações). Client apenas exibe.
-
-### 3. Socket Events
-
-Verificar que nome e payload são idênticos em ambos os lados.
-
-```
-Padrão: {domain}:{action}
-Exemplos: arena:lobby-updated, battle:action-executed
-```
+| Tarefa             | Arquivo                                   |
+| ------------------ | ----------------------------------------- |
+| Tipo compartilhado | `shared/types/{tipo}.types.ts`            |
+| Skill/Classe       | `shared/data/skills.data.ts`              |
+| Spell/Magia        | `shared/data/spells.data.ts`              |
+| Condição           | `server/src/logic/skill-conditions.ts`    |
+| Raça               | `shared/data/races.ts`                    |
+| Executor de skill  | `server/src/logic/skill-executors.ts`     |
+| Executor de spell  | `server/src/spells/executors.ts`          |
+| Utilitários spell  | `server/src/spells/utils.ts`              |
+| Lógica de combate  | `server/src/logic/combat-actions.ts`      |
+| Turnos/Rodadas     | `server/src/logic/round-control.ts`       |
+| Socket handler     | `server/src/handlers/{domain}.handler.ts` |
+| Feature client     | `client/src/features/{feature}/`          |
 
 ---
 
-## Sistema de Eventos (Log de Batalha)
+## 📚 Tutorial: Criar Nova Skill
 
-### Backend - Emitir eventos
+### Passo 1: Definir Skill (`shared/data/skills.data.ts`)
 
 ```typescript
-// server/src/logic/combat-events.ts
-import { emitAttackHitEvent, emitAttackDodgedEvent } from "./combat-events";
+export const MINHA_SKILL: SkillDefinition = {
+  code: "MINHA_SKILL",
+  name: "Minha Skill",
+  description: "Descrição do que a skill faz",
+  category: "ACTIVE", // ou "PASSIVE"
+  costTier: "MEDIUM", // LOW, MEDIUM, HIGH
+  range: "ADJACENT", // SELF, ADJACENT, RANGED, AREA
+  targetType: "ENEMY", // SELF, ALLY, ENEMY, ALL
+  functionName: "executeMinhaSkill", // Se ACTIVE
+  conditionApplied: "MINHA_CONDICAO", // Se PASSIVE
+  consumesAction: true,
+  cooldown: 2,
+};
 
-// Após ação de combate
-if (result.missed) {
-  await emitAttackDodgedEvent(battleId, attacker, target);
-} else {
-  await emitAttackHitEvent(battleId, attacker, target, result);
+// Adicionar à lista da classe
+export const WARRIOR_SKILLS: SkillDefinition[] = [
+  EXTRA_ATTACK,
+  SECOND_WIND,
+  ACTION_SURGE,
+  MINHA_SKILL, // ← Adicionar aqui
+];
+```
+
+**Arquivo:** `shared/data/skills.data.ts`
+
+---
+
+### Passo 2: Criar Condição (se PASSIVE) (`server/src/logic/skill-conditions.ts`)
+
+```typescript
+MINHA_CONDICAO: {
+  id: "MINHA_CONDICAO",
+  name: "Minha Condição",
+  description: "Descrição do efeito",
+  expiry: "permanent", // ou "end_of_turn", "next_turn", "on_action"
+  icon: "⚡",
+  color: "#fbbf24",
+  effects: {
+    // Escolha os efeitos necessários:
+    bonusDamage: 2,           // +2 dano
+    damageReduction: 1,       // -1 dano recebido
+    dodgeChance: 10,          // +10% esquiva
+    movementMod: 2,           // +2 movimento
+    extraAttacks: 1,          // +1 ataque por ação
+    // Ver conditions.types.ts para todos os efeitos
+  },
 }
 ```
 
-### Frontend - Exibir eventos
-
-```tsx
-import { EventProvider, EventLog } from "@/features/events";
-
-// Provider no App
-<EventProvider><App /></EventProvider>
-
-// Componente em qualquer lugar
-<EventLog context="BATTLE" contextId={battleId} />
-```
-
-### Arquivos do Sistema
-
-| Arquivo                                | Descrição                    |
-| -------------------------------------- | ---------------------------- |
-| `shared/types/events.types.ts`         | Tipos e constantes           |
-| `server/src/services/event.service.ts` | Criar e emitir eventos       |
-| `server/src/logic/combat-events.ts`    | Funções prontas para combate |
-| `client/src/features/events/`          | Context, hook e componente   |
+**Arquivo:** `server/src/logic/skill-conditions.ts`
 
 ---
 
-## Sistema de Round Control (Turnos e Rodadas)
-
-### FONTE DE VERDADE: `server/src/logic/round-control.ts`
-
-O **RoundControl** centraliza TODA a lógica de:
-
-- Troca de turnos (unit → unit, player → player)
-- Avanço de rodadas
-- Processamento de efeitos de início/fim de turno
-- Processamento de condições que expiram
-- Verificação de condições de vitória
-
-### Funções Principais
+### Passo 3: Criar Executor (se ACTIVE) (`server/src/logic/skill-executors.ts`)
 
 ```typescript
-import {
-  processUnitTurnEndConditions, // Processa fim de turno de unidade
-  advanceToNextPlayer, // Avança para próximo jogador
-  recordPlayerAction, // Registra ação do jogador na rodada
-  checkVictoryCondition, // Verifica se batalha terminou
-  checkExhaustionCondition, // Verifica exaustão (não-arena)
-  processNewRound, // Processa início de nova rodada
-  emitBattleEndEvents, // Emite eventos de fim de batalha
-  emitExhaustionEndEvents, // Emite eventos de exaustão
-} from "../../logic/round-control";
+function executeMinhaSkill(
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  allUnits: BattleUnit[],
+  skill: SkillDefinition
+): SkillExecutionResult {
+  // Validações
+  if (!target || !target.isAlive) {
+    return { success: false, error: "Alvo inválido" };
+  }
+
+  // Lógica da skill
+  const damage = caster.combat * 2;
+  target.currentHp -= damage;
+
+  if (target.currentHp <= 0) {
+    target.isAlive = false;
+  }
+
+  // Retorno
+  return {
+    success: true,
+    damageDealt: damage,
+    targetHpAfter: target.currentHp,
+    targetDefeated: !target.isAlive,
+  };
+}
+
+// Registrar no mapa de executores
+export const SKILL_EXECUTORS: Record<string, SkillExecutorFn> = {
+  executeSecondWind,
+  executeActionSurge,
+  executeMinhaSkill, // ← Adicionar aqui
+  // ...
+};
 ```
 
-### Fluxo de Fim de Turno
+**Arquivo:** `server/src/logic/skill-executors.ts`
+
+---
+
+### Passo 4: Adicionar Info Visual (`shared/data/skills.data.ts`)
 
 ```typescript
-// 1. Processar condições de fim de turno
-const turnEndResult = processUnitTurnEndConditions(unit);
+const SKILL_ICONS: Record<string, string> = {
+  MINHA_SKILL: "⚡",
+  // ...
+};
 
-// 2. Registrar ação do jogador
-recordPlayerAction(battle, currentPlayerId);
+const SKILL_COLORS: Record<string, string> = {
+  MINHA_SKILL: "yellow",
+  // ...
+};
+```
 
-// 3. Verificar vitória
-const victoryCheck = checkVictoryCondition(battle);
+**Arquivo:** `shared/data/skills.data.ts` (final do arquivo)
 
-// 4. Avançar para próximo jogador
-const turnTransition = advanceToNextPlayer(battle);
+---
 
-// 5. Se avançou rodada, processar
-if (turnTransition.roundAdvanced) {
-  await processNewRound(battle, io, lobby.lobbyId);
+### Passo 5: Adicionar Condição Visual (`shared/types/conditions.data.ts`)
+
+```typescript
+export const CONDITIONS_INFO: Record<string, ConditionInfo> = {
+  MINHA_CONDICAO: {
+    icon: "⚡",
+    name: "Minha Condição",
+    description: "Descrição do efeito",
+    color: "#fbbf24",
+  },
+  // ...
+};
+```
+
+**Arquivo:** `shared/types/conditions.data.ts`
+
+---
+
+### ✅ Checklist Final
+
+- [ ] Skill definida em `skills.data.ts`
+- [ ] Skill adicionada à lista da classe
+- [ ] Condição criada (se PASSIVE) em `skill-conditions.ts`
+- [ ] Executor implementado (se ACTIVE) em `skill-executors.ts`
+- [ ] Executor registrado em `SKILL_EXECUTORS`
+- [ ] Ícone e cor adicionados em `skills.data.ts`
+- [ ] Info visual da condição em `conditions.data.ts`
+- [ ] Testar em batalha
+
+---
+
+## 🎮 Sistema de Atributos
+
+| Atributo | Uso                                |
+| -------- | ---------------------------------- |
+| Combat   | Dano de ataque físico (direto)     |
+| Speed    | Movimento + Esquiva (3% por ponto) |
+| Focus    | Dano mágico + Proteção mágica (2x) |
+| Armor    | Proteção física (2x)               |
+| Vitality | HP máximo (1x)                     |
+
+**Arquivo:** `shared/config/global.config.ts`
+
+---
+
+## 🔄 Fluxo de Combate
+
+```
+1. Atacante usa ação de ataque
+2. scanConditionsForAction() - Verifica condições do atacante
+3. Calcula dano base = combat + bonusDamage
+4. Alvo: scanConditionsForAction() - Verifica condições do alvo
+5. Sistema de esquiva: 1D100 vs (speed × 3%)
+6. Aplica damageReduction das condições
+7. Aplica proteções (física/mágica)
+8. Aplica dano final no HP
+```
+
+**Arquivo:** `server/src/logic/combat-actions.ts`
+
+---
+
+## 🧩 Tipo Principal
+
+```typescript
+BattleUnit {
+  id, name, avatar, category, level, race,
+  combat, speed, focus, armor, vitality,
+  currentHp, maxHp,
+  physicalProtection, magicalProtection,
+  conditions: string[], // IDs das condições ativas
+  actions: string[],    // Ações disponíveis
+  // ...
 }
 ```
 
----
-
-## Sistema de Skills
-
-### Dados Estáticos (não banco)
-
-```typescript
-// Tipos: shared/types/skills.types.ts
-// Classes: server/src/data/classes.data.ts
-// Skills: server/src/data/skills.data.ts
-
-import { HERO_CLASSES, getClassByCode } from "../data/classes.data";
-import {
-  getSkillEffectiveRange,
-  isAdjacent,
-} from "../../../shared/types/skills.types";
-```
-
-### Ranges
-
-- `SELF` = 0 (apenas usuário)
-- `ADJACENT` = 1 (1 bloco Manhattan)
-- `RANGED` = customizável (padrão 4)
-- `AREA` = raio (padrão 2)
-
----
-
-## Padrões de Código
-
-### Feature (Client)
-
-```typescript
-// client/src/features/{feature}/index.ts
-export { FeatureProvider, useFeature } from "./context";
-export { FeatureComponent } from "./components";
-```
-
-### Handler (Server)
-
-```typescript
-export function registerFeatureHandlers(io: Server, socket: Socket) {
-  socket.on("feature:action", async (data, callback) => {
-    // 1. Validar → 2. Processar → 3. Persistir → 4. Emitir
-    callback?.({ success: true, data: result });
-  });
-}
-```
-
----
-
-## Quick Reference
-
-| Ação                       | Onde                                                  |
-| -------------------------- | ----------------------------------------------------- |
-| Novo tipo compartilhado    | `shared/types/`                                       |
-| Nova condição de batalha   | `server/src/logic/conditions.ts`                      |
-| Nova skill/classe          | `server/src/data/skills.data.ts` ou `classes.data.ts` |
-| Novo evento de combate     | `server/src/logic/combat-events.ts`                   |
-| Lógica de combate          | `server/src/logic/combat-actions.ts`                  |
-| Lógica de turnos/rodadas   | `server/src/logic/round-control.ts`                   |
-| Novo componente de feature | `client/src/features/{feature}/components/`           |
-
----
-
-## NÃO FAZER
-
-- ❌ Duplicar tipos entre client/server
-- ❌ Calcular lógica de jogo no frontend
-- ❌ Criar socket events sem verificar listener correspondente
-- ❌ Executar `npm run build/dev` (assumir que estão rodando)
-- ❌ Criar tipos novos se já existir um tipo similar - REUTILIZAR
-- ❌ Comentar ou depreciar código antigo - DELETAR
-- ❌ Manter arquivos não usados - DELETAR
-
----
-
-## Princípios de Código Limpo
-
-### Reutilização de Tipos
-
-- **SEMPRE** usar tipos existentes antes de criar novos
-- Se um tipo existe em `shared/types/`, use-o
-- Se encontrar tipo duplicado/perdido, mova para `shared/types/` e delete o original
-- Tipo principal de unidade de batalha: `BattleUnit` (de `battle-unit.factory.ts`)
-
-### Limpeza Contínua
-
-- Ao refatorar: **DELETE** versões antigas, nunca comente
-- Ao encontrar código morto: **DELETE** imediatamente
-- Ao encontrar arquivos não usados: **DELETE**
-- Ao encontrar imports não usados: **DELETE**
-
-### Objetivo
-
-> **O FOCO É MANTER O CÓDIGO LIMPO E INTELIGENTE.**
-
-Menos código = menos bugs = mais fácil de manter.
+**Arquivo:** `shared/types/battle.types.ts`

@@ -347,9 +347,11 @@ export async function loadBattlesFromDB(): Promise<void> {
         category: u.category,
         troopSlot: u.troopSlot ?? undefined,
         level: u.level,
+        race: "HUMANOIDE", // TODO: adicionar campo race no schema
         classCode: u.classCode ?? undefined,
         classFeatures: JSON.parse(u.classFeatures || "[]"),
         equipment: JSON.parse(u.equipment || "[]"),
+        spells: JSON.parse(u.spells || "[]"),
         combat: u.combat,
         speed: u.speed,
         focus: u.focus,

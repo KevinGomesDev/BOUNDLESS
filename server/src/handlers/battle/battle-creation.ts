@@ -47,10 +47,10 @@ export async function createAndStartBattle({
     createBattleUnitsWithRandomPositions(
       hostKingdom.units,
       lobby.hostUserId,
-      { id: hostKingdom.id, name: hostKingdom.name },
+      { id: hostKingdom.id, name: hostKingdom.name, race: hostKingdom.race },
       guestKingdom.units,
       lobby.guestUserId as string,
-      { id: guestKingdom.id, name: guestKingdom.name },
+      { id: guestKingdom.id, name: guestKingdom.name, race: guestKingdom.race },
       gridWidth,
       gridHeight,
       "arena"
@@ -239,6 +239,7 @@ export async function createAndStartBotBattle({
   const botUnits = createBotUnitsFromTemplate(randomTemplate, BOT_USER_ID, {
     id: BOT_KINGDOM_ID,
     name: `🤖 ${randomTemplate.regent.name}`,
+    race: randomTemplate.race,
   });
 
   // Criar unidades do jogador e do BOT com posições aleatórias
@@ -246,10 +247,14 @@ export async function createAndStartBotBattle({
     createBattleUnitsWithRandomPositions(
       hostKingdom.units,
       lobby.hostUserId,
-      { id: hostKingdom.id, name: hostKingdom.name },
+      { id: hostKingdom.id, name: hostKingdom.name, race: hostKingdom.race },
       botUnits,
       BOT_USER_ID,
-      { id: BOT_KINGDOM_ID, name: `🤖 ${randomTemplate.regent.name}` },
+      {
+        id: BOT_KINGDOM_ID,
+        name: `🤖 ${randomTemplate.regent.name}`,
+        race: randomTemplate.race,
+      },
       gridWidth,
       gridHeight,
       "arena"

@@ -311,7 +311,73 @@ export const SKILL_CONDITIONS: Record<string, ConditionDefinition> = {
 };
 
 // =============================================================================
-// HELPERS
+// CONDIÇÕES TEMPORÁRIAS DE SPELLS
+// =============================================================================
+
+/**
+ * Condições temporárias aplicadas por spells
+ * Estas condições têm expiry variável (next_turn, end_of_turn, etc.)
+ */
+export const SPELL_CONDITIONS: Record<string, ConditionDefinition> = {
+  // =========================================================================
+  // EMPOWER - Potencialização temporária
+  // =========================================================================
+  EMPOWERED: {
+    id: "EMPOWERED",
+    name: "Potencializado",
+    description:
+      "Todos os atributos aumentados temporariamente. Será seguido por Exaustão.",
+    expiry: "next_turn", // Expira no começo do próximo turno
+    icon: "⚡",
+    color: "#fbbf24",
+    effects: {
+      // Valor dinâmico baseado no Focus do conjurador (implementado no executor)
+      // Por simplicidade, usando valores fixos aqui
+      bonusDamage: 2,
+      movementMod: 2,
+      dodgeChance: 10,
+    },
+  },
+
+  EXHAUSTED: {
+    id: "EXHAUSTED",
+    name: "Exausto",
+    description:
+      "Penalidade em todos os atributos após o efeito de Potencializar.",
+    expiry: "next_turn", // Expira no começo do próximo turno seguinte
+    icon: "💤",
+    color: "#6b7280",
+    effects: {
+      bonusDamage: -2,
+      movementMod: -2,
+      dodgeChance: -10,
+    },
+  },
+};
+
+// =============================================================================
+// EXPORTAR TODAS AS CONDIÇÕES
+// =============================================================================
+
+/**
+ * Todas as condições de skills e spells combinadas
+ */
+export const ALL_CONDITIONS: Record<string, ConditionDefinition> = {
+  ...SKILL_CONDITIONS,
+  ...SPELL_CONDITIONS,
+};
+
+/**
+ * Obtém uma condição por ID (skill ou spell)
+ */
+export function getCondition(
+  conditionId: string
+): ConditionDefinition | undefined {
+  return ALL_CONDITIONS[conditionId];
+}
+
+// =============================================================================
+// HELPERS (mantidos para compatibilidade)
 // =============================================================================
 
 /**

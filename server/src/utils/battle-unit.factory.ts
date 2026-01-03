@@ -3,6 +3,7 @@
 
 import { determineUnitActions } from "../logic/unit-actions";
 import { findSkillByCode } from "../../../shared/data/skills.data";
+import { getRacePassiveCondition } from "../../../shared/data/races";
 import {
   PHYSICAL_PROTECTION_CONFIG,
   MAGICAL_PROTECTION_CONFIG,
@@ -31,6 +32,7 @@ interface DBUnit {
   classCode: string | null;
   classFeatures: string | null;
   equipment: string | null;
+  spells: string | null;
   combat: number;
   speed: number;
   focus: number;
@@ -43,6 +45,7 @@ interface DBUnit {
 interface KingdomInfo {
   id: string;
   name: string;
+  race: string;
 }
 
 interface Position {
@@ -67,6 +70,9 @@ export function createBattleUnit(
 ): BattleUnit {
   // Parse classFeatures do JSON
   const classFeatures: string[] = JSON.parse(dbUnit.classFeatures || "[]");
+
+  // Parse spells do JSON
+  const spells: string[] = JSON.parse(dbUnit.spells || "[]");
 
   // Determinar ações dinamicamente baseado nos stats e skills
   const unitActions = determineUnitActions(
@@ -94,6 +100,12 @@ export function createBattleUnit(
     }
   }
 
+  // Aplicar condição racial (passiva de raça)
+  const raceCondition = getRacePassiveCondition(kingdom.race);
+  if (raceCondition && !initialConditions.includes(raceCondition)) {
+    initialConditions.push(raceCondition);
+  }
+
   return {
     id: generateUnitId(),
     sourceUnitId: dbUnit.id,
@@ -104,6 +116,7 @@ export function createBattleUnit(
     category: dbUnit.category,
     troopSlot: dbUnit.troopSlot ?? undefined,
     level: dbUnit.level,
+    race: kingdom.race,
     classCode: dbUnit.classCode ?? undefined,
     classFeatures, // Já foi parseado acima
     equipment: JSON.parse(dbUnit.equipment || "[]"),
@@ -133,6 +146,7 @@ export function createBattleUnit(
     maxMagicalProtection:
       (dbUnit.focus || 0) * MAGICAL_PROTECTION_CONFIG.multiplier,
     conditions: initialConditions, // Condições iniciais de passivas
+    spells, // Lista de spells da unidade (copiada do DB)
     hasStartedAction: false,
     actions: unitActions,
     // Tamanho da unidade (default: NORMAL 1x1)
@@ -353,6 +367,7 @@ export function createBotUnitsFromTemplate(
       ? JSON.stringify([regent.initialSkillId])
       : "[]",
     equipment: "[]",
+    spells: "[]",
     combat: regent.combat,
     speed: regent.speed,
     focus: regent.focus,
