@@ -294,5 +294,5 @@ async function handleTimerExpired(battle: Battle): Promise<void> {
   await saveBattleToDB(battle);
 
   // Verificar se é turno do BOT e processar automaticamente
-  checkAndProcessBotTurn(battle);
+  await checkAndProcessBotTurn(battle);
 }

@@ -7,16 +7,19 @@ import {
   type ArenaBattleCanvasRef,
 } from "./canvas";
 import {
-  InitiativePanel,
   UnitPanel,
   BattleResultModal,
   BattleHeader,
   PauseMenu,
 } from "./battle";
+import { TurnStartModal } from "./shared";
 import { FullScreenLoading } from "@/components/FullScreenLoading";
 import { ChatProvider, useChat } from "../../chat";
 import { ChatBox } from "../../chat/components/ChatBox";
 import type { BattleUnit } from "../../../../../shared/types/battle.types";
+import { getSpellByCode } from "../../../../../shared/data/spells.data";
+import { getFullMovementInfo } from "../../../../../shared/utils/engagement.utils";
+import { socketService } from "../../../services/socket.service";
 
 /**
  * ArenaBattleView - Wrapper com ChatProvider
@@ -60,6 +63,7 @@ const ArenaBattleViewInner: React.FC = () => {
     attackUnit,
     endAction,
     executeAction,
+    castSpell,
     surrender,
     requestRematch,
     dismissBattleResult,
@@ -72,16 +76,58 @@ const ArenaBattleViewInner: React.FC = () => {
     direction: SpriteDirection;
   } | null>(null);
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState(false);
+  const [showTurnStartModal, setShowTurnStartModal] = useState(false);
+  const [isRoundStart, setIsRoundStart] = useState(false); // Indica se é início de rodada
+  const [isTurnLocked, setIsTurnLocked] = useState(false); // Trava interações durante o modal de turno
+  const [showDelayedBattleResult, setShowDelayedBattleResult] = useState(false); // Delay para mostrar modal de vitória
   const autoEndTriggeredRef = useRef<boolean>(false); // Evita múltiplos auto-ends
   const isMovingRef = useRef<boolean>(false); // Lock para evitar cliques rápidos
   const autoEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer para debounce do auto-end
+  const turnModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer para delay do modal de turno
   const unitsRef = useRef(units); // Ref para acessar units atualizado dentro do setTimeout
   const cameraCenteredRef = useRef<string | null>(null); // Controla se já centralizou a câmera neste turno
+  const turnModalShownRef = useRef<string | null>(null); // Controla se já mostrou o modal neste turno
+  const lastRoundRef = useRef<number | null>(null); // Rastreia a última rodada para detectar mudança
 
   // Manter ref sincronizada
   useEffect(() => {
     unitsRef.current = units;
   }, [units]);
+
+  // Ouvir eventos de combate para disparar animações
+  useEffect(() => {
+    // Handler para ataque - anima atacante (Sword) e alvo (Damage)
+    const handleUnitAttacked = (data: {
+      attackerUnitId: string;
+      targetUnitId: string | null;
+      missed?: boolean;
+    }) => {
+      // Animação de ataque no atacante
+      if (canvasRef.current && data.attackerUnitId) {
+        canvasRef.current.playAnimation(data.attackerUnitId, "Sword_1");
+      }
+      // Animação de dano no alvo (se não errou e tem alvo válido)
+      if (!data.missed && data.targetUnitId && canvasRef.current) {
+        // Pequeno delay para o dano aparecer após o golpe
+        setTimeout(() => {
+          canvasRef.current?.playAnimation(data.targetUnitId!, "Damage");
+        }, 200);
+      }
+    };
+
+    // Handler para erros - reseta lock de movimento imediatamente
+    const handleBattleError = () => {
+      isMovingRef.current = false;
+    };
+
+    socketService.on("battle:unit_attacked", handleUnitAttacked);
+    socketService.on("battle:error", handleBattleError);
+
+    return () => {
+      socketService.off("battle:unit_attacked", handleUnitAttacked);
+      socketService.off("battle:error", handleBattleError);
+    };
+  }, []);
 
   // Handler para atalhos de teclado (ESC = menu pausa, Espaço = finalizar turno)
   useEffect(() => {
@@ -125,12 +171,67 @@ const ArenaBattleViewInner: React.FC = () => {
     // NÃO limpar selectedUnitId aqui - será gerenciado pelo próximo useEffect
   }, [battle?.currentPlayerId, battle?.round]);
 
+  // Mostrar modal de "Turno começou!" quando muda de turno
+  // Delay antes de mostrar o modal de início de turno (ms)
+  // Isso dá tempo para animações do turno anterior terminarem
+  const TURN_MODAL_DELAY = 800;
+  // Delay para mostrar o modal de vitória (ms)
+  const BATTLE_RESULT_DELAY = 2000;
+
+  useEffect(() => {
+    if (!battle || !user) return;
+
+    const turnKey = `${battle.currentPlayerId}-${battle.round}`;
+
+    // Detectar se é início de rodada (rodada mudou)
+    const roundChanged =
+      lastRoundRef.current !== null && lastRoundRef.current !== battle.round;
+    const isFirstRound = lastRoundRef.current === null;
+
+    // Atualizar ref da rodada APÓS detectar mudança
+    lastRoundRef.current = battle.round;
+
+    // Mostrar modal se ainda não mostrou neste turno (com delay)
+    if (turnModalShownRef.current !== turnKey) {
+      turnModalShownRef.current = turnKey;
+      setIsRoundStart(roundChanged || isFirstRound);
+      setIsTurnLocked(true); // Travar interações durante o modal
+
+      // Cancelar timer anterior se existir
+      if (turnModalTimerRef.current) {
+        clearTimeout(turnModalTimerRef.current);
+      }
+
+      // Delay antes de mostrar o modal (usar ref para evitar cancelamento pelo StrictMode)
+      turnModalTimerRef.current = setTimeout(() => {
+        setShowTurnStartModal(true);
+        turnModalTimerRef.current = null;
+      }, TURN_MODAL_DELAY);
+    }
+  }, [battle?.currentPlayerId, battle?.round, user?.id]);
+
+  // Delay para mostrar o modal de vitória
+  useEffect(() => {
+    if (battleResult) {
+      const timer = setTimeout(() => {
+        setShowDelayedBattleResult(true);
+      }, BATTLE_RESULT_DELAY);
+      return () => clearTimeout(timer);
+    } else {
+      setShowDelayedBattleResult(false);
+    }
+  }, [battleResult]);
+
   // Auto-selecionar a unidade do turno atual quando muda de turno ou monta
   // E guiar câmera para ela APENAS UMA VEZ no início do turno
+  // SÓ EXECUTA APÓS O MODAL DE INÍCIO DE TURNO FECHAR (isTurnLocked = false)
   const beginActionCalledRef = useRef<string | null>(null); // Rastreia se beginAction já foi chamado para este turno
 
   useEffect(() => {
     if (!battle || !user) return;
+
+    // Aguardar o modal de início de turno fechar antes de auto-selecionar
+    if (isTurnLocked) return;
 
     const isMyTurnNow = battle.currentPlayerId === user.id;
     const turnKey = `${battle.currentPlayerId}-${battle.round}`;
@@ -208,6 +309,7 @@ const ArenaBattleViewInner: React.FC = () => {
     units,
     beginAction,
     selectedUnitId,
+    isTurnLocked,
   ]);
 
   // Auto-encerrar turno quando movimentos E ações acabarem
@@ -280,7 +382,7 @@ const ArenaBattleViewInner: React.FC = () => {
     }
   }, [arenaError]);
 
-  // Handler para centralizar mapa em uma unidade (chamado pelo InitiativePanel)
+  // Handler para centralizar mapa em uma unidade (chamado pelo BattleHeader)
   const handleInitiativeUnitClick = useCallback((unit: BattleUnit) => {
     canvasRef.current?.centerOnUnit(unit.id);
   }, []);
@@ -312,7 +414,6 @@ const ArenaBattleViewInner: React.FC = () => {
   const isMyTurn = battle.currentPlayerId === user.id;
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
   const myUnits = units.filter((u) => u.ownerId === user.id && u.isAlive);
-  const enemyUnits = units.filter((u) => u.ownerId !== user.id && u.isAlive);
 
   // Determinar o oponente
   const isHost = battle.hostKingdom.ownerId === user.id;
@@ -322,6 +423,12 @@ const ArenaBattleViewInner: React.FC = () => {
   // === MOVIMENTAÇÃO COM WASD ===
   const handleKeyboardMove = useCallback(
     (direction: "up" | "down" | "left" | "right") => {
+      // Bloquear durante o modal de início de turno
+      if (isTurnLocked) return;
+
+      // Bloquear se já há movimento em andamento
+      if (isMovingRef.current) return;
+
       if (!selectedUnit || !isMyTurn || selectedUnit.ownerId !== user.id)
         return;
       if (selectedUnit.movesLeft <= 0) return;
@@ -363,9 +470,22 @@ const ArenaBattleViewInner: React.FC = () => {
         return;
       }
 
+      // Verificar custo de movimento (para movimento de 1 célula, caminho está sempre livre)
+      const moveInfo = getFullMovementInfo(
+        selectedUnit,
+        newX,
+        newY,
+        units,
+        battle.config.map.obstacles || [],
+        battle.config.grid.width,
+        battle.config.grid.height
+      );
+
       if (
         !occupied &&
-        (newX !== selectedUnit.posX || newY !== selectedUnit.posY)
+        (newX !== selectedUnit.posX || newY !== selectedUnit.posY) &&
+        !moveInfo.isBlocked &&
+        moveInfo.totalCost <= selectedUnit.movesLeft
       ) {
         console.log(
           "%c[ArenaBattleView] ⌨️ Movimento WASD",
@@ -374,6 +494,8 @@ const ArenaBattleViewInner: React.FC = () => {
             direction,
             from: { x: selectedUnit.posX, y: selectedUnit.posY },
             to: { x: newX, y: newY },
+            totalCost: moveInfo.totalCost,
+            engagementCost: moveInfo.engagementCost,
           }
         );
         isMovingRef.current = true; // Lock para evitar movimentos rápidos
@@ -388,6 +510,7 @@ const ArenaBattleViewInner: React.FC = () => {
       moveUnit,
       battle.config.grid.width,
       battle.config.grid.height,
+      battle.config.map.obstacles,
     ]
   );
 
@@ -427,6 +550,9 @@ const ArenaBattleViewInner: React.FC = () => {
   }, [handleKeyboardMove]);
 
   const handleUnitClick = (unit: BattleUnit) => {
+    // Bloquear durante o modal de início de turno
+    if (isTurnLocked) return;
+
     console.log(
       "%c[ArenaBattleView] 🎯 Clique em unidade",
       "color: #06b6d4; font-weight: bold;",
@@ -464,6 +590,43 @@ const ArenaBattleViewInner: React.FC = () => {
       return;
     }
 
+    // Se há uma spell pendente aguardando alvo (spell que targetiza unidade)
+    if (pendingAction?.startsWith("spell:") && selectedUnit && isMyTurn) {
+      const spellCode = pendingAction.replace("spell:", "");
+      const spell = getSpellByCode(spellCode);
+
+      if (
+        spell &&
+        (spell.targetType === "ALLY" ||
+          spell.targetType === "ENEMY" ||
+          spell.targetType === "ALL")
+      ) {
+        // Validar alcance
+        const dx = Math.abs(unit.posX - selectedUnit.posX);
+        const dy = Math.abs(unit.posY - selectedUnit.posY);
+        const distance = dx + dy; // Manhattan distance
+
+        const maxRange = spell.range === "ADJACENT" ? 1 : selectedUnit.speed;
+
+        if (distance <= maxRange) {
+          console.log(
+            "%c[ArenaBattleView] 🔮 Conjurando spell em unidade!",
+            "color: #a855f7; font-weight: bold;",
+            { spellCode, targetId: unit.id, targetName: unit.name }
+          );
+          castSpell(selectedUnit.id, spellCode, unit.id);
+          setPendingAction(null);
+        } else {
+          console.log(
+            "%c[ArenaBattleView] ❌ Alvo fora de alcance da spell",
+            "color: #ef4444;",
+            { distance, maxRange }
+          );
+        }
+        return;
+      }
+    }
+
     // Comportamento padrão: selecionar unidade
     if (unit.ownerId === user.id) {
       // Toggle: clicar na mesma unidade desseleciona
@@ -495,7 +658,7 @@ const ArenaBattleViewInner: React.FC = () => {
       // Se é meu turno E não há unidade ativa ainda E esta unidade não começou ação
       // → iniciar ação desta unidade
       const hasNoActiveUnit = !battle.activeUnitId;
-      const hasNotStarted = !unit.hasStartedAction && unit.movesLeft === 0;
+      const hasNotStarted = !unit.hasStartedAction;
 
       // Caso especial: após reconexão, unidade pode ter hasStartedAction mas sem activeUnitId
       const needsReactivation = unit.hasStartedAction && hasNoActiveUnit;
@@ -525,6 +688,9 @@ const ArenaBattleViewInner: React.FC = () => {
   };
 
   const handleCellClick = (x: number, y: number) => {
+    // Bloquear durante o modal de início de turno
+    if (isTurnLocked) return;
+
     console.log(
       "%c[ArenaBattleView] 🗺️ Clique em célula",
       "color: #8b5cf6; font-weight: bold;",
@@ -558,6 +724,55 @@ const ArenaBattleViewInner: React.FC = () => {
       return;
     }
 
+    // Verificar se a unidade selecionada é a unidade ativa (ou aguardando ativação)
+    // Se activeUnitId está indefinido mas é minha unidade, permitir ação
+    const isActiveOrPending = battle.activeUnitId
+      ? selectedUnit.id === battle.activeUnitId
+      : selectedUnit.ownerId === user.id;
+    if (!isActiveOrPending) {
+      console.log(
+        "%c[ArenaBattleView] ⚠️ Unidade não está ativa - ignorando clique",
+        "color: #f59e0b;",
+        { selectedUnitId: selectedUnit.id, activeUnitId: battle.activeUnitId }
+      );
+      return;
+    }
+
+    // Se há uma spell pendente que targetiza posição
+    if (pendingAction?.startsWith("spell:") && selectedUnit) {
+      const spellCode = pendingAction.replace("spell:", "");
+      const spell = getSpellByCode(spellCode);
+
+      if (
+        spell &&
+        (spell.targetType === "POSITION" || spell.targetType === "GROUND")
+      ) {
+        // Validar alcance
+        const dx = Math.abs(x - selectedUnit.posX);
+        const dy = Math.abs(y - selectedUnit.posY);
+        const distance = dx + dy; // Manhattan distance
+
+        const maxRange = spell.range === "ADJACENT" ? 1 : selectedUnit.speed;
+
+        if (distance <= maxRange) {
+          console.log(
+            "%c[ArenaBattleView] 🔮 Conjurando spell em posição!",
+            "color: #a855f7; font-weight: bold;",
+            { spellCode, position: { x, y } }
+          );
+          castSpell(selectedUnit.id, spellCode, undefined, { x, y });
+          setPendingAction(null);
+        } else {
+          console.log(
+            "%c[ArenaBattleView] ❌ Posição fora de alcance da spell",
+            "color: #ef4444;",
+            { distance, maxRange }
+          );
+        }
+        return;
+      }
+    }
+
     // Calcular direção baseado no clique (apenas left/right para sprite)
     const deltaX = x - selectedUnit.posX;
     const clickDirection: SpriteDirection = deltaX < 0 ? "left" : "right";
@@ -565,8 +780,17 @@ const ArenaBattleViewInner: React.FC = () => {
 
     // Tentar mover para a célula
     if (selectedUnit.movesLeft > 0) {
-      const dx = Math.abs(x - selectedUnit.posX);
-      const dy = Math.abs(y - selectedUnit.posY);
+      // Calcular informações completas de movimento (incluindo verificação de caminho)
+      const moveInfo = getFullMovementInfo(
+        selectedUnit,
+        x,
+        y,
+        units,
+        battle.config.map.obstacles || [],
+        battle.config.grid.width,
+        battle.config.grid.height
+      );
+
       console.log(
         "%c[ArenaBattleView] 🚶 Tentando mover unidade",
         "color: #06b6d4;",
@@ -574,12 +798,33 @@ const ArenaBattleViewInner: React.FC = () => {
           unitId: selectedUnit.id,
           from: { x: selectedUnit.posX, y: selectedUnit.posY },
           to: { x, y },
-          distance: dx + dy,
+          baseCost: moveInfo.baseCost,
+          engagementCost: moveInfo.engagementCost,
+          totalCost: moveInfo.totalCost,
           movesLeft: selectedUnit.movesLeft,
-          canMove: dx + dy <= selectedUnit.movesLeft,
+          isBlocked: moveInfo.isBlocked,
+          canMove:
+            !moveInfo.isBlocked && moveInfo.totalCost <= selectedUnit.movesLeft,
         }
       );
-      if (dx + dy <= selectedUnit.movesLeft) {
+
+      // Verificar se o caminho está bloqueado
+      if (moveInfo.isBlocked) {
+        console.log(
+          "%c[ArenaBattleView] 🚫 Caminho bloqueado!",
+          "color: #ef4444;"
+        );
+        return;
+      }
+
+      if (moveInfo.totalCost <= selectedUnit.movesLeft) {
+        if (moveInfo.hasEngagementPenalty) {
+          console.log(
+            "%c[ArenaBattleView] ⚠️ Movimento com penalidade de engajamento!",
+            "color: #f59e0b;",
+            { engagementCost: moveInfo.engagementCost }
+          );
+        }
         console.log(
           "%c[ArenaBattleView] ✅ Movimento válido!",
           "color: #22c55e;"
@@ -588,8 +833,9 @@ const ArenaBattleViewInner: React.FC = () => {
         moveUnit(selectedUnit.id, x, y);
       } else {
         console.log(
-          "%c[ArenaBattleView] ❌ Distância muito grande",
-          "color: #ef4444;"
+          "%c[ArenaBattleView] ❌ Custo de movimento muito alto",
+          "color: #ef4444;",
+          { totalCost: moveInfo.totalCost, movesLeft: selectedUnit.movesLeft }
         );
       }
     } else {
@@ -676,35 +922,18 @@ const ArenaBattleViewInner: React.FC = () => {
         onSurrender={handleSurrender}
       />
 
-      {/* Header da Batalha - Fixo no topo */}
-      <BattleHeader
-        myKingdom={myKingdom}
-        opponentKingdom={opponentKingdom}
-        myUnitsAlive={myUnits.length}
-        enemyUnitsAlive={enemyUnits.length}
-        isMyTurn={isMyTurn}
-        config={battle.config}
-      />
-
-      {/* Área Principal - Flex grow para preencher */}
-      <div className="flex-1 flex min-h-0">
-        {/* Painel de Iniciativa - Fixo à esquerda */}
-        <InitiativePanel
-          battle={battle}
-          units={units}
-          currentUserId={user.id}
-          onUnitClick={handleInitiativeUnitClick}
-        />
-
-        {/* Canvas do Grid - Área principal */}
+      {/* Área Principal - Canvas em tela cheia */}
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Canvas do Grid - Área principal (tela cheia) */}
         <div className="flex-1 p-2 min-w-0">
-          <div className="w-full h-full bg-citadel-granite rounded-xl border-4 border-metal-iron shadow-stone-raised">
+          <div className="w-full h-full bg-citadel-granite rounded-xl border-4 border-metal-iron shadow-stone-raised relative">
             <ArenaBattleCanvas
               ref={canvasRef}
               battle={battle}
               units={units}
               currentUserId={user.id}
               selectedUnitId={selectedUnitId}
+              activeUnitId={battle.activeUnitId}
               onUnitClick={handleUnitClick}
               onCellClick={handleCellClick}
               onObstacleClick={handleObstacleClick}
@@ -712,24 +941,33 @@ const ArenaBattleViewInner: React.FC = () => {
               pendingAction={pendingAction}
               activeBubbles={chatState.activeBubbles}
             />
+
+            {/* BattleHeader - Overlay na parte superior (dentro do Canvas) */}
+            <BattleHeader
+              battle={battle}
+              units={units}
+              currentUserId={user.id}
+              selectedUnitId={selectedUnitId ?? undefined}
+              onUnitClick={handleInitiativeUnitClick}
+            />
+
+            {/* UnitPanel - Overlay na parte inferior (dentro do Canvas) */}
+            <UnitPanel
+              selectedUnit={selectedUnit ?? null}
+              activeUnitId={battle.activeUnitId}
+              isMyTurn={isMyTurn}
+              currentUserId={user.id}
+              pendingAction={pendingAction}
+              onSetPendingAction={setPendingAction}
+              onExecuteAction={executeAction}
+              onEndAction={handleEndAction}
+            />
           </div>
         </div>
-
-        {/* UnitPanel - Painel lateral direito */}
-        <UnitPanel
-          selectedUnit={selectedUnit ?? null}
-          activeUnitId={battle.activeUnitId}
-          isMyTurn={isMyTurn}
-          currentUserId={user.id}
-          pendingAction={pendingAction}
-          onSetPendingAction={setPendingAction}
-          onExecuteAction={executeAction}
-          onEndAction={handleEndAction}
-        />
       </div>
 
-      {/* Modal de Resultado da Batalha */}
-      {battleResult && (
+      {/* Modal de Resultado da Batalha (com delay de 1s) */}
+      {showDelayedBattleResult && battleResult && (
         <BattleResultModal
           result={battleResult}
           units={battleResult.finalUnits}
@@ -744,10 +982,29 @@ const ArenaBattleViewInner: React.FC = () => {
         />
       )}
 
-      {/* Chat de Batalha - Abre com Enter */}
-      <BattleChatUI
-        currentUnitId={selectedUnitId || battle.activeUnitId || myUnits[0]?.id}
+      {/* Modal de Início de Turno */}
+      <TurnStartModal
+        isVisible={showTurnStartModal}
+        onHide={() => {
+          setShowTurnStartModal(false);
+          setIsTurnLocked(false); // Destravar interações quando modal fechar
+        }}
+        round={battle.round}
+        isMyTurn={isMyTurn}
+        isRoundStart={isRoundStart}
+        currentPlayerKingdomName={
+          isMyTurn ? myKingdom.name : opponentKingdom.name
+        }
       />
+
+      {/* Chat de Batalha - Abre com Enter (escondido quando modal de resultado está aberto) */}
+      {!showDelayedBattleResult && (
+        <BattleChatUI
+          currentUnitId={
+            selectedUnitId || battle.activeUnitId || myUnits[0]?.id
+          }
+        />
+      )}
     </div>
   );
 };
@@ -789,7 +1046,7 @@ const BattleChatUI: React.FC<{
 
   if (!state.isOpen) {
     return (
-      <div className="fixed bottom-4 right-4 z-40">
+      <div className="fixed bottom-32 left-4 z-50">
         <button
           onClick={openChat}
           className="
@@ -810,7 +1067,7 @@ const BattleChatUI: React.FC<{
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-72">
+    <div className="fixed bottom-32 left-4 z-50 w-72">
       <ChatBox
         currentUnitId={currentUnitId || undefined}
         variant="compact"

@@ -130,15 +130,42 @@ export const SKILL_CONDITIONS: Record<string, ConditionDefinition> = {
   // =========================================================================
   // MAGO
   // =========================================================================
-  ARCANE_MASTERY: {
-    id: "ARCANE_MASTERY",
-    name: "Maestria Arcana",
-    description: "+1 dado em todos os testes de Foco",
+  GRIMOIRE: {
+    id: "GRIMOIRE",
+    name: "Grimório",
+    description:
+      "Possui um Livro de Magias. Aprende magias conjuradas visíveis permanentemente.",
     expiry: "permanent",
-    icon: "✨",
+    icon: "📖",
     color: "#6366f1",
     effects: {
-      focusMod: 1, // +1 em Foco
+      // Efeito especial: aprender magias é lógica de combate
+      learnsVisibleSpells: true,
+    },
+  },
+
+  MAGIC_WEAPON: {
+    id: "MAGIC_WEAPON",
+    name: "Arma Mágica",
+    description: "Ataques causam dano Mágico ao invés de Físico.",
+    expiry: "end_of_combat",
+    icon: "✨",
+    color: "#8b5cf6",
+    effects: {
+      convertPhysicalToMagical: true,
+    },
+  },
+
+  ARCANE_SHIELD: {
+    id: "ARCANE_SHIELD",
+    name: "Escudo Arcano",
+    description: "Redução de Dano igual à metade do Foco.",
+    expiry: "next_turn",
+    icon: "🛡️",
+    color: "#6366f1",
+    effects: {
+      // damageReduction será calculado dinamicamente baseado no Focus
+      arcaneShieldActive: true,
     },
   },
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import type { BattleEndedResponse } from "../../types/arena.types";
 import type { BattleUnit } from "../../../../../../shared/types/battle.types";
 
@@ -15,9 +15,11 @@ interface BattleResultModalProps {
   opponentWantsRematch?: boolean;
 }
 
+type ViewTab = "summary" | "myUnits" | "enemyUnits";
+
 /**
- * BattleResultModal - Modal exibido ao final de uma batalha de Arena
- * Mostra resultado (Vitória/Derrota), todas as unidades e seus status finais
+ * BattleResultModal - Modal moderno exibido ao final de uma batalha
+ * Preparado para lidar com centenas de unidades usando tabs e virtualização
  */
 export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   result,
@@ -31,188 +33,371 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   rematchPending,
   opponentWantsRematch,
 }) => {
-  const myUnits = units.filter((u) => u.ownerId === myUserId);
-  const enemyUnits = units.filter((u) => u.ownerId !== myUserId);
+  const [activeTab, setActiveTab] = useState<ViewTab>("summary");
 
-  const renderUnitCard = (unit: BattleUnit, isEnemy: boolean) => {
+  // Separar unidades
+  const myUnits = useMemo(
+    () => units.filter((u) => u.ownerId === myUserId),
+    [units, myUserId]
+  );
+  const enemyUnits = useMemo(
+    () => units.filter((u) => u.ownerId !== myUserId),
+    [units, myUserId]
+  );
+
+  // Calcular estatísticas
+  const stats = useMemo(() => {
+    const myAlive = myUnits.filter((u) => u.isAlive && u.currentHp > 0);
+    const myDead = myUnits.filter((u) => !u.isAlive || u.currentHp <= 0);
+    const enemyAlive = enemyUnits.filter((u) => u.isAlive && u.currentHp > 0);
+    const enemyDead = enemyUnits.filter((u) => !u.isAlive || u.currentHp <= 0);
+
+    const myTotalHp = myUnits.reduce((sum, u) => sum + u.maxHp, 0);
+    const myCurrentHp = myUnits.reduce(
+      (sum, u) => sum + Math.max(0, u.currentHp),
+      0
+    );
+    const enemyTotalHp = enemyUnits.reduce((sum, u) => sum + u.maxHp, 0);
+    const enemyCurrentHp = enemyUnits.reduce(
+      (sum, u) => sum + Math.max(0, u.currentHp),
+      0
+    );
+
+    return {
+      myAlive: myAlive.length,
+      myDead: myDead.length,
+      myTotal: myUnits.length,
+      myHpPercent: myTotalHp > 0 ? (myCurrentHp / myTotalHp) * 100 : 0,
+      enemyAlive: enemyAlive.length,
+      enemyDead: enemyDead.length,
+      enemyTotal: enemyUnits.length,
+      enemyHpPercent:
+        enemyTotalHp > 0 ? (enemyCurrentHp / enemyTotalHp) * 100 : 0,
+    };
+  }, [myUnits, enemyUnits]);
+
+  // Componente de unidade compacto para listas grandes
+  const UnitRow: React.FC<{ unit: BattleUnit; isEnemy: boolean }> = ({
+    unit,
+    isEnemy,
+  }) => {
     const hpPercent = (unit.currentHp / unit.maxHp) * 100;
     const isDead = !unit.isAlive || unit.currentHp <= 0;
 
     return (
       <div
-        key={unit.id}
-        className={`p-3 rounded-lg border-2 ${
+        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
           isDead
-            ? "bg-gray-800/50 border-gray-600 opacity-60"
+            ? "bg-gray-800/40 opacity-70"
             : isEnemy
-            ? "bg-red-900/30 border-red-700"
-            : "bg-blue-900/30 border-blue-700"
+            ? "bg-red-900/20 hover:bg-red-900/30"
+            : "bg-blue-900/20 hover:bg-blue-900/30"
         }`}
       >
-        {/* Nome e Status */}
-        <div className="flex items-center justify-between mb-2">
-          <span
-            className={`font-bold ${
-              isDead ? "text-gray-400 line-through" : "text-parchment-light"
-            }`}
-            style={{ fontFamily: "'Cinzel', serif" }}
-          >
-            {unit.name}
-          </span>
-          {isDead ? (
-            <span className="text-xs px-2 py-0.5 bg-gray-700 border border-gray-500 rounded text-gray-300">
-              💀 MORTO
-            </span>
-          ) : (
-            <span className="text-xs px-2 py-0.5 bg-green-800 border border-green-600 rounded text-green-300">
-              ✓ VIVO
-            </span>
-          )}
+        {/* Status Icon */}
+        <div className="text-lg w-6 text-center">
+          {isDead ? "💀" : isEnemy ? "⚔️" : "👤"}
         </div>
 
-        {/* Barra de HP */}
-        <div className="mb-2">
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-parchment-dark">HP</span>
-            <span className="text-parchment-light">
+        {/* Nome e Stats */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className={`font-medium truncate ${
+                isDead ? "text-gray-500 line-through" : "text-parchment-light"
+              }`}
+            >
+              {unit.name}
+            </span>
+            <span className="text-xs text-parchment-dark">Lv.{unit.level}</span>
+          </div>
+
+          {/* HP Bar compacta */}
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 h-1.5 bg-citadel-obsidian rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{
+                  width: `${Math.max(0, hpPercent)}%`,
+                  backgroundColor: isDead
+                    ? "#374151"
+                    : hpPercent > 60
+                    ? "#22c55e"
+                    : hpPercent > 30
+                    ? "#eab308"
+                    : "#ef4444",
+                }}
+              />
+            </div>
+            <span className="text-xs text-parchment-dark whitespace-nowrap">
               {unit.currentHp}/{unit.maxHp}
             </span>
           </div>
-          <div className="h-2 bg-citadel-obsidian rounded-full overflow-hidden">
-            <div
-              className="h-full transition-all duration-300"
-              style={{
-                width: `${Math.max(0, hpPercent)}%`,
-                backgroundColor:
-                  hpPercent > 60
-                    ? "#4ade80"
-                    : hpPercent > 30
-                    ? "#fbbf24"
-                    : "#ef4444",
-              }}
-            />
-          </div>
         </div>
 
-        {/* Stats resumidos */}
-        <div className="grid grid-cols-4 gap-1 text-xs">
-          <div className="text-center">
-            <span className="text-parchment-dark">⚔️</span>
-            <p className="text-parchment-light">{unit.combat}</p>
-          </div>
-          <div className="text-center">
-            <span className="text-parchment-dark">�</span>
-            <p className="text-parchment-light">{unit.speed}</p>
-          </div>
-          <div className="text-center">
-            <span className="text-parchment-dark">🎯</span>
-            <p className="text-parchment-light">{unit.focus}</p>
-          </div>
-          <div className="text-center">
-            <span className="text-parchment-dark">🛡️</span>
-            <p className="text-parchment-light">{unit.armor}</p>
-          </div>
+        {/* Stats compactos */}
+        <div className="hidden sm:flex items-center gap-3 text-xs text-parchment-dark">
+          <span title="Combate">⚔️{unit.combat}</span>
+          <span title="Velocidade">💨{unit.speed}</span>
+          <span title="Foco">🎯{unit.focus}</span>
+          <span title="Armadura">🛡️{unit.armor}</span>
         </div>
-
-        {/* Condições */}
-        {unit.conditions.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {unit.conditions.map((cond, i) => (
-              <span
-                key={i}
-                className="text-xs px-1.5 py-0.5 bg-war-blood/30 border border-war-crimson/50 rounded text-war-ember"
-              >
-                {cond}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
     );
   };
 
+  // Lista de unidades com scroll virtual para grandes quantidades
+  const UnitList: React.FC<{ unitList: BattleUnit[]; isEnemy: boolean }> = ({
+    unitList,
+    isEnemy,
+  }) => {
+    // Ordenar: vivos primeiro, depois mortos
+    const sortedUnits = useMemo(
+      () =>
+        [...unitList].sort((a, b) => {
+          const aAlive = a.isAlive && a.currentHp > 0 ? 1 : 0;
+          const bAlive = b.isAlive && b.currentHp > 0 ? 1 : 0;
+          if (aAlive !== bAlive) return bAlive - aAlive;
+          return b.currentHp / b.maxHp - a.currentHp / a.maxHp;
+        }),
+      [unitList]
+    );
+
+    if (sortedUnits.length === 0) {
+      return (
+        <div className="text-center text-parchment-dark py-8">
+          Nenhuma unidade
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+        {sortedUnits.map((unit) => (
+          <UnitRow key={unit.id} unit={unit} isEnemy={isEnemy} />
+        ))}
+      </div>
+    );
+  };
+
+  // Stat Card para o resumo
+  const StatCard: React.FC<{
+    label: string;
+    alive: number;
+    dead: number;
+    total: number;
+    hpPercent: number;
+    isEnemy: boolean;
+  }> = ({ label, alive, dead, total, hpPercent, isEnemy }) => (
+    <div
+      className={`p-4 rounded-xl border ${
+        isEnemy
+          ? "bg-gradient-to-br from-red-950/50 to-red-900/30 border-red-800/50"
+          : "bg-gradient-to-br from-blue-950/50 to-blue-900/30 border-blue-800/50"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">{isEnemy ? "⚔️" : "👑"}</span>
+        <span className="font-semibold text-parchment-light truncate">
+          {label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center mb-3">
+        <div>
+          <div className="text-2xl font-bold text-green-400">{alive}</div>
+          <div className="text-xs text-parchment-dark">Vivos</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-red-400">{dead}</div>
+          <div className="text-xs text-parchment-dark">Mortos</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-parchment-aged">{total}</div>
+          <div className="text-xs text-parchment-dark">Total</div>
+        </div>
+      </div>
+
+      {/* HP Total Bar */}
+      <div>
+        <div className="flex justify-between text-xs text-parchment-dark mb-1">
+          <span>HP Total</span>
+          <span>{Math.round(hpPercent)}%</span>
+        </div>
+        <div className="h-2 bg-citadel-obsidian rounded-full overflow-hidden">
+          <div
+            className="h-full transition-all"
+            style={{
+              width: `${hpPercent}%`,
+              backgroundColor:
+                hpPercent > 60
+                  ? "#22c55e"
+                  : hpPercent > 30
+                  ? "#eab308"
+                  : "#ef4444",
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-citadel-granite border-4 border-metal-iron rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fadeIn">
+      <div className="bg-gradient-to-b from-citadel-granite to-citadel-carved border border-metal-iron/50 rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden animate-slideUp">
         {/* Header - Resultado */}
         <div
-          className={`p-6 text-center border-b-4 ${
+          className={`relative p-6 text-center overflow-hidden ${
             isWinner
-              ? "bg-gradient-to-b from-yellow-600/30 to-yellow-900/30 border-yellow-600"
-              : "bg-gradient-to-b from-red-900/30 to-gray-900/30 border-red-800"
+              ? "bg-gradient-to-br from-yellow-600/20 via-yellow-500/10 to-transparent"
+              : "bg-gradient-to-br from-red-900/30 via-red-800/10 to-transparent"
           }`}
         >
-          <div className="text-6xl mb-2">{isWinner ? "🏆" : "💀"}</div>
-          <h1
-            className={`text-3xl font-bold ${
-              isWinner ? "text-yellow-400" : "text-red-400"
-            }`}
-            style={{ fontFamily: "'Cinzel Decorative', cursive" }}
-          >
-            {isWinner ? "VITÓRIA!" : "DERROTA"}
-          </h1>
-          <p className="text-parchment-aged mt-2">{result.reason}</p>
+          {/* Background decoration */}
+          <div className="absolute inset-0 opacity-10">
+            <div
+              className={`absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-3xl ${
+                isWinner ? "bg-yellow-500" : "bg-red-600"
+              }`}
+            />
+          </div>
+
+          <div className="relative">
+            <div
+              className={`text-7xl mb-3 animate-bounce ${
+                isWinner ? "" : "animate-none"
+              }`}
+            >
+              {isWinner ? "🏆" : "💀"}
+            </div>
+            <h1
+              className={`text-4xl font-black tracking-wider ${
+                isWinner
+                  ? "text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-300"
+                  : "text-red-400"
+              }`}
+              style={{ fontFamily: "'Cinzel Decorative', cursive" }}
+            >
+              {isWinner ? "VITÓRIA" : "DERROTA"}
+            </h1>
+            <p className="text-parchment-aged mt-2 text-sm">{result.reason}</p>
+          </div>
         </div>
 
-        {/* Conteúdo - Unidades */}
-        <div className="p-6">
-          {/* Minhas Unidades */}
-          <div className="mb-6">
-            <h2
-              className="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2"
-              style={{ fontFamily: "'Cinzel', serif" }}
-            >
-              <span className="text-2xl">👑</span>
-              {myKingdomName}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {myUnits.map((unit) => renderUnitCard(unit, false))}
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className="flex border-b border-metal-iron/30">
+          <button
+            onClick={() => setActiveTab("summary")}
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              activeTab === "summary"
+                ? "text-parchment-light border-b-2 border-yellow-500 bg-citadel-slate/30"
+                : "text-parchment-dark hover:text-parchment-aged hover:bg-citadel-slate/20"
+            }`}
+          >
+            📊 Resumo
+          </button>
+          <button
+            onClick={() => setActiveTab("myUnits")}
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              activeTab === "myUnits"
+                ? "text-parchment-light border-b-2 border-blue-500 bg-citadel-slate/30"
+                : "text-parchment-dark hover:text-parchment-aged hover:bg-citadel-slate/20"
+            }`}
+          >
+            👑 Minhas ({stats.myTotal})
+          </button>
+          <button
+            onClick={() => setActiveTab("enemyUnits")}
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              activeTab === "enemyUnits"
+                ? "text-parchment-light border-b-2 border-red-500 bg-citadel-slate/30"
+                : "text-parchment-dark hover:text-parchment-aged hover:bg-citadel-slate/20"
+            }`}
+          >
+            ⚔️ Inimigos ({stats.enemyTotal})
+          </button>
+        </div>
 
-          {/* Unidades Inimigas */}
-          <div>
-            <h2
-              className="text-lg font-bold text-red-400 mb-3 flex items-center gap-2"
-              style={{ fontFamily: "'Cinzel', serif" }}
-            >
-              <span className="text-2xl">⚔️</span>
-              {opponentKingdomName}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {enemyUnits.map((unit) => renderUnitCard(unit, true))}
+        {/* Content */}
+        <div className="p-4">
+          {activeTab === "summary" && (
+            <div className="grid grid-cols-2 gap-4">
+              <StatCard
+                label={myKingdomName}
+                alive={stats.myAlive}
+                dead={stats.myDead}
+                total={stats.myTotal}
+                hpPercent={stats.myHpPercent}
+                isEnemy={false}
+              />
+              <StatCard
+                label={opponentKingdomName}
+                alive={stats.enemyAlive}
+                dead={stats.enemyDead}
+                total={stats.enemyTotal}
+                hpPercent={stats.enemyHpPercent}
+                isEnemy={true}
+              />
             </div>
-          </div>
+          )}
+
+          {activeTab === "myUnits" && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-parchment-light font-semibold">
+                  {myKingdomName}
+                </h3>
+                <span className="text-xs text-parchment-dark">
+                  {stats.myAlive} vivos / {stats.myDead} mortos
+                </span>
+              </div>
+              <UnitList unitList={myUnits} isEnemy={false} />
+            </div>
+          )}
+
+          {activeTab === "enemyUnits" && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-parchment-light font-semibold">
+                  {opponentKingdomName}
+                </h3>
+                <span className="text-xs text-parchment-dark">
+                  {stats.enemyAlive} vivos / {stats.enemyDead} mortos
+                </span>
+              </div>
+              <UnitList unitList={enemyUnits} isEnemy={true} />
+            </div>
+          )}
         </div>
 
         {/* Footer - Ações */}
-        <div className="p-6 bg-citadel-slate/50 border-t-2 border-metal-iron">
+        <div className="p-4 bg-citadel-slate/30 border-t border-metal-iron/30">
           {/* Status de Revanche */}
           {opponentWantsRematch && !rematchPending && (
-            <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600 rounded-lg text-center">
-              <p className="text-yellow-400 font-semibold">
+            <div className="mb-3 p-2.5 bg-yellow-900/30 border border-yellow-600/50 rounded-lg text-center">
+              <p className="text-yellow-400 text-sm font-medium">
                 ⚔️ O oponente quer uma revanche!
               </p>
             </div>
           )}
           {rematchPending && (
-            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-600 rounded-lg text-center">
-              <p className="text-blue-400 font-semibold">
+            <div className="mb-3 p-2.5 bg-blue-900/30 border border-blue-600/50 rounded-lg text-center">
+              <p className="text-blue-400 text-sm font-medium">
                 ⏳ Aguardando resposta do oponente...
               </p>
             </div>
           )}
 
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <button
               onClick={onRematch}
               disabled={rematchPending}
-              className={`flex-1 py-3 rounded-lg font-bold text-lg transition-all ${
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                 rematchPending
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                  ? "bg-gray-700 text-gray-500 cursor-not-allowed"
                   : opponentWantsRematch
-                  ? "bg-gradient-to-b from-yellow-500 to-yellow-700 border-2 border-yellow-400 text-citadel-obsidian hover:from-yellow-400 hover:to-yellow-600"
-                  : "bg-gradient-to-b from-green-600 to-green-800 border-2 border-green-400 text-parchment-light hover:from-green-500 hover:to-green-700"
+                  ? "bg-gradient-to-r from-yellow-500 to-amber-600 text-citadel-obsidian hover:from-yellow-400 hover:to-amber-500 shadow-lg shadow-yellow-500/20"
+                  : "bg-gradient-to-r from-green-600 to-emerald-700 text-white hover:from-green-500 hover:to-emerald-600 shadow-lg shadow-green-500/20"
               }`}
             >
               {rematchPending
@@ -223,13 +408,51 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
             </button>
             <button
               onClick={onLeave}
-              className="flex-1 py-3 bg-gradient-to-b from-citadel-granite to-citadel-carved border-2 border-metal-iron rounded-lg text-parchment-aged font-bold text-lg hover:from-citadel-weathered hover:to-citadel-granite transition-all"
+              className="flex-1 py-2.5 bg-gradient-to-r from-gray-700 to-gray-800 border border-gray-600 rounded-xl text-parchment-aged font-semibold text-sm hover:from-gray-600 hover:to-gray-700 transition-all"
             >
               🚪 Sair
             </button>
           </div>
         </div>
       </div>
+
+      {/* Styles for animations */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { 
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.4s ease-out;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0,0,0,0.2);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.3);
+        }
+      `}</style>
     </div>
   );
 };

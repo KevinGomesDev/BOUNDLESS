@@ -3,10 +3,8 @@
 
 import { useEffect, useState } from "react";
 import type { GameEvent } from "../../../../../shared/types/events.types";
-import {
-  getSeverityColor,
-  getCategoryIcon,
-} from "../../../../../shared/types/events.types";
+import { getCategoryIcon } from "../../../../../shared/types/events.types";
+import { getSeverityColors } from "../../../config/colors.config";
 
 // =============================================================================
 // TYPES
@@ -62,10 +60,10 @@ function EventToastItem({
     };
   }, [toast.id, duration, onDismiss]);
 
-  const severityColor = getSeverityColor(toast.event.severity);
+  const severityColors = getSeverityColors(toast.event.severity);
   const icon = getCategoryIcon(toast.event.category);
 
-  // Cores de fundo baseadas na severidade
+  // Cores de fundo baseadas na severidade (já definidas no config)
   const bgColorMap: Record<string, string> = {
     INFO: "bg-blue-900/90 border-blue-500/50",
     SUCCESS: "bg-green-900/90 border-green-500/50",
@@ -105,7 +103,7 @@ function EventToastItem({
       <div className="flex items-start gap-3 p-3">
         <span className="text-lg flex-shrink-0">{icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium ${severityColor}`}>
+          <p className={`text-sm font-medium ${severityColors.text}`}>
             {toast.event.message}
           </p>
         </div>

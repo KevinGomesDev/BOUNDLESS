@@ -25,6 +25,7 @@ import {
   processUnitDeathForEidolon,
   processEidolonDeath,
 } from "./summon-logic";
+import { hasFreePath } from "../../../shared/utils/engagement.utils";
 
 export interface MoveActionResult {
   success: boolean;
@@ -106,7 +107,8 @@ export function executeMoveAction(
     toY,
     gridWidth,
     gridHeight,
-    unit.movesLeft
+    unit.movesLeft,
+    { unit, allUnits } // Contexto de engajamento para calcular custo extra
   );
 
   if (!moveValidation.valid) {
@@ -142,6 +144,23 @@ export function executeMoveAction(
 
   if (hasObstacle) {
     return { success: false, error: "Target cell is blocked by obstacle" };
+  }
+
+  // Verificar se há um caminho livre até o destino (BFS)
+  const pathFree = hasFreePath(
+    unit.posX,
+    unit.posY,
+    toX,
+    toY,
+    allUnits,
+    obstacles,
+    unit.id,
+    gridWidth,
+    gridHeight
+  );
+
+  if (!pathFree) {
+    return { success: false, error: "Path is blocked" };
   }
 
   const fromX = unit.posX;
@@ -197,6 +216,15 @@ export function executeAttackAction(
   }
   if (!attacker.isAlive) {
     return { success: false, error: "Dead unit cannot attack" };
+  }
+
+  // === MAGIC_WEAPON: Converter dano físico em mágico ===
+  let effectiveDamageType = damageType;
+  if (
+    attacker.conditions.includes("MAGIC_WEAPON") &&
+    effectiveDamageType === "FISICO"
+  ) {
+    effectiveDamageType = "MAGICO";
   }
 
   // === SISTEMA DE MÚLTIPLOS ATAQUES (extraAttacks) ===
@@ -280,7 +308,7 @@ export function executeAttackAction(
       rawDamage,
       damageReduction: 0,
       finalDamage: rawDamage,
-      damageType,
+      damageType: effectiveDamageType,
       targetHpAfter: newHp,
       obstacleDestroyed: destroyed,
       obstacleId: obstacle.id,
@@ -308,7 +336,7 @@ export function executeAttackAction(
       rawDamage,
       damageReduction: 0,
       finalDamage: rawDamage,
-      damageType,
+      damageType: effectiveDamageType,
       targetHpAfter: 0,
       targetDefeated: destroyed,
       attacksLeftThisTurn: attacker.attacksLeftThisTurn,
@@ -345,7 +373,7 @@ export function executeAttackAction(
       rawDamage: 0,
       damageReduction: 0,
       finalDamage: 0,
-      damageType,
+      damageType: effectiveDamageType,
       targetHpAfter: target.currentHp,
       targetPhysicalProtection: target.physicalProtection,
       targetMagicalProtection: target.magicalProtection,
@@ -368,7 +396,7 @@ export function executeAttackAction(
     rawDamage,
     damageReduction,
     damageToApply,
-    damageType,
+    damageType: effectiveDamageType,
     dodgeChance,
     dodgeRoll,
   });
@@ -411,7 +439,7 @@ export function executeAttackAction(
       rawDamage,
       damageReduction,
       finalDamage: damageToApply,
-      damageType,
+      damageType: effectiveDamageType,
       targetHpAfter: target.currentHp, // Alvo não recebeu dano
       targetPhysicalProtection: target.physicalProtection,
       targetMagicalProtection: target.magicalProtection,
@@ -430,7 +458,7 @@ export function executeAttackAction(
     target.magicalProtection,
     target.currentHp,
     damageToApply,
-    damageType
+    effectiveDamageType
   );
 
   target.physicalProtection = protectionResult.newPhysicalProtection;
@@ -464,7 +492,7 @@ export function executeAttackAction(
     rawDamage,
     damageReduction,
     finalDamage: damageToApply,
-    damageType,
+    damageType: effectiveDamageType,
     targetHpAfter: target.currentHp,
     targetPhysicalProtection: target.physicalProtection,
     targetMagicalProtection: target.magicalProtection,

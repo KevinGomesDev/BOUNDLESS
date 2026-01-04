@@ -196,20 +196,6 @@ export type EventCode = (typeof EVENT_CODES)[keyof typeof EVENT_CODES];
 // =============================================================================
 
 /**
- * Retorna cor CSS baseada na severidade
- */
-export function getSeverityColor(severity: EventSeverity): string {
-  const colors: Record<EventSeverity, string> = {
-    INFO: "text-blue-400",
-    SUCCESS: "text-green-400",
-    WARNING: "text-yellow-400",
-    DANGER: "text-red-400",
-    NEUTRAL: "text-gray-300",
-  };
-  return colors[severity];
-}
-
-/**
  * Retorna ícone baseado na categoria
  */
 export function getCategoryIcon(category: EventCategory): string {

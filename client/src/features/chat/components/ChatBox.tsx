@@ -71,13 +71,21 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handleSubmit();
+        const trimmed = inputValue.trim();
+        if (!trimmed) {
+          // Se não há mensagem, fecha o chat
+          closeChat();
+          onClose?.();
+        } else {
+          // Se há mensagem, envia
+          handleSubmit();
+        }
       } else if (e.key === "Escape") {
         closeChat();
         onClose?.();
       }
     },
-    [handleSubmit, closeChat, onClose]
+    [inputValue, handleSubmit, closeChat, onClose]
   );
 
   const formatTime = (date: Date) => {

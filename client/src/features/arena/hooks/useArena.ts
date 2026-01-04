@@ -46,6 +46,7 @@ export function useArenaBattle() {
     attackUnit,
     endAction,
     executeAction,
+    castSpell,
     surrender,
   } = useArena();
   return {
@@ -57,6 +58,7 @@ export function useArenaBattle() {
     attackUnit,
     endAction,
     executeAction,
+    castSpell,
     surrender,
   };
 }

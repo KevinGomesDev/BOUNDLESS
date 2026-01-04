@@ -36,12 +36,21 @@ export function makeDefensiveDecision(
   availableSkills: SkillDefinition[]
 ): AIDecision {
   try {
-    const { units, obstacles, gridSize, movesRemaining, selfAssessment } =
-      context;
+    const {
+      units,
+      obstacles,
+      gridSize,
+      movesRemaining,
+      actionsRemaining,
+      selfAssessment,
+    } = context;
     const enemies = units.filter(
       (u) => u.isAlive && u.ownerId !== unit.ownerId
     );
     const allies = getAllies(unit, units);
+
+    // Verificar se pode atacar (tem ações disponíveis)
+    const canAttack = (actionsRemaining ?? unit.actionsLeft ?? 0) > 0;
 
     // Usar self-assessment se disponível, senão calcular manualmente
     const hpPercentage =
@@ -148,7 +157,7 @@ export function makeDefensiveDecision(
         ) <= attackRange
     );
 
-    if (adjacentEnemies.length > 0) {
+    if (adjacentEnemies.length > 0 && canAttack) {
       // Atacar o inimigo adjacente mais fraco
       adjacentEnemies.sort(
         (a, b) => a.currentHp / a.maxHp - b.currentHp / b.maxHp

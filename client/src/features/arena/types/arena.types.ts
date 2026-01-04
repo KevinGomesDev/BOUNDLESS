@@ -80,6 +80,12 @@ export interface ArenaContextType {
     unitId: string,
     params?: Record<string, unknown>
   ) => void;
+  castSpell: (
+    unitId: string,
+    spellCode: string,
+    targetId?: string,
+    targetPosition?: { x: number; y: number }
+  ) => void;
   surrender: () => void;
   requestRematch: () => void;
   dismissBattleResult: () => void;

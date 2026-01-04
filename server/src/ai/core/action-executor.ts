@@ -82,9 +82,21 @@ export interface AIExecutionResult {
     };
     unitAttacked?: {
       attackerId: string;
+      attackerName: string;
       targetId: string;
-      damage: number;
+      targetName: string;
+      rawDamage: number;
+      damageReduction: number;
+      finalDamage: number;
+      damageType: string;
+      targetHpAfter: number;
+      targetPhysicalProtection: number;
+      targetMagicalProtection: number;
       defeated: boolean;
+      missed: boolean;
+      dodged: boolean;
+      dodgeChance: number;
+      dodgeRoll: number;
     };
     skillUsed?: { casterId: string; skillCode: string; targetId: string };
   };
@@ -207,9 +219,23 @@ function executeAttack(
       stateChanges: {
         unitAttacked: {
           attackerId: attacker.id,
+          attackerName: attacker.name,
           targetId: target.id,
-          damage: result.finalDamage ?? 0,
+          targetName: target.name,
+          rawDamage: result.rawDamage ?? 0,
+          damageReduction: result.damageReduction ?? 0,
+          finalDamage: result.finalDamage ?? 0,
+          damageType: result.damageType ?? "FISICO",
+          targetHpAfter: result.targetHpAfter ?? target.currentHp,
+          targetPhysicalProtection:
+            result.targetPhysicalProtection ?? target.physicalProtection,
+          targetMagicalProtection:
+            result.targetMagicalProtection ?? target.magicalProtection,
           defeated: result.targetDefeated ?? false,
+          missed: result.missed ?? false,
+          dodged: result.dodged ?? false,
+          dodgeChance: result.dodgeChance ?? 0,
+          dodgeRoll: result.dodgeRoll ?? 0,
         },
       },
     };
@@ -326,6 +352,77 @@ export async function executeFullAITurn(
           reason: decision.reason,
           stateChanges: result.stateChanges,
         });
+
+        // === EMITIR EVENTOS DETALHADOS DE ATAQUE ===
+        if (decision.type === "ATTACK" && result.stateChanges?.unitAttacked) {
+          const attack = result.stateChanges.unitAttacked;
+
+          // Emitir evento detalhado de ataque (igual ao jogador)
+          io.to(lobbyId).emit("battle:unit_attacked", {
+            battleId: battle.battleId,
+            attackerUnitId: attack.attackerId,
+            targetUnitId: attack.targetId,
+            targetObstacleId: null,
+            targetType: "unit",
+            damage: attack.finalDamage,
+            damageType: attack.damageType,
+            targetHpAfter: attack.targetHpAfter,
+            attackerActionsLeft: unit.actionsLeft,
+            attackerAttacksLeftThisTurn: unit.attacksLeftThisTurn,
+            missed: attack.missed,
+            rawDamage: attack.rawDamage,
+            damageReduction: attack.damageReduction,
+            finalDamage: attack.finalDamage,
+            targetPhysicalProtection: attack.targetPhysicalProtection,
+            targetMagicalProtection: attack.targetMagicalProtection,
+            targetDefeated: attack.defeated,
+            obstacleDestroyed: false,
+            obstacleId: null,
+            attackerName: attack.attackerName,
+            attackerIcon: "🤖",
+            attackerCombat: unit.combat,
+            targetName: attack.targetName,
+            targetIcon: "🛡️",
+            targetCombat: 0,
+            targetSpeed: 0,
+            dodgeChance: attack.dodgeChance,
+            dodgeRoll: attack.dodgeRoll,
+          });
+
+          // === COMBAT TOASTS ===
+          // Toast de esquiva
+          if (attack.missed && attack.dodged) {
+            io.to(lobbyId).emit("battle:toast", {
+              battleId: battle.battleId,
+              type: "success",
+              title: "💨 Esquivou!",
+              message: `${attack.targetName} desviou do ataque de ${attack.attackerName}!`,
+              duration: 2500,
+            });
+          }
+
+          // Toast de dano ao alvo
+          if (!attack.missed && attack.finalDamage > 0) {
+            io.to(lobbyId).emit("battle:toast", {
+              battleId: battle.battleId,
+              type: "error",
+              title: "⚔️ Ataque!",
+              message: `${attack.attackerName} causou ${attack.finalDamage} de dano em ${attack.targetName}!`,
+              duration: 2000,
+            });
+          }
+
+          // Toast de derrota
+          if (attack.defeated) {
+            io.to(lobbyId).emit("battle:toast", {
+              battleId: battle.battleId,
+              type: "error",
+              title: "💀 Derrotado!",
+              message: `${attack.targetName} foi derrotado por ${attack.attackerName}!`,
+              duration: 3000,
+            });
+          }
+        }
 
         // Emitir estado atualizado da batalha
         io.to(lobbyId).emit("battle:state-updated", {

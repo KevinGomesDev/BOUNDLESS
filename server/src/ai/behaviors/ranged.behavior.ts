@@ -32,12 +32,21 @@ export function makeRangedDecision(
   availableSkills: SkillDefinition[]
 ): AIDecision {
   try {
-    const { units, obstacles, gridSize, movesRemaining, selfAssessment } =
-      context;
+    const {
+      units,
+      obstacles,
+      gridSize,
+      movesRemaining,
+      actionsRemaining,
+      selfAssessment,
+    } = context;
     const enemies = units.filter(
       (u) => u.isAlive && u.ownerId !== unit.ownerId
     );
     const preferredRange = profile.preferredRange ?? 3;
+
+    // Verificar se pode atacar (tem ações disponíveis)
+    const canAttack = (actionsRemaining ?? unit.actionsLeft ?? 0) > 0;
 
     // 1. Verificar se inimigos estão muito perto
     const nearestEnemy = findNearestEnemy(unit, units);
@@ -112,8 +121,8 @@ export function makeRangedDecision(
         { x: bestTarget.posX, y: bestTarget.posY }
       );
 
-      // Atacar se está ao alcance
-      if (distance <= attackRange) {
+      // Atacar se está ao alcance e tem ações
+      if (distance <= attackRange && canAttack) {
         return {
           type: "ATTACK",
           unitId: unit.id,

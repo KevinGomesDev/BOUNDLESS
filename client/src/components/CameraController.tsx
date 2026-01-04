@@ -211,33 +211,17 @@ export const CameraController = forwardRef<
       onCameraChange?.(camera);
     }, [camera, onCameraChange]);
 
-    // Limitar offset para não sair muito dos limites
+    // Limitar offset - Pan livre sem restrições rígidas
     const clampOffset = useCallback(
       (
         offsetX: number,
         offsetY: number,
         zoom: number
       ): { x: number; y: number } => {
-        const container = containerRef.current;
-        if (!container) return { x: offsetX, y: offsetY };
-
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
-        const scaledWidth = contentWidth * zoom;
-        const scaledHeight = contentHeight * zoom;
-
-        // Permitir arrastar até metade do conteúdo para fora
-        const minX = containerWidth - scaledWidth - scaledWidth * 0.5;
-        const maxX = scaledWidth * 0.5;
-        const minY = containerHeight - scaledHeight - scaledHeight * 0.5;
-        const maxY = scaledHeight * 0.5;
-
-        return {
-          x: Math.max(minX, Math.min(maxX, offsetX)),
-          y: Math.max(minY, Math.min(maxY, offsetY)),
-        };
+        // Retorna os valores sem restrições para permitir pan livre
+        return { x: offsetX, y: offsetY };
       },
-      [contentWidth, contentHeight]
+      []
     );
 
     // === HANDLERS DE MOUSE ===

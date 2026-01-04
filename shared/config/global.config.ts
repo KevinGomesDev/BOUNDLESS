@@ -13,9 +13,7 @@ export interface AttributeDefinition {
   key: AttributeKey;
   name: string;
   shortName: string;
-  icon: string;
   description: string;
-  color: string;
 }
 
 export const ATTRIBUTE_NAMES: Record<AttributeKey, AttributeDefinition> = {
@@ -23,43 +21,33 @@ export const ATTRIBUTE_NAMES: Record<AttributeKey, AttributeDefinition> = {
     key: "combat",
     name: "Combate",
     shortName: "COM",
-    icon: "⚔️",
     description: "Determina dados de ataque e dano. Dano = Sucessos × Combate.",
-    color: "text-red-400",
   },
   speed: {
     key: "speed",
     name: "Velocidade",
     shortName: "VEL",
-    icon: "💨",
     description:
       "Determina chance de esquiva e movimento. Esquiva = Speed × 3%.",
-    color: "text-blue-400",
   },
   focus: {
     key: "focus",
     name: "Foco",
     shortName: "FOC",
-    icon: "🎯",
     description: "Poder mágico. Proteção Mágica = Foco × 4. Usado para magias.",
-    color: "text-purple-400",
   },
   armor: {
     key: "armor",
     name: "Armadura",
     shortName: "ARM",
-    icon: "🛡️",
     description:
       "Redução de dano físico. Proteção Física = Armadura × 4. Absorve dano antes do HP.",
-    color: "text-amber-400",
   },
   vitality: {
     key: "vitality",
     name: "Vitalidade",
     shortName: "VIT",
-    icon: "❤️",
     description: "Pontos de vida. HP Máximo = Vitalidade × 2.",
-    color: "text-green-400",
   },
 };
 
@@ -100,7 +88,6 @@ export interface ResourceDefinition {
   shortName: string;
   icon: string;
   description: string;
-  color: string;
 }
 
 export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
@@ -110,7 +97,6 @@ export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
     shortName: "MIN",
     icon: "⛏️",
     description: "Recurso básico para construção e equipamentos.",
-    color: "text-amber-400",
   },
   supplies: {
     key: "supplies",
@@ -118,7 +104,6 @@ export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
     shortName: "SUP",
     icon: "📦",
     description: "Mantimentos e provisões para as tropas.",
-    color: "text-green-400",
   },
   arcane: {
     key: "arcane",
@@ -126,7 +111,6 @@ export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
     shortName: "ARC",
     icon: "✨",
     description: "Energia mágica para habilidades e feitiços.",
-    color: "text-purple-400",
   },
   experience: {
     key: "experience",
@@ -134,7 +118,6 @@ export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
     shortName: "EXP",
     icon: "⭐",
     description: "Pontos de experiência para evolução.",
-    color: "text-blue-400",
   },
   devotion: {
     key: "devotion",
@@ -142,7 +125,6 @@ export const RESOURCE_NAMES: Record<ResourceKey, ResourceDefinition> = {
     shortName: "DEV",
     icon: "🙏",
     description: "Fé e poder divino para habilidades sagradas.",
-    color: "text-yellow-400",
   },
 };
 
@@ -636,7 +618,7 @@ export const DEFENSE_CONFIG = {
    * Fórmula: Atributo * multiplier = % de esquiva
    * Ex: Speed 5 * 3 = 15% de chance
    */
-  dodgeMultiplier: 3,
+  dodgeMultiplier: 1,
 
   /**
    * Chance máxima de esquiva (cap)
@@ -807,9 +789,9 @@ export const OBSTACLE_CONFIG = {
    * Range de quantidade de obstáculos por tamanho de território
    */
   ranges: {
-    SMALL: { min: 1, max: 6 },
-    MEDIUM: { min: 1, max: 12 },
-    LARGE: { min: 1, max: 18 },
+    SMALL: { min: 1, max: 8 },
+    MEDIUM: { min: 1, max: 16 },
+    LARGE: { min: 1, max: 32 },
   } as Record<TerritorySize, { min: number; max: number }>,
 } as const;
 
@@ -874,9 +856,16 @@ export const ARENA_COLORS = {
   gridDot: "#0f3460",
   cellLight: "#2d2d44",
   cellDark: "#1f1f33",
-  cellHover: "#3d3d5c",
+  cellHover: "rgba(239, 68, 68, 0.5)", // Vermelho para hover
   cellMovable: "#2a4a2a",
   cellAttackable: "#4a2a2a",
+  // Células de movimento
+  cellMovableNormal: "rgba(34, 197, 94, 0.4)", // Verde - movimento normal
+  cellMovableNormalBorder: "rgba(34, 197, 94, 0.8)",
+  cellMovableEngagement: "rgba(251, 146, 60, 0.4)", // Laranja - com penalidade de engajamento
+  cellMovableEngagementBorder: "rgba(251, 146, 60, 0.8)",
+  cellMovableBlocked: "rgba(239, 68, 68, 0.4)", // Vermelho - caminho bloqueado
+  cellMovableBlockedBorder: "rgba(239, 68, 68, 0.8)",
   // Jogadores
   hostPrimary: "#4a90d9",
   hostSecondary: "#2d5a8a",

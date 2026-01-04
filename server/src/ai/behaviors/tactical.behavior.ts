@@ -37,14 +37,27 @@ export function makeTacticalDecision(
   availableSkills: SkillDefinition[]
 ): AIDecision {
   try {
-    const { units, obstacles, gridSize, movesRemaining, selfAssessment } =
-      context;
+    const {
+      units,
+      obstacles,
+      gridSize,
+      movesRemaining,
+      actionsRemaining,
+      selfAssessment,
+    } = context;
     const enemies = units.filter(
       (u) => u.isAlive && u.ownerId !== unit.ownerId
     );
 
+    // Verificar se pode atacar (tem ações disponíveis)
+    const canAttack = (actionsRemaining ?? unit.actionsLeft ?? 0) > 0;
+
     console.log(
-      `[AI Tactical] ${unit.name} em (${unit.posX}, ${unit.posY}), movesRemaining=${movesRemaining}, enemies=${enemies.length}`
+      `[AI Tactical] ${unit.name} em (${unit.posX}, ${
+        unit.posY
+      }), movesRemaining=${movesRemaining}, actionsRemaining=${
+        actionsRemaining ?? unit.actionsLeft
+      }, enemies=${enemies.length}`
     );
 
     // 1. Verificar se está em perigo (usando self-assessment se disponível)
@@ -123,8 +136,10 @@ export function makeTacticalDecision(
           `[AI Tactical] Ao alcance! threatsNearby=${threatsNearby}, hpPercent=${hpPercent}, hasProtection=${hasProtection}`
         );
 
-        // Se poucos inimigos por perto, tem HP bom ou tem proteção, atacar
-        if (threatsNearby <= 2 || hpPercent > 0.5 || hasProtection) {
+        // Só atacar se tem ações disponíveis
+        if (!canAttack) {
+          console.log(`[AI Tactical] Não tem ações disponíveis para atacar`);
+        } else if (threatsNearby <= 2 || hpPercent > 0.5 || hasProtection) {
           return {
             type: "ATTACK",
             unitId: unit.id,

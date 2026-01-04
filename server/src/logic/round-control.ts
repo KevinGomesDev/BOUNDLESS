@@ -316,15 +316,31 @@ export async function processNewRound(
 export function checkVictoryCondition(battle: Battle): VictoryCheckResult {
   const aliveBySide = new Map<string, number>();
 
+  console.log("[VICTORY_CHECK] Verificando condição de vitória...");
+  console.log("[VICTORY_CHECK] Total de unidades:", battle.units.length);
+
   for (const unit of battle.units) {
+    console.log(`[VICTORY_CHECK] Unidade ${unit.name} (${unit.id}):`, {
+      isAlive: unit.isAlive,
+      currentHp: unit.currentHp,
+      maxHp: unit.maxHp,
+      ownerId: unit.ownerId,
+    });
+
     if (unit.isAlive) {
       const count = aliveBySide.get(unit.ownerId) || 0;
       aliveBySide.set(unit.ownerId, count + 1);
     }
   }
 
+  console.log(
+    "[VICTORY_CHECK] Unidades vivas por lado:",
+    Array.from(aliveBySide.entries())
+  );
+
   // Se só um lado tem unidades vivas, ele venceu
   if (aliveBySide.size === 0) {
+    console.log("[VICTORY_CHECK] ❌ EMPATE - Nenhuma unidade viva");
     return {
       battleEnded: true,
       winnerId: null,
@@ -339,6 +355,11 @@ export function checkVictoryCondition(battle: Battle): VictoryCheckResult {
       (u) => u.ownerId === winnerId
     )?.ownerKingdomId;
 
+    console.log("[VICTORY_CHECK] ✅ VITÓRIA!", {
+      winnerId,
+      winnerKingdom,
+    });
+
     return {
       battleEnded: true,
       winnerId,
@@ -347,6 +368,7 @@ export function checkVictoryCondition(battle: Battle): VictoryCheckResult {
     };
   }
 
+  console.log("[VICTORY_CHECK] ⚔️ Batalha continua");
   return {
     battleEnded: false,
     winnerId: null,

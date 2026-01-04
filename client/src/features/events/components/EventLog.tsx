@@ -8,10 +8,10 @@ import type {
   EventContext as EventContextType,
 } from "../../../../../shared/types/events.types";
 import {
-  getSeverityColor,
   getCategoryIcon,
   formatEventTime,
 } from "../../../../../shared/types/events.types";
+import { getSeverityColors } from "../../../config/colors.config";
 
 // =============================================================================
 // TYPES
@@ -39,7 +39,7 @@ interface EventItemProps {
 // =============================================================================
 
 function EventItem({ event, showTimestamp, showIcon }: EventItemProps) {
-  const severityColor = getSeverityColor(event.severity);
+  const severityColors = getSeverityColors(event.severity);
   const icon = showIcon ? getCategoryIcon(event.category) : null;
 
   return (
@@ -49,7 +49,9 @@ function EventItem({ event, showTimestamp, showIcon }: EventItemProps) {
       )}
 
       <div className="flex-1 min-w-0">
-        <span className={`text-sm ${severityColor}`}>{event.message}</span>
+        <span className={`text-sm ${severityColors.text}`}>
+          {event.message}
+        </span>
       </div>
 
       {showTimestamp && (
@@ -190,7 +192,9 @@ export function CompactEventLog({
       {recentEvents.map((event) => (
         <div
           key={event.id}
-          className={`text-xs ${getSeverityColor(event.severity)} truncate`}
+          className={`text-xs ${
+            getSeverityColors(event.severity).text
+          } truncate`}
         >
           {getCategoryIcon(event.category)} {event.message}
         </div>

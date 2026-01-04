@@ -77,6 +77,11 @@ export interface ConditionEffects {
   convertToTrueDamage?: boolean; // Dano transferido é verdadeiro (ignora proteção)
   isEidolon?: boolean; // Marca a unidade como Eidolon
   resetsOnDeath?: boolean; // Acúmulos são resetados ao morrer
+
+  // === EFEITOS DE MAGO ===
+  learnsVisibleSpells?: boolean; // Aprende magias ao ver outros lançando
+  convertPhysicalToMagical?: boolean; // Converte dano físico em mágico
+  arcaneShieldActive?: boolean; // Escudo arcano ativo (redução = Focus/2)
 }
 
 /**
@@ -90,6 +95,7 @@ export type ConditionExpiry =
   | "manual"
   | "permanent"
   | "end_of_battle"
+  | "end_of_combat"
   | "duration";
 
 /**

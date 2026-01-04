@@ -37,8 +37,17 @@ export function makeAggressiveDecision(
   availableSkills: SkillDefinition[]
 ): AIDecision {
   try {
-    const { units, obstacles, gridSize, movesRemaining, selfAssessment } =
-      context;
+    const {
+      units,
+      obstacles,
+      gridSize,
+      movesRemaining,
+      actionsRemaining,
+      selfAssessment,
+    } = context;
+
+    // Verificar se pode atacar (tem ações disponíveis)
+    const canAttack = (actionsRemaining ?? unit.actionsLeft ?? 0) > 0;
 
     // 0. Verificar se precisa explorar (nenhum inimigo visível)
     if (shouldExplore(unit, units) && movesRemaining > 0) {
@@ -110,18 +119,23 @@ export function makeAggressiveDecision(
 
       // Se está ao alcance, atacar (verificar se podemos nos dar ao luxo)
       if (distance <= attackRange) {
-        // Se temos self-assessment, verificar se podemos atacar com segurança
-        const shouldAttack = selfAssessment
-          ? canAffordToAttack(unit, bestTarget, selfAssessment)
-          : true;
+        // Só atacar se tem ações disponíveis
+        if (!canAttack) {
+          // Não tem ações, tentar mover para se posicionar melhor
+        } else {
+          // Se temos self-assessment, verificar se podemos atacar com segurança
+          const shouldAttack = selfAssessment
+            ? canAffordToAttack(unit, bestTarget, selfAssessment)
+            : true;
 
-        if (shouldAttack) {
-          return {
-            type: "ATTACK",
-            unitId: unit.id,
-            targetId: bestTarget.id,
-            reason: `Agressivo: Atacar ${bestTarget.name} (Combat: ${unit.combat} vs Armor: ${bestTarget.armor})`,
-          };
+          if (shouldAttack) {
+            return {
+              type: "ATTACK",
+              unitId: unit.id,
+              targetId: bestTarget.id,
+              reason: `Agressivo: Atacar ${bestTarget.name} (Combat: ${unit.combat} vs Armor: ${bestTarget.armor})`,
+            };
+          }
         }
       }
 

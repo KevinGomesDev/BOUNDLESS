@@ -1,11 +1,12 @@
 // client/src/components/Topbar/Topbar.tsx
 // Componente de Topbar unificado que muda conteúdo baseado no contexto
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useConnection } from "../../core";
 import { useAuth } from "../../features/auth";
 import { EventHistoryButton } from "../../features/events";
 import { SwordManAvatar } from "../SwordManAvatar";
+import { Tooltip } from "@/components/Tooltip";
 import type {
   ArenaKingdom,
   ArenaConfig,
@@ -183,27 +184,28 @@ const TerrainIndicator: React.FC<{
   name: string;
 }> = ({ emoji, name }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const indicatorRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
-      className="relative"
+      ref={indicatorRef}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
       <div className="bg-citadel-obsidian/60 px-3 py-1 rounded border border-metal-iron cursor-help hover:bg-citadel-slate/50 transition-colors">
         <span className="text-xl">{emoji}</span>
       </div>
-      {showTooltip && (
-        <div className="absolute z-[200] top-full left-1/2 -translate-x-1/2 mt-2 w-40 p-3 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{emoji}</span>
-            <span className="text-parchment-light font-bold text-sm">
-              {name}
-            </span>
-          </div>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron" />
+      <Tooltip
+        anchorRef={indicatorRef}
+        visible={showTooltip}
+        preferredPosition="bottom"
+        width="w-40"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{emoji}</span>
+          <span className="text-parchment-light font-bold text-sm">{name}</span>
         </div>
-      )}
+      </Tooltip>
     </div>
   );
 };

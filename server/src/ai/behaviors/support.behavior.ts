@@ -42,12 +42,21 @@ export function makeSupportDecision(
   availableSkills: SkillDefinition[]
 ): AIDecision {
   try {
-    const { units, obstacles, gridSize, movesRemaining, selfAssessment } =
-      context;
+    const {
+      units,
+      obstacles,
+      gridSize,
+      movesRemaining,
+      actionsRemaining,
+      selfAssessment,
+    } = context;
     const enemies = units.filter(
       (u) => u.isAlive && u.ownerId !== unit.ownerId
     );
     const allies = getAllies(unit, units);
+
+    // Verificar se pode atacar (tem ações disponíveis)
+    const canAttack = (actionsRemaining ?? unit.actionsLeft ?? 0) > 0;
 
     // 1. Verificar se PRÓPRIO HP está baixo - suporte se cura primeiro se puder
     if (selfAssessment?.isWounded) {
@@ -184,7 +193,7 @@ export function makeSupportDecision(
     }
 
     // 5. Se não tem o que fazer de suporte, tentar ataque de oportunidade
-    if (nearestEnemy) {
+    if (nearestEnemy && canAttack) {
       const distance = manhattanDistance(
         { x: unit.posX, y: unit.posY },
         { x: nearestEnemy.posX, y: nearestEnemy.posY }

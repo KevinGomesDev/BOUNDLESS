@@ -18,6 +18,7 @@ import {
   recordPlayerAction,
   advanceToNextPlayer,
   processNewRound,
+  checkVictoryCondition,
 } from "../../logic/round-control";
 import { getEffectiveSpeedWithConditions } from "../../utils/battle.utils";
 
@@ -58,8 +59,9 @@ export async function processBotTurn(battle: Battle): Promise<void> {
 
   console.log(`[BOT] 🤖 Iniciando turno do BOT na batalha ${battle.id}`);
 
-  // Delay para parecer que está "pensando"
-  await aiActionDelay(1000);
+  // Delay inicial maior para dar tempo do modal de turno aparecer no cliente
+  // O modal tem animação de ~3200ms, então esperamos um pouco mais
+  await aiActionDelay(3500);
 
   // Obter unidades do BOT
   const botUnits = battle.units.filter(
@@ -105,6 +107,12 @@ export async function processBotTurn(battle: Battle): Promise<void> {
     // Processar decisões da IA para esta unidade
     await processBotUnitDecisions(battle, unit.id);
 
+    // Se a batalha terminou, não continuar processando
+    if ((battle.status as string) === "ENDED") {
+      console.log(`[BOT] Batalha terminou, parando processamento de unidades`);
+      break;
+    }
+
     // Finalizar turno da unidade usando processUnitTurnEndConditions
     const turnEndResult = processUnitTurnEndConditions(unit);
     battle.activeUnitId = undefined;
@@ -128,8 +136,10 @@ export async function processBotTurn(battle: Battle): Promise<void> {
     await aiActionDelay(300);
   }
 
-  // Passar o turno após processar todas as unidades
-  await passBotTurn(battle);
+  // Só passar turno se a batalha não terminou
+  if ((battle.status as string) !== "ENDED") {
+    await passBotTurn(battle);
+  }
 }
 
 /**
@@ -204,6 +214,12 @@ async function processBotUnitDecisions(
   const executed = await executeBotDecision(battle, decision);
 
   if (executed) {
+    // Verificar se a batalha terminou após a execução
+    if ((battle.status as string) === "ENDED") {
+      console.log(`[BOT] Batalha terminou, parando processamento`);
+      return;
+    }
+
     await aiActionDelay(500); // Delay para visualização
 
     // Continuar processando se ainda tem recursos
@@ -268,33 +284,104 @@ async function executeBotDecision(
 
     case "ATTACK":
       if (result.stateChanges?.unitAttacked) {
-        const { attackerId, targetId, damage, defeated } =
+        const { attackerId, targetId, finalDamage, defeated } =
           result.stateChanges.unitAttacked;
+        const attack = result.stateChanges.unitAttacked;
         const attacker = battle.units.find((u) => u.id === attackerId);
         const target = battle.units.find((u) => u.id === targetId);
+
+        console.log(`[BOT ATTACK] Resultado:`, {
+          attackerId,
+          targetId,
+          finalDamage,
+          defeated,
+          targetIsAlive: target?.isAlive,
+          targetCurrentHp: target?.currentHp,
+        });
 
         if (attacker && target) {
           io.to(lobby.lobbyId).emit("battle:unit_attacked", {
             battleId: battle.id,
             attackerUnitId: attackerId,
             targetUnitId: targetId,
-            damage,
-            finalDamage: damage,
+            damage: finalDamage,
+            finalDamage: finalDamage,
             targetHpAfter: target.currentHp,
             targetPhysicalProtection: target.physicalProtection,
             targetMagicalProtection: target.magicalProtection,
             targetDefeated: defeated,
-            damageType: "FISICO",
+            damageType: attack.damageType ?? "FISICO",
             attackerActionsLeft: attacker.actionsLeft,
             attackerAttacksLeftThisTurn: attacker.attacksLeftThisTurn,
-            missed: false,
+            missed: attack.missed ?? false,
+            rawDamage: attack.rawDamage ?? finalDamage,
+            damageReduction: attack.damageReduction ?? 0,
+            attackerName: attack.attackerName ?? attacker.name,
+            targetName: attack.targetName ?? target.name,
+            dodgeChance: attack.dodgeChance ?? 0,
+            dodgeRoll: attack.dodgeRoll ?? 0,
           });
 
+          // === COMBAT TOASTS ===
+          // Toast de esquiva
+          if (attack.missed && attack.dodged) {
+            io.to(lobby.lobbyId).emit("battle:toast", {
+              battleId: battle.id,
+              type: "success",
+              title: "💨 Esquivou!",
+              message: `${target.name} desviou do ataque de ${attacker.name}!`,
+              duration: 2500,
+            });
+          }
+
+          // Toast de dano ao alvo
+          if (!attack.missed && finalDamage > 0) {
+            io.to(lobby.lobbyId).emit("battle:toast", {
+              battleId: battle.id,
+              type: "error",
+              title: "⚔️ Ataque!",
+              message: `${attacker.name} causou ${finalDamage} de dano em ${target.name}!`,
+              duration: 2000,
+            });
+          }
+
+          // Toast de derrota
           if (defeated) {
+            console.log(`[BOT] 💀 Unidade derrotada! Verificando vitória...`);
+
+            io.to(lobby.lobbyId).emit("battle:toast", {
+              battleId: battle.id,
+              type: "error",
+              title: "💀 Derrotado!",
+              message: `${target.name} foi derrotado por ${attacker.name}!`,
+              duration: 3000,
+            });
+
             io.to(lobby.lobbyId).emit("battle:unit_defeated", {
               battleId: battle.id,
               unitId: targetId,
             });
+
+            // Verificar vitória após derrotar unidade
+            const victoryCheck = checkVictoryCondition(battle);
+            if (victoryCheck.battleEnded) {
+              battle.status = "ENDED";
+              stopBattleTurnTimer(battle.id);
+
+              io.to(lobby.lobbyId).emit("battle:battle_ended", {
+                battleId: battle.id,
+                winnerId: victoryCheck.winnerId,
+                winnerKingdomId: victoryCheck.winnerKingdomId,
+                reason: victoryCheck.reason,
+                finalUnits: battle.units,
+              });
+
+              console.log(
+                `[BOT] Batalha finalizada após ataque. Vencedor: ${victoryCheck.winnerId}`
+              );
+              await saveBattleToDB(battle);
+              return true; // Retornar imediatamente, batalha acabou
+            }
           }
         }
       }
@@ -324,13 +411,22 @@ async function passBotTurn(battle: Battle): Promise<void> {
   const lobby = battleLobbies.get(battle.lobbyId);
   if (!lobby) return;
 
-  // Verificar vitória
+  // Verificar vitória com logs
   const hostAlive = battle.units.some(
     (u) => u.ownerId === battle.hostUserId && u.isAlive
   );
   const botAlive = battle.units.some(
     (u) => u.ownerId === BOT_USER_ID && u.isAlive
   );
+
+  console.log(`[BOT passBotTurn] Verificando vitória:`, {
+    hostUserId: battle.hostUserId,
+    hostAlive,
+    botAlive,
+    unitsAlive: battle.units
+      .filter((u) => u.isAlive)
+      .map((u) => ({ id: u.id, ownerId: u.ownerId, name: u.name })),
+  });
 
   if (!hostAlive || !botAlive) {
     const winnerId = hostAlive ? battle.hostUserId : BOT_USER_ID;

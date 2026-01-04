@@ -227,47 +227,45 @@ export const CLERIC_SKILLS: SkillDefinition[] = [
 // MAGO - Skills (ARCANE / ARCANA)
 // =============================================================================
 
-export const ARCANE_MASTERY: SkillDefinition = {
-  code: "ARCANE_MASTERY",
-  name: "Maestria Arcana",
+export const GRIMOIRE: SkillDefinition = {
+  code: "GRIMOIRE",
+  name: "Grimório",
   description:
-    "Pode conjurar qualquer magia arcana. +1 dado em todos os testes de Foco.",
+    "Você possui um Livro de Magias que ocupa todos seus Slots de Equipamentos. Sempre que uma Unidade conjurar uma magia visível, você a aprende permanentemente.",
   category: "PASSIVE",
-  conditionApplied: "ARCANE_MASTERY",
+  conditionApplied: "GRIMOIRE",
 };
 
-export const FIREBALL: SkillDefinition = {
-  code: "FIREBALL",
-  name: "Bola de Fogo",
-  description: "Causa 2d6 de dano de fogo em todos os alvos em uma área.",
+export const MAGIC_WEAPON: SkillDefinition = {
+  code: "MAGIC_WEAPON",
+  name: "Arma Mágica",
+  description:
+    "Imbuí a arma de uma Unidade adjacente com Magia. Até o fim do Combate, os Ataques dessa Unidade causam dano Mágico ao invés de Físico.",
   category: "ACTIVE",
   costTier: "MEDIUM",
-  range: "AREA",
-  rangeValue: 3,
-  targetType: "ALL",
-  functionName: "executeFireball",
+  range: "ADJACENT",
+  targetType: "ALLY",
+  functionName: "executeMagicWeapon",
   consumesAction: true,
-  cooldown: 2,
 };
 
-export const TELEPORT: SkillDefinition = {
-  code: "TELEPORT",
-  name: "Teleportar",
-  description: "Teleporta para qualquer posição dentro do alcance.",
+export const ARCANE_SHIELD: SkillDefinition = {
+  code: "ARCANE_SHIELD",
+  name: "Escudo Arcano",
+  description:
+    "Você recebe Redução de Dano igual à metade do seu Foco, até o fim do seu próximo turno.",
   category: "ACTIVE",
-  costTier: "HIGH",
-  range: "RANGED",
-  rangeValue: 6,
+  costTier: "MEDIUM",
+  range: "SELF",
   targetType: "SELF",
-  functionName: "executeTeleport",
-  consumesAction: true,
-  cooldown: 3,
+  functionName: "executeArcaneShield",
+  consumesAction: false, // Não gasta ação
 };
 
 export const WIZARD_SKILLS: SkillDefinition[] = [
-  ARCANE_MASTERY,
-  FIREBALL,
-  TELEPORT,
+  GRIMOIRE,
+  MAGIC_WEAPON,
+  ARCANE_SHIELD,
 ];
 
 // =============================================================================
@@ -443,9 +441,9 @@ const SKILL_ICONS: Record<string, string> = {
   CELESTIAL_EXPULSION: "✨",
   BLESS: "🙏",
   // Wizard
-  ARCANE_MASTERY: "📖",
-  FIREBALL: "🔥",
-  TELEPORT: "🌀",
+  GRIMOIRE: "📖",
+  MAGIC_WEAPON: "✨",
+  ARCANE_SHIELD: "🛡️",
   // Barbarian
   WILD_FURY: "😡",
   RECKLESS_ATTACK: "💥",
@@ -477,9 +475,9 @@ const SKILL_COLORS: Record<string, string> = {
   CELESTIAL_EXPULSION: "cyan",
   BLESS: "sky",
   // Wizard - purple
-  ARCANE_MASTERY: "purple",
-  FIREBALL: "orange",
-  TELEPORT: "indigo",
+  GRIMOIRE: "purple",
+  MAGIC_WEAPON: "violet",
+  ARCANE_SHIELD: "indigo",
   // Barbarian - red
   WILD_FURY: "red",
   RECKLESS_ATTACK: "red",

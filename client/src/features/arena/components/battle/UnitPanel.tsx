@@ -1,511 +1,245 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { getConditionInfo } from "../../constants";
-import { ATTRIBUTE_NAMES } from "../../../../../../shared/config/global.config";
 import { getSkillInfo } from "../../../../../../shared/data/skills.data";
+import { getSpellByCode } from "../../../../../../shared/data/spells.data";
 import type { BattleUnit } from "../../../../../../shared/types/battle.types";
+import { AttributesDisplay } from "@/components/AttributesDisplay/index";
+import { UI_SECTION_COLORS } from "../../../../config/colors.config";
+import { Tooltip } from "@/components/Tooltip";
+import {
+  AnimatedCharacterSprite,
+  parseAvatarToHeroId,
+} from "../../../kingdom/components/CreateKingdom";
 
 // =============================================================================
-// COMPONENTES INTERNOS
+// TIPOS E INTERFACES
 // =============================================================================
 
-// Componente de Progresso Circular (HP e Proteção)
-const CircularProgress: React.FC<{
-  current: number;
-  max: number;
-  color: string;
-  bgColor?: string;
-  size?: number;
-  strokeWidth?: number;
-  label: string;
+interface StatInfo {
   icon: string;
-  tooltip: string;
-}> = ({
-  current,
-  max,
-  color,
-  bgColor = "#374151",
-  size = 72,
-  strokeWidth = 6,
-  label,
-  icon,
-  tooltip,
-}) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const percentage = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
-  const strokeDashoffset = circumference * (1 - percentage);
+  name: string;
+  value: string | number;
+  description: string;
+  color: string;
+  details?: string[];
+}
 
-  const handleMouseEnter = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
-      });
-    }
-    setShowTooltip(true);
-  };
+// =============================================================================
+// COMPONENTES AUXILIARES
+// =============================================================================
+
+// Stat Badge - Ícone com tooltip detalhado
+const StatBadge: React.FC<{ stat: StatInfo }> = ({ stat }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const badgeRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
-      ref={containerRef}
-      className="relative inline-flex flex-col items-center"
-      onMouseEnter={handleMouseEnter}
+      ref={badgeRef}
+      className="relative"
+      onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <svg width={size} height={size} className="transform -rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={bgColor}
-          strokeWidth={strokeWidth}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          className="transition-all duration-500 ease-out"
-        />
-      </svg>
       <div
-        className="absolute flex flex-col items-center justify-center"
-        style={{ top: 0, left: 0, width: size, height: size }}
+        className="w-9 h-9 rounded-lg border-2 flex flex-col items-center justify-center cursor-help transition-all hover:scale-105"
+        style={{
+          borderColor: stat.color,
+          backgroundColor: `${stat.color}15`,
+        }}
       >
-        <span className="text-sm leading-none">{icon}</span>
-        <span className="text-parchment-light font-bold text-[11px] leading-tight">
-          {current}/{max}
+        <span className="text-xs leading-none">{stat.icon}</span>
+        <span
+          className="font-bold text-[10px] leading-none mt-0.5"
+          style={{ color: stat.color }}
+        >
+          {stat.value}
         </span>
       </div>
-      <span className="text-parchment-dark text-[10px] mt-1">{label}</span>
-      {showTooltip && (
-        <div
-          className="fixed z-[9999] w-44 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <p className="text-parchment-aged text-xs leading-relaxed text-center">
-            {tooltip}
-          </p>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-        </div>
-      )}
+
+      {/* Tooltip */}
+      <Tooltip
+        anchorRef={badgeRef}
+        visible={showTooltip}
+        preferredPosition="top"
+        width="w-56"
+      >
+        <p className="text-gray-100 font-bold text-xs mb-1 flex items-center gap-1.5">
+          <span className="text-base">{stat.icon}</span>
+          <span>{stat.name}</span>
+          <span className="ml-auto font-mono" style={{ color: stat.color }}>
+            {stat.value}
+          </span>
+        </p>
+        <p className="text-gray-300 text-[10px] leading-relaxed mb-1">
+          {stat.description}
+        </p>
+        {stat.details && stat.details.length > 0 && (
+          <div className="border-t border-gray-700 pt-1 mt-1">
+            {stat.details.map((detail, i) => (
+              <p
+                key={i}
+                className="text-gray-400 text-[9px] flex items-center gap-1"
+              >
+                <span className="text-gray-500">•</span>
+                {detail}
+              </p>
+            ))}
+          </div>
+        )}
+      </Tooltip>
     </div>
   );
 };
 
-// Componente de Bolinhas de Movimento
-const MovementDots: React.FC<{ total: number; remaining: number }> = ({
-  total,
-  remaining,
-}) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
+// Derived Stats - Seção de stats derivados
+const DerivedStats: React.FC<{ unit: BattleUnit }> = ({ unit }) => {
+  const stats = useMemo(() => {
+    const result: StatInfo[] = [];
 
-  const handleMouseEnter = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
+    // Calcular esquiva
+    const baseDodge = unit.speed * 3;
+    const hasDodging = unit.conditions.includes("DODGING");
+    const dodgeBonus = hasDodging ? 50 : 0;
+    const totalDodge = Math.min(baseDodge + dodgeBonus, 75);
+
+    result.push({
+      icon: "🌀",
+      name: "Chance de Esquiva",
+      value: `${totalDodge}%`,
+      description: "Chance de evitar ataques físicos.",
+      color: "#22d3ee", // cyan-400
+      details: [
+        `Base (Speed × 3): ${baseDodge}%`,
+        ...(hasDodging ? [`Postura Defensiva: +${dodgeBonus}%`] : []),
+        `Máximo: 75%`,
+      ],
+    });
+
+    // Dano base de ataque
+    result.push({
+      icon: "⚔️",
+      name: "Dano Base",
+      value: unit.combat,
+      description: "Dano causado por ataques físicos.",
+      color: "#f87171", // red-400
+      details: [`Combat: ${unit.combat}`, `Dano = Combat × Multiplicador`],
+    });
+
+    // Poder mágico
+    if (unit.focus > 0) {
+      result.push({
+        icon: "✨",
+        name: "Poder Mágico",
+        value: unit.focus,
+        description: "Potência de habilidades mágicas.",
+        color: "#a78bfa", // violet-400
+        details: [`Focus: ${unit.focus}`, `Dano Mágico = Focus × Tier`],
       });
     }
-    setShowTooltip(true);
-  };
+
+    // Movimento
+    result.push({
+      icon: "👣",
+      name: "Movimento",
+      value: unit.speed,
+      description: "Células que pode percorrer por turno.",
+      color: "#60a5fa", // blue-400
+      details: [`Base (Speed): ${unit.speed}`, `Dash: +${unit.speed} extra`],
+    });
+
+    return result;
+  }, [unit]);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <div className="flex flex-wrap gap-0.5 max-w-[60px] justify-center cursor-help h-5 items-center">
-        {Array.from({ length: total }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-              i < remaining
-                ? "bg-blue-400 shadow-[0_0_4px_rgba(96,165,250,0.6)]"
-                : "bg-gray-600"
-            }`}
-          />
+    <div className="flex-shrink-0 px-3">
+      <h4
+        className={`${UI_SECTION_COLORS.stats.title} text-[10px] font-bold uppercase tracking-wider pb-1 mb-1.5 border-b ${UI_SECTION_COLORS.stats.border}`}
+      >
+        Stats
+      </h4>
+      <div className="flex gap-1.5 flex-wrap max-w-[200px]">
+        {stats.map((stat, i) => (
+          <StatBadge key={i} stat={stat} />
         ))}
       </div>
-      {showTooltip && (
-        <div
-          className="fixed z-[9999] w-40 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <p className="text-parchment-light font-bold text-xs mb-1">
-            🚶 Movimentos
-          </p>
-          <p className="text-parchment-aged text-[10px] leading-relaxed">
-            Cada bolinha azul representa 1 célula de movimento. Mover gasta
-            movimentos. Use WASD ou clique no mapa.
-          </p>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-        </div>
-      )}
     </div>
   );
 };
 
-// Componente de Quadrados de Ações
-const ActionSquares: React.FC<{ total: number; remaining: number }> = ({
-  total,
-  remaining,
-}) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseEnter = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
-      });
-    }
-    setShowTooltip(true);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <div className="flex gap-0.5 justify-center cursor-help h-5 items-center">
-        {Array.from({ length: total }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-4 h-4 rounded-sm transition-colors duration-300 ${
-              i < remaining
-                ? "bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]"
-                : "bg-gray-600"
-            }`}
-          />
-        ))}
-      </div>
-      {showTooltip && (
-        <div
-          className="fixed z-[9999] w-44 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <p className="text-parchment-light font-bold text-xs mb-1">
-            ⚡ Ações
-          </p>
-          <p className="text-parchment-aged text-[10px] leading-relaxed">
-            Cada quadrado verde é 1 ação disponível. Atacar, esquivar, disparar
-            e conjurar consomem ações.
-          </p>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Componente de Badge de Condição
+// Condition Badge - Apenas ícone com hover
 const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
   const info = getConditionInfo(condition);
-
-  const handleMouseEnter = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
-      });
-    }
-    setShowTooltip(true);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 bg-war-blood/30 border border-war-crimson/50 rounded text-war-ember cursor-help">
-        <span>{info.icon}</span>
-        <span>{info.name}</span>
-      </span>
-      {showTooltip && (
-        <div
-          className="fixed z-[9999] w-48 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <div className="flex items-center gap-1 mb-1">
-            <span className="text-base">{info.icon}</span>
-            <span className="text-parchment-light font-bold text-xs">
-              {info.name}
-            </span>
-          </div>
-          <p className="text-parchment-aged text-[10px] leading-relaxed">
-            {info.description}
-          </p>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Definições de tooltips para atributos (usa config global)
-const ATTRIBUTE_TOOLTIPS: Record<
-  string,
-  { icon: string; name: string; description: string }
-> = {
-  combat: {
-    icon: ATTRIBUTE_NAMES.combat.icon,
-    name: ATTRIBUTE_NAMES.combat.name,
-    description: ATTRIBUTE_NAMES.combat.description,
-  },
-  speed: {
-    icon: ATTRIBUTE_NAMES.speed.icon,
-    name: ATTRIBUTE_NAMES.speed.name,
-    description: ATTRIBUTE_NAMES.speed.description,
-  },
-  focus: {
-    icon: ATTRIBUTE_NAMES.focus.icon,
-    name: ATTRIBUTE_NAMES.focus.name,
-    description: ATTRIBUTE_NAMES.focus.description,
-  },
-  armor: {
-    icon: ATTRIBUTE_NAMES.armor.icon,
-    name: ATTRIBUTE_NAMES.armor.name,
-    description: ATTRIBUTE_NAMES.armor.description,
-  },
-  vitality: {
-    icon: ATTRIBUTE_NAMES.vitality.icon,
-    name: ATTRIBUTE_NAMES.vitality.name,
-    description: ATTRIBUTE_NAMES.vitality.description,
-  },
-};
-
-// Componente de Tooltip para atributos
-const AttributeTooltip: React.FC<{
-  attribute: string;
-  value: number;
-}> = ({ attribute, value }) => {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const info = ATTRIBUTE_TOOLTIPS[attribute];
-  if (!info) return null;
-
-  const handleMouseEnter = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
-      });
-    }
-    setShowTooltip(true);
-  };
+  const badgeRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
-      ref={containerRef}
-      className="relative group"
-      onMouseEnter={handleMouseEnter}
+      ref={badgeRef}
+      className="relative"
+      onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <div className="bg-citadel-slate/50 rounded p-1.5 text-center w-full hover:bg-citadel-slate/70 transition-colors cursor-help">
-        <span className="text-parchment-dark block text-xs">{info.icon}</span>
-        <p className="text-parchment-light font-bold text-sm">{value}</p>
+      <div
+        className="w-7 h-7 rounded-lg border-2 flex items-center justify-center cursor-help"
+        style={{
+          borderColor: info.color,
+          backgroundColor: `${info.color}20`,
+        }}
+      >
+        <span className="text-sm">{info.icon}</span>
       </div>
-      {showTooltip && (
-        <div
-          className="fixed z-[9999] w-48 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <div className="flex items-center gap-1 mb-1">
-            <span>{info.icon}</span>
-            <span className="text-parchment-light font-bold text-xs">
-              {info.name}
-            </span>
-          </div>
-          <p className="text-parchment-aged text-xs leading-relaxed">
-            {info.description}
-          </p>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-        </div>
-      )}
+
+      {/* Tooltip */}
+      <Tooltip
+        anchorRef={badgeRef}
+        visible={showTooltip}
+        preferredPosition="top"
+        width="w-52"
+      >
+        <p className="text-gray-100 font-bold text-xs mb-1 flex items-center gap-1.5">
+          <span className="text-base">{info.icon}</span>
+          <span>{info.name}</span>
+        </p>
+        <p className="text-gray-300 text-[10px] leading-relaxed">
+          {info.description}
+        </p>
+      </Tooltip>
     </div>
   );
 };
 
-// Definições de ações disponíveis
-const ACTIONS_INFO: Record<
-  string,
-  {
-    icon: string;
-    name: string;
-    description: string;
-    color: string;
-    requiresTarget?: boolean;
-  }
-> = {
+// Actions Info
+const ACTIONS_INFO: Record<string, any> = {
   attack: {
     icon: "⚔️",
     name: "Atacar",
-    description: "Ataca unidade adjacente. Clique para selecionar alvo.",
-    color: "red",
+    description: "Ataque corpo a corpo",
     requiresTarget: true,
-  },
-  dash: {
-    icon: "💨",
-    name: "Disparada",
-    description: "Gasta 1 ação. Adiciona movimentos extras igual à Acuidade.",
-    color: "amber",
   },
   dodge: {
     icon: "🌀",
-    name: "Esquiva",
-    description:
-      "Gasta 1 ação. Ataques têm 50% de chance de errar até o próximo turno.",
-    color: "cyan",
+    name: "Esquivar",
+    description: "Aumenta esquiva até o próximo turno",
+    requiresTarget: false,
   },
-  protect: {
-    icon: "🛡️",
-    name: "Proteger",
-    description: "Gasta 1 ação. Reduz o próximo dano recebido em 5.",
-    color: "emerald",
+  dash: {
+    icon: "💨",
+    name: "Corrida",
+    description: "Dobra o movimento por um turno",
+    requiresTarget: false,
   },
-  cast: {
-    icon: "✨",
-    name: "Conjurar",
-    description: "Gasta 1 ação. Usa uma magia ou habilidade especial.",
-    color: "purple",
-  },
-  help: {
-    icon: "🤝",
-    name: "Ajudar",
-    description:
-      "Gasta 1 ação. Dá vantagem ao próximo ataque de aliado adjacente.",
-    color: "sky",
-  },
-  knockdown: {
-    icon: "⬇️",
-    name: "Derrubar",
-    description: "Gasta 1 ação. Tenta derrubar o inimigo adjacente.",
-    color: "orange",
-    requiresTarget: true,
-  },
-  grab: {
-    icon: "🤼",
-    name: "Agarrar",
-    description: "Gasta 1 ação. Agarra unidade adjacente, impedindo movimento.",
-    color: "rose",
-    requiresTarget: true,
-  },
-  throw: {
-    icon: "🎯",
-    name: "Arremessar",
-    description: "Gasta 1 ação. Arremessa objeto ou unidade agarrada.",
-    color: "indigo",
-    requiresTarget: true,
-  },
-  flee: {
+  disengage: {
     icon: "🏃",
-    name: "Fugir",
-    description: "Gasta 1 ação. Tenta escapar do combate.",
-    color: "gray",
+    name: "Recuar",
+    description: "Move sem provocar ataques de oportunidade",
+    requiresTarget: false,
   },
-  disarm: {
-    icon: "✋",
-    name: "Desarmar",
-    description: "Gasta 1 ação. Tenta desarmar o inimigo.",
-    color: "yellow",
-    requiresTarget: true,
-  },
-};
-
-// Mapa de cores para os botões de ação
-const COLOR_CLASSES: Record<string, { active: string; normal: string }> = {
-  red: {
-    active: "bg-red-700/60 border-red-400 ring-2 ring-red-400/50",
-    normal: "bg-red-900/40 border-red-500/50 hover:bg-red-800/60",
-  },
-  amber: {
-    active: "bg-amber-700/60 border-amber-400 ring-2 ring-amber-400/50",
-    normal: "bg-amber-900/40 border-amber-500/50 hover:bg-amber-800/60",
-  },
-  cyan: {
-    active: "bg-cyan-700/60 border-cyan-400 ring-2 ring-cyan-400/50",
-    normal: "bg-cyan-900/40 border-cyan-500/50 hover:bg-cyan-800/60",
-  },
-  emerald: {
-    active: "bg-emerald-700/60 border-emerald-400 ring-2 ring-emerald-400/50",
-    normal: "bg-emerald-900/40 border-emerald-500/50 hover:bg-emerald-800/60",
-  },
-  purple: {
-    active: "bg-purple-700/60 border-purple-400 ring-2 ring-purple-400/50",
-    normal: "bg-purple-900/40 border-purple-500/50 hover:bg-purple-800/60",
-  },
-  sky: {
-    active: "bg-sky-700/60 border-sky-400 ring-2 ring-sky-400/50",
-    normal: "bg-sky-900/40 border-sky-500/50 hover:bg-sky-800/60",
-  },
-  orange: {
-    active: "bg-orange-700/60 border-orange-400 ring-2 ring-orange-400/50",
-    normal: "bg-orange-900/40 border-orange-500/50 hover:bg-orange-800/60",
-  },
-  rose: {
-    active: "bg-rose-700/60 border-rose-400 ring-2 ring-rose-400/50",
-    normal: "bg-rose-900/40 border-rose-500/50 hover:bg-rose-800/60",
-  },
-  indigo: {
-    active: "bg-indigo-700/60 border-indigo-400 ring-2 ring-indigo-400/50",
-    normal: "bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-800/60",
-  },
-  gray: {
-    active: "bg-gray-600/60 border-gray-400 ring-2 ring-gray-400/50",
-    normal: "bg-gray-800/40 border-gray-600/50 hover:bg-gray-700/60",
-  },
-  yellow: {
-    active: "bg-yellow-700/60 border-yellow-400 ring-2 ring-yellow-400/50",
-    normal: "bg-yellow-900/40 border-yellow-500/50 hover:bg-yellow-800/60",
+  spell: {
+    icon: "🔮",
+    name: "Magia",
+    description: "Use uma magia",
+    requiresTarget: false,
+    isMenu: true,
   },
 };
 
@@ -515,7 +249,7 @@ const COLOR_CLASSES: Record<string, { active: string; normal: string }> = {
 
 interface UnitPanelProps {
   selectedUnit: BattleUnit | null;
-  activeUnitId: string | undefined; // Unidade que está efetivamente no turno
+  activeUnitId: string | undefined;
   isMyTurn: boolean;
   currentUserId: string;
   pendingAction: string | null;
@@ -524,10 +258,6 @@ interface UnitPanelProps {
   onEndAction: () => void;
 }
 
-/**
- * Painel de Unidade - Exibe detalhes da unidade selecionada
- * Estruturado como componente lateral similar ao InitiativePanel
- */
 export const UnitPanel: React.FC<UnitPanelProps> = ({
   selectedUnit,
   activeUnitId,
@@ -538,108 +268,236 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
   onExecuteAction,
   onEndAction,
 }) => {
-  // Só mostra ações se a unidade selecionada É a unidade ativa do turno
-  const isActiveUnit = selectedUnit?.id === activeUnitId;
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [hoveredSpell, setHoveredSpell] = useState<string | null>(null);
+
+  // Se activeUnitId está undefined mas é meu turno e a unidade é minha,
+  // consideramos que está "aguardando ativação" e tratamos como se fosse ativa
+  const isActiveOrPending = activeUnitId
+    ? selectedUnit?.id === activeUnitId
+    : isMyTurn && selectedUnit?.ownerId === currentUserId;
+
+  if (!selectedUnit) {
+    return (
+      <div className="absolute bottom-0 left-0 right-0 bg-gray-900 border-t-2 border-gray-700 shadow-2xl">
+        <div className="py-3 text-center">
+          <p className="text-gray-300 text-sm flex items-center justify-center gap-2">
+            <span className="text-xl">👁️</span>
+            <span>Selecione uma unidade para ver detalhes</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const canAct =
+    isMyTurn && selectedUnit.ownerId === currentUserId && isActiveOrPending;
 
   return (
-    <div className="w-80 xl:w-96 flex-shrink-0 p-2 flex flex-col gap-2 overflow-y-auto overflow-x-hidden">
-      {/* Painel da Unidade Selecionada */}
-      {selectedUnit ? (
-        <div className="bg-citadel-granite rounded-xl border-2 border-metal-iron p-3 shadow-stone-raised flex-shrink-0">
-          {/* Header com nome */}
-          <h3
-            className="text-parchment-light font-bold text-base mb-3 border-b border-metal-rust/30 pb-2 truncate text-center"
-            style={{ fontFamily: "'Cinzel', serif" }}
-          >
-            {selectedUnit.name}
-          </h3>
-
-          {/* HP e Proteções - Círculos lado a lado */}
-          <div className="flex justify-center gap-3 mb-3">
-            <CircularProgress
-              current={selectedUnit.currentHp}
-              max={selectedUnit.maxHp}
-              color={
-                selectedUnit.currentHp / selectedUnit.maxHp > 0.6
-                  ? "#4ade80"
-                  : selectedUnit.currentHp / selectedUnit.maxHp > 0.3
-                  ? "#fbbf24"
-                  : "#ef4444"
-              }
-              size={64}
-              label="HP"
-              icon="❤️"
-              tooltip="Pontos de Vida. Quando chegar a 0, a unidade morre. HP Máximo = Vitalidade × 2."
-            />
-            <CircularProgress
-              current={selectedUnit.physicalProtection}
-              max={selectedUnit.maxPhysicalProtection}
-              color={
-                selectedUnit.physicalProtection > 0 ? "#60a5fa" : "#6b7280"
-              }
-              size={64}
-              label="P. Física"
-              icon="🛡️"
-              tooltip="Proteção Física. Absorve dano FÍSICO antes do HP. Proteção = Armadura × 4."
-            />
-            <CircularProgress
-              current={selectedUnit.magicalProtection}
-              max={selectedUnit.maxMagicalProtection}
-              color={selectedUnit.magicalProtection > 0 ? "#a855f7" : "#6b7280"}
-              size={64}
-              label="P. Mágica"
-              icon="✨"
-              tooltip="Proteção Mágica. Absorve dano MÁGICO antes do HP. Proteção = Foco × 4."
-            />
-          </div>
-
-          {/* Atributos - Grid com tooltips hover */}
-          <div className="grid grid-cols-5 gap-1 mb-3">
-            <AttributeTooltip attribute="combat" value={selectedUnit.combat} />
-            <AttributeTooltip attribute="speed" value={selectedUnit.speed} />
-            <AttributeTooltip attribute="focus" value={selectedUnit.focus} />
-            <AttributeTooltip attribute="armor" value={selectedUnit.armor} />
-            <AttributeTooltip
-              attribute="vitality"
-              value={selectedUnit.vitality}
-            />
-          </div>
-
-          {/* Ações e Movimentos - só mostra quando é meu turno E a unidade selecionada é a ativa */}
-          {isMyTurn && isActiveUnit && selectedUnit.hasStartedAction && (
-            <div className="border-t border-metal-iron/30 pt-3 mb-3">
-              <div className="grid grid-cols-2 gap-2">
-                {/* Ações - Quadrados Verdes */}
-                <div className="flex flex-col items-center">
-                  <ActionSquares
-                    total={1}
-                    remaining={selectedUnit.actionsLeft}
+    <div className="absolute bottom-0 left-0 right-0 z-20">
+      {/* Container principal */}
+      <div className="bg-gray-900/90 backdrop-blur-sm border-2 border-gray-700 rounded-xl shadow-2xl">
+        <div className="flex items-stretch divide-x-2 divide-gray-700 px-3 py-2">
+          {/* SEÇÃO 1: DADOS BÁSICOS */}
+          <div className="flex-shrink-0 pr-3">
+            <h4
+              className={`${UI_SECTION_COLORS.basicData.title} text-[10px] font-bold uppercase tracking-wider pb-1 mb-1.5 border-b ${UI_SECTION_COLORS.basicData.border}`}
+            >
+              Dados Básicos
+            </h4>
+            <div className="flex items-center gap-2">
+              {/* Avatar - Sprite animado */}
+              <div className="relative">
+                <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-gray-600 shadow-lg overflow-hidden flex items-center justify-center">
+                  <AnimatedCharacterSprite
+                    heroId={parseAvatarToHeroId(selectedUnit.avatar)}
+                    animation="Idle"
+                    direction="right"
                   />
-                  <span className="text-parchment-dark text-[10px] mt-1">
-                    Ações
+                </div>
+                <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-gray-900 font-bold text-[9px] px-1 py-0.5 rounded-full border border-amber-300">
+                  {selectedUnit.level}
+                </div>
+              </div>
+
+              {/* Nome + Barras */}
+              <div className="min-w-[200px]">
+                <h3
+                  className="text-gray-100 font-bold text-xs mb-0.5"
+                  style={{ fontFamily: "'Cinzel', serif" }}
+                >
+                  {selectedUnit.name}
+                </h3>
+
+                {/* HP Bar */}
+                <div className="relative h-5 bg-gray-800/80 rounded border border-red-900/50 overflow-hidden mb-1">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-red-600 to-red-500 transition-all duration-300 flex items-center justify-end pr-1.5"
+                    style={{
+                      width: `${
+                        (selectedUnit.currentHp / selectedUnit.maxHp) * 100
+                      }%`,
+                    }}
+                  >
+                    <span className="text-white font-bold text-xs drop-shadow-lg">
+                      {selectedUnit.currentHp}
+                    </span>
+                  </div>
+                  <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">
+                    /{selectedUnit.maxHp}
                   </span>
                 </div>
-                {/* Movimentos - Bolinhas Azuis */}
-                <div className="flex flex-col items-center">
-                  <MovementDots
-                    total={Math.max(selectedUnit.movesLeft, selectedUnit.speed)}
-                    remaining={selectedUnit.movesLeft}
-                  />
-                  <span className="text-parchment-dark text-[10px] mt-1">
-                    Movimentos
+
+                {/* Proteções inline */}
+                <div className="flex gap-1.5">
+                  {/* Proteção Física */}
+                  <div className="flex-1 relative h-4 bg-gray-800/80 rounded border border-blue-500/40 overflow-hidden">
+                    {selectedUnit.physicalProtection > 0 ? (
+                      <>
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 to-blue-400 transition-all flex items-center justify-end pr-1"
+                          style={{
+                            width: `${
+                              selectedUnit.maxPhysicalProtection > 0
+                                ? (selectedUnit.physicalProtection /
+                                    selectedUnit.maxPhysicalProtection) *
+                                  100
+                                : 0
+                            }%`,
+                          }}
+                        >
+                          <span className="text-white font-bold text-[10px] drop-shadow">
+                            {selectedUnit.physicalProtection}
+                          </span>
+                        </div>
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-blue-300/60 font-bold text-[10px]">
+                          /{selectedUnit.maxPhysicalProtection}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="absolute inset-0 flex items-center justify-center text-blue-400/50 font-bold text-[10px] italic">
+                        Quebrado
+                      </span>
+                    )}
+                  </div>
+                  {/* Proteção Mágica */}
+                  <div className="flex-1 relative h-4 bg-gray-800/80 rounded border border-purple-500/40 overflow-hidden">
+                    {selectedUnit.magicalProtection > 0 ? (
+                      <>
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 to-purple-400 transition-all flex items-center justify-end pr-1"
+                          style={{
+                            width: `${
+                              selectedUnit.maxMagicalProtection > 0
+                                ? (selectedUnit.magicalProtection /
+                                    selectedUnit.maxMagicalProtection) *
+                                  100
+                                : 0
+                            }%`,
+                          }}
+                        >
+                          <span className="text-white font-bold text-[10px] drop-shadow">
+                            {selectedUnit.magicalProtection}
+                          </span>
+                        </div>
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-purple-300/60 font-bold text-[10px]">
+                          /{selectedUnit.maxMagicalProtection}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="absolute inset-0 flex items-center justify-center text-purple-400/50 font-bold text-[10px] italic">
+                        Quebrado
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SEÇÃO 2: ATRIBUTOS */}
+          <div className="flex-shrink-0 px-3">
+            <h4
+              className={`${UI_SECTION_COLORS.attributes.title} text-[10px] font-bold uppercase tracking-wider pb-1 mb-1.5 border-b ${UI_SECTION_COLORS.attributes.border}`}
+            >
+              Atributos
+            </h4>
+            <AttributesDisplay
+              attributes={{
+                combat: selectedUnit.combat,
+                speed: selectedUnit.speed,
+                focus: selectedUnit.focus,
+                armor: selectedUnit.armor,
+                vitality: selectedUnit.vitality,
+              }}
+              editable={false}
+            />
+          </div>
+
+          {/* SEÇÃO 2.5: STATS DERIVADOS */}
+          <DerivedStats unit={selectedUnit} />
+
+          {/* SEÇÃO 3: AÇÕES */}
+          {isMyTurn && isActiveOrPending && selectedUnit.hasStartedAction && (
+            <div className="flex-shrink-0 px-3">
+              <h4
+                className={`${UI_SECTION_COLORS.actions.title} text-[10px] font-bold uppercase tracking-wider pb-1 mb-1.5 border-b ${UI_SECTION_COLORS.actions.border}`}
+              >
+                Recursos
+              </h4>
+              <div className="flex items-center gap-2">
+                {/* Ação */}
+                <div
+                  className={`w-9 h-9 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
+                    selectedUnit.actionsLeft > 0
+                      ? "border-emerald-500 bg-emerald-500/15"
+                      : "border-gray-600 bg-gray-800/50"
+                  }`}
+                >
+                  <span className="text-xs">⚡</span>
+                  <span
+                    className={`font-bold text-[10px] ${
+                      selectedUnit.actionsLeft > 0
+                        ? "text-emerald-400"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {selectedUnit.actionsLeft}
+                  </span>
+                </div>
+
+                {/* Movimento */}
+                <div
+                  className={`w-9 h-9 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
+                    selectedUnit.movesLeft > 0
+                      ? "border-blue-500 bg-blue-500/15"
+                      : "border-gray-600 bg-gray-800/50"
+                  }`}
+                >
+                  <span className="text-xs">👣</span>
+                  <span
+                    className={`font-bold text-[10px] ${
+                      selectedUnit.movesLeft > 0
+                        ? "text-blue-400"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {selectedUnit.movesLeft}
                   </span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Condições - Bloco dedicado com tooltips */}
+          {/* SEÇÃO 4: CONDIÇÕES */}
           {selectedUnit.conditions.length > 0 && (
-            <div className="border-t border-metal-iron/30 pt-3 mb-3">
-              <h4 className="text-parchment-dark text-xs mb-2 font-semibold flex items-center gap-1">
-                <span>⚠️</span> Condições Ativas
+            <div className="px-3 min-w-[120px] max-w-[300px]">
+              <h4
+                className={`${UI_SECTION_COLORS.conditions.title} text-[10px] font-bold uppercase tracking-wider pb-1 mb-1.5 border-b ${UI_SECTION_COLORS.conditions.border}`}
+              >
+                Condições
               </h4>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex items-start gap-1 flex-wrap max-h-[60px] overflow-y-auto">
                 {selectedUnit.conditions.map((cond, i) => (
                   <ConditionBadge key={i} condition={cond} />
                 ))}
@@ -647,137 +505,227 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
             </div>
           )}
 
-          {/* Mensagem quando está visualizando outra unidade (não a ativa) */}
-          {isMyTurn &&
-            selectedUnit.ownerId === currentUserId &&
-            !isActiveUnit && (
-              <div className="border-t border-metal-iron/30 pt-3">
-                <div className="bg-amber-900/30 border border-amber-600/50 rounded-lg p-3 text-center">
-                  <p className="text-amber-400 text-xs font-semibold mb-1">
-                    👁️ Visualizando
-                  </p>
-                  <p className="text-parchment-dark text-[10px]">
-                    Clique na unidade ativa para agir com ela, ou finalize o
-                    turno atual.
-                  </p>
-                </div>
-              </div>
-            )}
-
-          {/* Lista de Ações Disponíveis - só mostra se for a unidade ativa do turno */}
-          {isMyTurn &&
-            selectedUnit.ownerId === currentUserId &&
-            isActiveUnit && (
-              <div className="border-t border-metal-iron/30 pt-3">
-                <h4 className="text-parchment-dark text-xs mb-2 font-semibold flex items-center gap-1">
-                  <span>⚡</span> Ações
-                  {pendingAction && (
-                    <span className="ml-auto text-amber-400 text-[10px] animate-pulse">
-                      Selecione um alvo...
-                    </span>
-                  )}
-                </h4>
-
-                {/* Grid de Ações */}
-                <div className="grid grid-cols-3 gap-1.5 mb-3">
-                  {selectedUnit.actions
-                    ?.filter((actionKey) => actionKey !== "move")
-                    .map((actionKey) => {
-                      // Primeiro tenta ACTIONS_INFO, depois getSkillInfo
-                      let actionInfo = ACTIONS_INFO[actionKey];
-                      if (!actionInfo) {
-                        const skillInfo = getSkillInfo(actionKey);
-                        if (!skillInfo) return null;
-                        actionInfo = skillInfo;
-                      }
-
-                      const isTargetAction = actionInfo.requiresTarget;
-                      const isActive = pendingAction === actionKey;
-                      const color =
-                        COLOR_CLASSES[actionInfo.color] || COLOR_CLASSES.gray;
-
-                      // Para ataques: permite se tem ações OU ataques extras restantes
-                      // Para outras ações: só permite se tem ações
-                      const isAttackAction = actionKey === "attack";
-                      const hasExtraAttacks =
-                        (selectedUnit.attacksLeftThisTurn ?? 0) > 0;
-                      const canExecute = isAttackAction
-                        ? selectedUnit.actionsLeft > 0 || hasExtraAttacks
-                        : selectedUnit.actionsLeft > 0;
-
-                      return (
-                        <div key={actionKey} className="relative group">
-                          <button
-                            onClick={() => {
-                              if (!canExecute) return;
-                              if (isTargetAction) {
-                                onSetPendingAction(isActive ? null : actionKey);
-                              } else {
-                                onExecuteAction(actionKey, selectedUnit.id);
-                              }
-                            }}
-                            disabled={!canExecute}
-                            className={`w-full p-1.5 rounded-lg border-2 text-center transition-all ${
-                              isActive
-                                ? color.active
-                                : canExecute
-                                ? `${color.normal} cursor-pointer`
-                                : "bg-gray-800/40 border-gray-600/30 opacity-50 cursor-not-allowed"
-                            }`}
-                            style={{
-                              cursor: canExecute ? "pointer" : "not-allowed",
-                            }}
-                          >
-                            <span className="text-lg block">
-                              {actionInfo.icon}
-                            </span>
-                            <span className="text-parchment-light text-[10px] font-semibold block">
-                              {actionInfo.name}
-                            </span>
-                          </button>
-                          <div className="absolute z-[9999] top-full left-1/2 -translate-x-1/2 mt-2 w-40 p-2 bg-citadel-obsidian border border-metal-iron rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                            <p className="text-parchment-light font-bold text-[10px] mb-0.5">
-                              {actionInfo.icon} {actionInfo.name}
-                            </p>
-                            <p className="text-parchment-aged text-[9px]">
-                              {actionInfo.description}
-                            </p>
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-citadel-obsidian border-l border-t border-metal-iron"></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-
-                {/* Cancelar ação pendente */}
-                {pendingAction && (
-                  <button
-                    onClick={() => onSetPendingAction(null)}
-                    className="w-full mb-2 py-1.5 bg-gray-700/50 border border-gray-600 rounded text-parchment-dark text-xs hover:bg-gray-600/50 transition-colors"
-                  >
-                    ✕ Cancelar{" "}
-                    {pendingAction === "attack" ? "Ataque" : pendingAction}
-                  </button>
-                )}
-
-                {/* Finalizar Turno */}
+          {/* CONTROLES */}
+          {canAct && (
+            <div className="flex-1 flex items-center justify-end gap-2 px-3">
+              {/* Botão de Ações */}
+              <div className="relative">
                 <button
-                  onClick={onEndAction}
-                  className="w-full py-2 bg-gradient-to-b from-amber-600 to-amber-800 border-2 border-amber-500 rounded-lg text-parchment-light text-sm font-bold hover:from-amber-500 hover:to-amber-700 transition-all flex items-center justify-center gap-2"
+                  onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
+                  className="px-4 py-2 bg-gradient-to-b from-blue-600 to-blue-800 border-2 border-blue-500 rounded-lg text-white font-bold text-sm hover:from-blue-500 hover:to-blue-700 transition-all shadow-lg flex items-center gap-2"
                 >
-                  <span>⏭️</span>
-                  <span>Finalizar Turno</span>
+                  <span>⚡</span>
+                  <span>Ações</span>
+                  <span className="text-xs">{actionsMenuOpen ? "▲" : "▼"}</span>
                 </button>
+
+                {/* Menu de Ações */}
+                {actionsMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-6 bg-gray-900/95 backdrop-blur-sm border-2 border-gray-600 rounded-xl shadow-2xl p-3 min-w-[220px] max-w-[300px]">
+                    {/* Título */}
+                    <div className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-2 pb-2 border-b border-gray-700">
+                      Selecione uma Ação
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {selectedUnit.actions
+                        ?.filter((actionKey) => actionKey !== "move")
+                        .map((actionKey) => {
+                          let actionInfo = ACTIONS_INFO[actionKey];
+                          if (!actionInfo) {
+                            const skillInfo = getSkillInfo(actionKey);
+                            if (!skillInfo) return null;
+                            actionInfo = skillInfo;
+                          }
+
+                          const isAttackAction = actionKey === "attack";
+                          const hasExtraAttacks =
+                            (selectedUnit.attacksLeftThisTurn ?? 0) > 0;
+                          const canExecute = isAttackAction
+                            ? selectedUnit.actionsLeft > 0 || hasExtraAttacks
+                            : selectedUnit.actionsLeft > 0;
+
+                          return (
+                            <div key={actionKey} className="relative group">
+                              <button
+                                onClick={() => {
+                                  if (!canExecute) return;
+                                  if (actionInfo.requiresTarget) {
+                                    onSetPendingAction(actionKey);
+                                    setActionsMenuOpen(false);
+                                  } else {
+                                    onExecuteAction(actionKey, selectedUnit.id);
+                                    setActionsMenuOpen(false);
+                                  }
+                                }}
+                                disabled={!canExecute}
+                                className={`w-full px-3 py-2.5 rounded-lg border text-left transition-all flex items-center gap-3 ${
+                                  canExecute
+                                    ? "bg-gray-800 hover:bg-gray-700 border-gray-600 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20"
+                                    : "bg-gray-800/40 border-gray-700/50 opacity-40 cursor-not-allowed"
+                                }`}
+                              >
+                                <span className="text-xl w-6 text-center">
+                                  {actionInfo.icon}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-gray-100 text-sm font-semibold block">
+                                    {actionInfo.name}
+                                  </span>
+                                  <span className="text-gray-500 text-[9px] block truncate">
+                                    {actionInfo.description}
+                                  </span>
+                                </div>
+                                {actionInfo.requiresTarget && (
+                                  <span className="text-gray-500 text-[10px]">
+                                    🎯
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                      {/* Magia (se tiver spells) */}
+                      {selectedUnit.spells &&
+                        selectedUnit.spells.length > 0 && (
+                          <div className="relative">
+                            <button
+                              onMouseEnter={() => setHoveredSpell("spell")}
+                              onMouseLeave={() => setHoveredSpell(null)}
+                              className="w-full px-3 py-2.5 rounded-lg border text-left transition-all flex items-center gap-3 bg-purple-900/30 hover:bg-purple-800/40 border-purple-600/50 hover:border-purple-500"
+                            >
+                              <span className="text-xl w-6 text-center">
+                                🔮
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-gray-100 text-sm font-semibold block">
+                                  Magia
+                                </span>
+                                <span className="text-purple-400 text-[9px] block">
+                                  {selectedUnit.spells.length} disponível(is)
+                                </span>
+                              </div>
+                              <span className="text-purple-400 text-xs">▶</span>
+                            </button>
+
+                            {/* Submenu */}
+                            {hoveredSpell === "spell" && (
+                              <div
+                                className="absolute right-full top-0 mr-2 bg-gray-900/95 backdrop-blur-sm border-2 border-purple-600/50 rounded-xl shadow-2xl p-2.5 min-w-[200px] z-[99999]"
+                                onMouseEnter={() => setHoveredSpell("spell")}
+                                onMouseLeave={() => setHoveredSpell(null)}
+                              >
+                                <div className="text-purple-400 text-[10px] font-bold uppercase tracking-wider mb-2 pb-1.5 border-b border-purple-600/30">
+                                  🔮 Magias Disponíveis
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  {selectedUnit.spells.map((spellCode) => {
+                                    const spellInfo = getSpellByCode(spellCode);
+                                    return (
+                                      <button
+                                        key={spellCode}
+                                        onClick={() => {
+                                          if (selectedUnit.actionsLeft > 0) {
+                                            onSetPendingAction(
+                                              `spell:${spellCode}`
+                                            );
+                                            setActionsMenuOpen(false);
+                                            setHoveredSpell(null);
+                                          }
+                                        }}
+                                        disabled={selectedUnit.actionsLeft <= 0}
+                                        className={`w-full px-3 py-2 rounded-lg text-left transition-all flex items-center gap-2 ${
+                                          selectedUnit.actionsLeft > 0
+                                            ? "hover:bg-purple-800/30 hover:border-purple-500"
+                                            : "opacity-40 cursor-not-allowed"
+                                        } border border-transparent`}
+                                      >
+                                        <span className="text-base">
+                                          {spellInfo?.icon || "✨"}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-gray-100 text-sm block">
+                                            {spellInfo?.name || spellCode}
+                                          </span>
+                                          <span className="text-purple-400 text-[9px] block truncate">
+                                            {spellInfo?.description || ""}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Botão Finalizar */}
+              <button
+                onClick={onEndAction}
+                className="px-4 py-2 bg-gradient-to-b from-amber-600 to-amber-800 border-2 border-amber-500 rounded-lg text-white font-bold text-sm hover:from-amber-500 hover:to-amber-700 transition-all shadow-lg flex items-center gap-2"
+              >
+                <span>⏭️</span>
+                <span>Finalizar</span>
+              </button>
+            </div>
+          )}
+
+          {/* Mensagem de visualização */}
+          {isMyTurn &&
+            selectedUnit.ownerId === currentUserId &&
+            !isActiveOrPending && (
+              <div className="px-4 py-2 bg-amber-900/40 border border-amber-600/50 rounded-lg">
+                <p className="text-amber-400 text-xs font-semibold flex items-center gap-1">
+                  <span>👁️</span>
+                  <span>
+                    Visualizando - Selecione a unidade ativa para agir
+                  </span>
+                </p>
               </div>
             )}
         </div>
-      ) : (
-        <div className="bg-citadel-granite rounded-xl border-2 border-metal-iron p-3 shadow-stone-raised flex-shrink-0">
-          <p className="text-parchment-dark text-center text-xs">
-            Selecione uma unidade para ver detalhes
-          </p>
-        </div>
-      )}
+
+        {/* Ação Pendente */}
+        {pendingAction && (
+          <div className="bg-amber-500/20 border-t-2 border-amber-500/50 px-4 py-2 flex items-center justify-between">
+            <span className="text-amber-400 text-sm font-semibold animate-pulse flex items-center gap-2">
+              <span>🎯</span>
+              <span>
+                {pendingAction.startsWith("spell:")
+                  ? (() => {
+                      const spellCode = pendingAction.replace("spell:", "");
+                      const spell = getSpellByCode(spellCode);
+                      if (spell) {
+                        const targetText =
+                          spell.targetType === "POSITION" ||
+                          spell.targetType === "GROUND"
+                            ? "uma posição"
+                            : spell.targetType === "ALLY"
+                            ? "um aliado"
+                            : spell.targetType === "ENEMY"
+                            ? "um inimigo"
+                            : "um alvo";
+                        return `${spell.icon} ${spell.name}: Selecione ${targetText}...`;
+                      }
+                      return "Selecione um alvo...";
+                    })()
+                  : "Selecione um alvo..."}
+              </span>
+            </span>
+            <button
+              onClick={() => onSetPendingAction(null)}
+              className="px-3 py-1 bg-gray-700/70 hover:bg-gray-600/70 border border-gray-500 rounded text-white text-xs transition-colors"
+            >
+              ✕ Cancelar
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -40,13 +40,17 @@ interface UseSpritesReturn {
   /** Obtém heroId baseado em avatar ou classCode */
   getHeroId: (avatar?: string, classCode?: string) => number;
   /** Obtém sprite pronto para desenho (com image e config) */
-  getSprite: (spriteType: string) => {
+  getSprite: (
+    spriteType: string,
+    animation?: SpriteAnimation
+  ) => {
     image: HTMLImageElement;
     config: {
       frameWidth: number;
       frameHeight: number;
-      idleFrames: number;
-      idleRow: number;
+      frameCount: number;
+      row: number;
+      loop: boolean;
     };
   } | null;
   /** Frame index global para animações idle (ref para evitar re-renders) */
@@ -61,6 +65,7 @@ const PRELOAD_ANIMATIONS: SpriteAnimation[] = [
   "Walk",
   "Sword_1",
   "Dead",
+  "Damage",
 ];
 
 /**
@@ -173,38 +178,43 @@ export function useSprites(): UseSpritesReturn {
   /**
    * Obtém sprite pronto para desenho no canvas
    * @param spriteType - avatar string ou classCode
+   * @param animation - animação desejada (default: "Idle")
    * @returns Objeto com imagem e configuração ou null se não carregado
    */
   const getSprite = useCallback(
     (
-      spriteType: string
+      spriteType: string,
+      animation: SpriteAnimation = "Idle"
     ): {
       image: HTMLImageElement;
       config: {
         frameWidth: number;
         frameHeight: number;
-        idleFrames: number;
-        idleRow: number;
+        frameCount: number;
+        row: number;
+        loop: boolean;
       };
     } | null => {
       // Converter spriteType para heroId
       const heroId = getHeroIdForUnit(spriteType, spriteType);
 
-      // Obter imagem de Idle
-      const image = getImage(heroId, "Idle");
+      // Obter imagem da animação
+      const image = getImage(heroId, animation);
 
       if (!image) {
         return null;
       }
 
-      // Configuração para Idle (todos os sprites usam 32x32 frames, row 0)
+      // Configuração da animação (todos os sprites usam 32x32 frames, row 0)
+      const animConfig = ANIMATION_CONFIGS[animation];
       return {
         image,
         config: {
           frameWidth: FRAME_SIZE,
           frameHeight: FRAME_SIZE,
-          idleFrames: ANIMATION_CONFIGS.Idle.frameCount,
-          idleRow: 0,
+          frameCount: animConfig.frameCount,
+          row: 0,
+          loop: animConfig.loop,
         },
       };
     },

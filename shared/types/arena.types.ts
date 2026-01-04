@@ -60,6 +60,14 @@ export interface ArenaConfig {
     cellHover: string;
     cellMovable: string;
     cellAttackable: string;
+    // Células de movimento
+    cellMovableNormal: string;
+    cellMovableNormalBorder: string;
+    cellMovableEngagement: string;
+    cellMovableEngagementBorder: string;
+    cellMovableBlocked: string;
+    cellMovableBlockedBorder: string;
+    // Jogadores
     hostPrimary: string;
     hostSecondary: string;
     guestPrimary: string;

@@ -27,7 +27,6 @@ export { ArenaList, ArenaLobbyView } from "./components/lobby";
 export {
   BattleHeader,
   UnitPanel,
-  InitiativePanel,
   BattleResultModal,
 } from "./components/battle";
 

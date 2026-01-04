@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   HERO_IDS,
   TOTAL_HEROES,
@@ -18,7 +18,7 @@ export type { SpriteAnimation, SpriteDirection };
 interface AnimatedCharacterSpriteProps {
   /** ID do herói (1-15) */
   heroId: number;
-  /** Tamanho do sprite em pixels */
+  /** Tamanho do sprite em pixels (ignorado se autoFill=true) */
   size?: number;
   /** Animação a exibir */
   animation?: SpriteAnimation;
@@ -38,6 +38,8 @@ interface AnimatedCharacterSpriteProps {
  * - Seletor de avatar (criação de reino/tropas)
  * - Canvas de batalha
  * - Qualquer outro lugar que precise exibir personagens
+ *
+ * Com autoFill=true, o sprite preenche 100% do container pai e se centraliza.
  */
 export const AnimatedCharacterSprite: React.FC<
   AnimatedCharacterSpriteProps
@@ -49,12 +51,14 @@ export const AnimatedCharacterSprite: React.FC<
   className = "",
   onAnimationEnd,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef(0);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const loadedPathRef = useRef<string>("");
   const lastFrameTimeRef = useRef(0);
   const animationEndCalledRef = useRef(false);
+  const [canvasSize] = useState(size);
 
   const config = ANIMATION_CONFIGS[animation];
   const { frameCount, frameDuration, loop } = config;
@@ -114,7 +118,7 @@ export const AnimatedCharacterSprite: React.FC<
       }
 
       // Limpar canvas
-      ctx.clearRect(0, 0, size, size);
+      ctx.clearRect(0, 0, canvasSize, canvasSize);
 
       // Calcular posição no sprite sheet (frames horizontais)
       const srcX = frameRef.current * FRAME_SIZE;
@@ -125,11 +129,21 @@ export const AnimatedCharacterSprite: React.FC<
 
       // Aplicar flip se direção é esquerda
       if (direction === "left") {
-        ctx.translate(size, 0);
+        ctx.translate(canvasSize, 0);
         ctx.scale(-1, 1);
       }
 
-      ctx.drawImage(img, srcX, srcY, FRAME_SIZE, FRAME_SIZE, 0, 0, size, size);
+      ctx.drawImage(
+        img,
+        srcX,
+        srcY,
+        FRAME_SIZE,
+        FRAME_SIZE,
+        0,
+        0,
+        canvasSize,
+        canvasSize
+      );
 
       ctx.restore();
 
@@ -143,7 +157,7 @@ export const AnimatedCharacterSprite: React.FC<
     };
   }, [
     heroId,
-    size,
+    canvasSize,
     animation,
     direction,
     frameCount,
@@ -152,14 +166,17 @@ export const AnimatedCharacterSprite: React.FC<
     onAnimationEnd,
   ]);
 
+  // Modo normal: canvas com tamanho fixo
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className={className}
-      style={{ imageRendering: "pixelated" }}
-    />
+    <div className="mb-7" ref={containerRef}>
+      <canvas
+        ref={canvasRef}
+        width={canvasSize}
+        height={canvasSize}
+        className={className}
+        style={{ imageRendering: "pixelated" }}
+      />
+    </div>
   );
 };
 

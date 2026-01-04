@@ -18,6 +18,8 @@
 - Executar `npm run build/dev` (assumir que estão rodando)
 - Manter arquivos/imports não usados
 - Não crie Docs
+- Antes de finalizar a tarefa, confira se não existem erros. Se existirem, corrija-os.
+- NUNCA faça sub-componentes dentro do mesmo arquivo. Sempre separe em arquivos diferentes. Se ver algum componente grande, que pode ser dividido, divida-o em vários componentes menores, cada um em seu próprio arquivo.
 
 ---
 

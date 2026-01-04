@@ -9,6 +9,16 @@ import {
   setArenaRefs,
 } from "../utils/session.utils";
 import { resumeBattleTimer } from "./battle.handler";
+import { stopBattleTurnTimer } from "./battle/battle-timer";
+import {
+  checkVictoryCondition,
+  emitBattleEndEvents,
+} from "../logic/round-control";
+import {
+  deleteBattleFromDB,
+  deleteLobbyFromDB,
+  updateUserStats,
+} from "./battle/battle-persistence";
 import type {
   ArenaLobbyData,
   ArenaBattleData,
@@ -229,6 +239,81 @@ export const registerSessionHandlers = (io: Server, socket: Socket): void => {
           return socket.emit("session:none", {
             message: "Batalha não encontrada",
           });
+        }
+
+        // ===== VERIFICAÇÃO DE VITÓRIA NA RESTAURAÇÃO =====
+        // Verificar se a batalha deveria ter terminado (todas unidades de um lado mortas)
+        const victoryCheck = checkVictoryCondition(battle as any);
+        if (victoryCheck.battleEnded && battle.status !== "ENDED") {
+          console.log(
+            `[SESSION] ⚠️ Batalha ${session.battleId} deveria ter terminado! Finalizando agora...`
+          );
+
+          battle.status = "ENDED";
+          stopBattleTurnTimer(session.battleId!);
+
+          // Emitir evento de fim de batalha
+          emitBattleEndEvents(
+            io,
+            battle.lobbyId,
+            battle.id,
+            victoryCheck,
+            battle.units as any
+          );
+
+          // Emitir para o socket que está reconectando
+          socket.emit("battle:battle_ended", {
+            battleId: battle.id,
+            winnerId: victoryCheck.winnerId,
+            winnerKingdomId: victoryCheck.winnerKingdomId,
+            reason: victoryCheck.reason,
+            finalUnits: battle.units,
+          });
+
+          // ===== LIMPEZA COMPLETA =====
+          // 1. Limpar mapas em memória
+          if (lobby) {
+            userToLobbyRef?.delete(lobby.hostUserId);
+            if (lobby.guestUserId) {
+              userToLobbyRef?.delete(lobby.guestUserId);
+            }
+            disconnectedPlayersRef?.delete(lobby.hostUserId);
+            if (lobby.guestUserId) {
+              disconnectedPlayersRef?.delete(lobby.guestUserId);
+            }
+            lobby.status = "ENDED";
+          }
+          socketToUserRef?.delete(socket.id);
+
+          // 2. Atualizar estatísticas dos jogadores
+          if (lobby) {
+            const loserId =
+              victoryCheck.winnerId === lobby.hostUserId
+                ? lobby.guestUserId
+                : lobby.hostUserId;
+            await updateUserStats(
+              victoryCheck.winnerId,
+              loserId,
+              battle.isArena ?? true
+            );
+          }
+
+          // 3. Deletar dados do banco
+          await deleteBattleFromDB(battle.id);
+          if (session.lobbyId) {
+            await deleteLobbyFromDB(session.lobbyId);
+          }
+
+          // 4. Remover dos mapas em memória
+          arenaBattlesRef?.delete(battle.id);
+          if (session.lobbyId) {
+            arenaLobbiesRef?.delete(session.lobbyId);
+          }
+
+          console.log(
+            `[SESSION] Batalha ${session.battleId} finalizada na restauração. Vencedor: ${victoryCheck.winnerId}. Banco e mapas limpos.`
+          );
+          return;
         }
 
         // Entrar na sala da batalha e do lobby (timer emite para lobbyId)

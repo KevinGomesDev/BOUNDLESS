@@ -49,10 +49,8 @@ export const SKILL_EXECUTORS: Record<string, SkillExecutorFn> = {
   executeCelestialExpulsion,
 
   // Mago
-  executeFireball,
-  executeTeleport,
-  executeMagicMissile,
-  executeShield,
+  executeMagicWeapon,
+  executeArcaneShield,
 
   // Ranger
   executeHuntersMark,
@@ -455,143 +453,73 @@ function executeCelestialExpulsion(
 // =============================================================================
 
 /**
- * WIZARD_FIREBALL: Dano em área (Focus de dano para todos em raio)
+ * MAGIC_WEAPON: Imbuí a arma de uma Unidade adjacente com Magia
+ * Até o fim do Combate, os Ataques dessa Unidade causam dano Mágico ao invés de Físico.
  */
-function executeFireball(
+function executeMagicWeapon(
   caster: BattleUnit,
   target: BattleUnit | null,
-  allUnits: BattleUnit[],
-  skill: SkillDefinition
+  _allUnits: BattleUnit[],
+  _skill: SkillDefinition
 ): SkillExecutionResult {
   if (!target) {
-    return { success: false, error: "Requer um ponto alvo" };
+    return { success: false, error: "Requer um aliado adjacente" };
   }
 
-  const damage = caster.focus;
-  const radius = skill.rangeValue ?? 2;
-  let totalDamage = 0;
-
-  for (const unit of allUnits) {
-    if (!unit.isAlive) continue;
-
-    const distance = getManhattanDistance(
+  // Verificar se é adjacente
+  if (
+    !isAdjacentOmnidirectional(
+      caster.posX,
+      caster.posY,
       target.posX,
-      target.posY,
-      unit.posX,
-      unit.posY
-    );
-    if (distance > radius) continue;
+      target.posY
+    )
+  ) {
+    return { success: false, error: "Alvo deve estar adjacente" };
+  }
 
-    // Dano mágico - aplica em proteção mágica primeiro
-    let remainingDamage = damage;
+  // Verificar se é aliado (mesmo dono)
+  if (target.ownerId !== caster.ownerId) {
+    return { success: false, error: "Só pode ser usado em aliados" };
+  }
 
-    if (unit.magicalProtection > 0) {
-      const absorbed = Math.min(unit.magicalProtection, remainingDamage);
-      unit.magicalProtection -= absorbed;
-      remainingDamage -= absorbed;
-    }
-
-    if (remainingDamage > 0) {
-      unit.currentHp = Math.max(0, unit.currentHp - remainingDamage);
-      totalDamage += remainingDamage;
-    }
-
-    if (unit.currentHp <= 0) {
-      unit.isAlive = false;
-    }
+  // Aplicar condição MAGIC_WEAPON ao alvo
+  if (!target.conditions.includes("MAGIC_WEAPON")) {
+    target.conditions.push("MAGIC_WEAPON");
   }
 
   return {
     success: true,
-    damageDealt: totalDamage,
-    targetHpAfter: target.currentHp,
-    targetDefeated: !target.isAlive,
+    conditionApplied: "MAGIC_WEAPON",
   };
 }
 
 /**
- * WIZARD_TELEPORT: Teleporta para posição
+ * ARCANE_SHIELD: Recebe Redução de Dano igual à metade do Foco até o próximo turno
+ * Não gasta ação!
  */
-function executeTeleport(
-  caster: BattleUnit,
-  target: BattleUnit | null,
-  _allUnits: BattleUnit[],
-  _skill: SkillDefinition
-): SkillExecutionResult {
-  if (!target) {
-    return { success: false, error: "Requer um destino" };
-  }
-
-  const destX = target.posX;
-  const destY = target.posY;
-
-  caster.posX = destX;
-  caster.posY = destY;
-
-  return {
-    success: true,
-    newPosX: destX,
-    newPosY: destY,
-  };
-}
-
-/**
- * WIZARD_MAGIC_MISSILE: Dano mágico garantido (Focus de dano)
- */
-function executeMagicMissile(
-  caster: BattleUnit,
-  target: BattleUnit | null,
-  _allUnits: BattleUnit[],
-  _skill: SkillDefinition
-): SkillExecutionResult {
-  if (!target) {
-    return { success: false, error: "Requer um alvo" };
-  }
-
-  const damage = caster.focus;
-  let remainingDamage = damage;
-
-  if (target.magicalProtection > 0) {
-    const absorbed = Math.min(target.magicalProtection, remainingDamage);
-    target.magicalProtection -= absorbed;
-    remainingDamage -= absorbed;
-  }
-
-  if (remainingDamage > 0) {
-    target.currentHp = Math.max(0, target.currentHp - remainingDamage);
-  }
-
-  const targetDefeated = target.currentHp <= 0;
-  if (targetDefeated) {
-    target.isAlive = false;
-  }
-
-  return {
-    success: true,
-    damageDealt: damage,
-    targetHpAfter: target.currentHp,
-    targetDefeated,
-  };
-}
-
-/**
- * WIZARD_SHIELD: Ganha proteção mágica temporária
- */
-function executeShield(
+function executeArcaneShield(
   caster: BattleUnit,
   _target: BattleUnit | null,
   _allUnits: BattleUnit[],
   _skill: SkillDefinition
 ): SkillExecutionResult {
-  const shieldAmount = caster.focus * 2;
-  caster.magicalProtection = Math.min(
-    caster.magicalProtection + shieldAmount,
-    caster.maxMagicalProtection * 2
-  );
+  // Calcular redução de dano = Focus / 2 (arredondado para baixo)
+  const damageReduction = Math.floor(caster.focus / 2);
+
+  // Aplicar condição ARCANE_SHIELD
+  if (!caster.conditions.includes("ARCANE_SHIELD")) {
+    caster.conditions.push("ARCANE_SHIELD");
+  }
+
+  // Armazenar o valor da redução no damageReduction da unidade
+  // Nota: A condição ARCANE_SHIELD será processada no sistema de dano
+  caster.damageReduction = (caster.damageReduction || 0) + damageReduction;
 
   return {
     success: true,
-    conditionApplied: "SHIELDED",
+    conditionApplied: "ARCANE_SHIELD",
+    healAmount: damageReduction, // Usar healAmount para indicar o valor da redução
   };
 }
 

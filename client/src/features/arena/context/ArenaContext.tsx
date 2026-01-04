@@ -444,6 +444,31 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       });
     };
 
+    // Handler para atualização em massa de unidades (usado após spells, etc)
+    const handleUnitsUpdated = (data: {
+      units: Array<{
+        id: string;
+        currentHp?: number;
+        isAlive?: boolean;
+        actionsLeft?: number;
+        posX?: number;
+        posY?: number;
+        conditions?: string[];
+      }>;
+    }) => {
+      battleLog("📦", "UNIDADES ATUALIZADAS", {
+        count: data.units.length,
+      });
+
+      // Atualizar cada unidade recebida
+      for (const unitUpdate of data.units) {
+        dispatch({
+          type: "UPDATE_UNIT",
+          payload: unitUpdate,
+        });
+      }
+    };
+
     // Handler para quando a unidade finaliza o turno
     const handleUnitTurnEnded = (data: {
       battleId: string;
@@ -639,6 +664,48 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       }
     };
 
+    // Handler para quando uma spell é conjurada
+    const handleSpellCast = (data: {
+      unitId: string;
+      unitName: string;
+      spellCode: string;
+      spellName: string;
+      result: {
+        success: boolean;
+        damageDealt?: number;
+        targetIds?: string[];
+        unitsMoved?: Array<{
+          unitId: string;
+          from: { x: number; y: number };
+          to: { x: number; y: number };
+        }>;
+        conditionsApplied?: Array<{
+          targetId: string;
+          conditionId: string;
+        }>;
+      };
+    }) => {
+      battleLog("🔮", "SPELL CONJURADA", {
+        unitName: data.unitName,
+        spellName: data.spellName,
+        result: data.result,
+      });
+
+      // Mostrar toast sobre a spell
+      showToastRef.current({
+        id: `spell-${Date.now()}`,
+        timestamp: new Date(),
+        context: "BATTLE",
+        scope: "INDIVIDUAL",
+        category: "COMBAT",
+        severity: "INFO",
+        battleId: state.battle?.battleId || "",
+        targetUserIds: [user.id],
+        message: `🔮 ${data.unitName} conjurou ${data.spellName}!`,
+        code: "SPELL_CAST",
+      });
+    };
+
     // Handler para quando um obstáculo é destruído
     const handleObstacleDestroyed = (data: {
       battleId: string;
@@ -812,6 +879,8 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     socketService.on("battle:rematch_declined", handleRematchDeclined);
     socketService.on("battle:obstacle_destroyed", handleObstacleDestroyed);
     socketService.on("battle:toast", handleBattleToast);
+    socketService.on("battle:units_updated", handleUnitsUpdated);
+    socketService.on("skills:spell_cast", handleSpellCast);
 
     return () => {
       socketService.off("battle:lobby_created", handleLobbyCreated);
@@ -846,6 +915,8 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       socketService.off("battle:rematch_declined", handleRematchDeclined);
       socketService.off("battle:obstacle_destroyed", handleObstacleDestroyed);
       socketService.off("battle:toast", handleBattleToast);
+      socketService.off("battle:units_updated", handleUnitsUpdated);
+      socketService.off("skills:spell_cast", handleSpellCast);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -1073,6 +1144,55 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
     [state.battle, state.units]
   );
 
+  // Função para conjurar spells
+  const castSpell = useCallback(
+    (
+      unitId: string,
+      spellCode: string,
+      targetId?: string,
+      targetPosition?: { x: number; y: number }
+    ) => {
+      if (!user || !state.battle) return;
+
+      const unit = state.units.find((u) => u.id === unitId);
+      if (!unit || unit.actionsLeft <= 0) {
+        battleLog("⚠️", "castSpell bloqueado: sem ações disponíveis", {
+          unitId,
+          actionsLeft: unit?.actionsLeft ?? 0,
+        });
+        return;
+      }
+
+      battleLog("⬆️", "EMIT: skills:cast_spell", {
+        battleId: state.battle.battleId,
+        userId: user.id,
+        unitId,
+        spellCode,
+        targetId,
+        targetPosition,
+      });
+
+      // Update otimista
+      dispatch({
+        type: "UPDATE_UNIT",
+        payload: {
+          id: unitId,
+          actionsLeft: unit.actionsLeft - 1,
+        },
+      });
+
+      socketService.emit("skills:cast_spell", {
+        battleId: state.battle.battleId,
+        userId: user.id,
+        unitId,
+        spellCode,
+        targetId,
+        targetPosition,
+      });
+    },
+    [user, state.battle, state.units]
+  );
+
   const surrender = useCallback(() => {
     if (!user || !state.battle) return;
     battleLog("⬆️", "EMIT: arena:surrender", {
@@ -1156,6 +1276,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       attackUnit,
       endAction,
       executeAction,
+      castSpell,
       surrender,
       requestRematch,
       dismissBattleResult,
@@ -1173,6 +1294,7 @@ export const ArenaProvider: React.FC<ArenaProviderProps> = ({ children }) => {
       attackUnit,
       endAction,
       executeAction,
+      castSpell,
       surrender,
       requestRematch,
       dismissBattleResult,

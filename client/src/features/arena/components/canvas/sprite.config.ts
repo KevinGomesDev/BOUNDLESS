@@ -87,7 +87,7 @@ export const ANIMATION_CONFIGS: Record<SpriteAnimation, AnimationConfig> = {
   Damage: {
     fileName: "Damage",
     frameCount: 3,
-    frameDuration: 200,
+    frameDuration: 500,
     loop: false,
   },
   Dead: { fileName: "Dead", frameCount: 3, frameDuration: 260, loop: false },

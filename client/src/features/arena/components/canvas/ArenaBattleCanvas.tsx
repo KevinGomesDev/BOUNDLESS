@@ -8,15 +8,20 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
+import { createPortal } from "react-dom";
 import type { ArenaBattle } from "../../types/arena.types";
 import type {
   BattleObstacle,
   BattleUnit,
 } from "../../../../../../shared/types/battle.types";
+import {
+  getFullMovementInfo,
+  type MovementCellInfo,
+} from "../../../../../../shared/utils/engagement.utils";
 import { useSprites, updateSpriteFrame } from "./useSprites";
 import { useUnitAnimations } from "./useUnitAnimations";
 import { UI_COLORS, UNIT_RENDER_CONFIG } from "./canvas.constants";
-import type { SpriteDirection } from "./sprite.config";
+import type { SpriteAnimation, SpriteDirection } from "./sprite.config";
 import {
   CameraController,
   type CameraControllerRef,
@@ -29,6 +34,8 @@ export type { SpriteDirection };
 export interface ArenaBattleCanvasRef {
   /** Centralizar câmera em uma unidade pelo ID */
   centerOnUnit: (unitId: string) => void;
+  /** Iniciar animação de sprite em uma unidade */
+  playAnimation: (unitId: string, animation: SpriteAnimation) => void;
 }
 
 interface ActiveBubble {
@@ -41,6 +48,8 @@ interface ArenaBattleCanvasProps {
   units: BattleUnit[];
   currentUserId: string;
   selectedUnitId: string | null;
+  /** ID da unidade ativa no turno atual */
+  activeUnitId?: string;
   onCellClick?: (x: number, y: number) => void;
   onUnitClick?: (unit: BattleUnit) => void;
   onObstacleClick?: (obstacle: BattleObstacle) => void;
@@ -64,6 +73,7 @@ export const ArenaBattleCanvas = memo(
         units,
         currentUserId,
         selectedUnitId,
+        activeUnitId,
         onCellClick,
         onUnitClick,
         onObstacleClick,
@@ -106,6 +116,12 @@ export const ArenaBattleCanvas = memo(
         y: number;
       } | null>(null);
 
+      // Posição do mouse na tela para tooltip
+      const [mousePosition, setMousePosition] = useState<{
+        clientX: number;
+        clientY: number;
+      } | null>(null);
+
       // Hook de sprites (usa refs para evitar re-renders)
       const {
         getSprite,
@@ -114,10 +130,14 @@ export const ArenaBattleCanvas = memo(
         lastFrameChangeRef,
       } = useSprites();
 
-      // Hook de animações de movimento
+      // Hook de animações de movimento e sprite
       const {
         getVisualPosition,
         startMoveAnimation,
+        startSpriteAnimation,
+        getSpriteAnimation,
+        getSpriteFrame,
+        isMoving,
         hasActiveAnimations,
         updateAnimations,
       } = useUnitAnimations();
@@ -273,34 +293,63 @@ export const ArenaBattleCanvas = memo(
       // Verificar se é o turno do jogador atual
       const isMyTurn = battle.currentPlayerId === currentUserId;
 
-      // Células movíveis como Set para O(1) lookup
-      // Só mostra quando é o turno do jogador
-      const movableCells = useMemo((): Set<string> => {
-        if (!isMyTurn) return new Set();
-        if (!selectedUnit || selectedUnit.movesLeft <= 0) return new Set();
+      // Células movíveis como Map com informação completa de movimento
+      // Inclui: custo, tipo (normal/engagement/blocked), etc.
+      const movableCellsMap = useMemo((): Map<string, MovementCellInfo> => {
+        if (!isMyTurn) return new Map();
+        if (!selectedUnit || selectedUnit.movesLeft <= 0) return new Map();
+        // Verificar se é a unidade ativa OU se activeUnitId está indefinido e é minha unidade
+        const isActiveOrPending = activeUnitId
+          ? selectedUnit.id === activeUnitId
+          : selectedUnit.ownerId === currentUserId;
+        if (!isActiveOrPending) return new Map();
 
-        const movable = new Set<string>();
+        const movable = new Map<string, MovementCellInfo>();
         const range = selectedUnit.movesLeft;
 
-        for (let dx = -range; dx <= range; dx++) {
-          for (let dy = -range; dy <= range; dy++) {
+        // Expandir range para considerar potenciais penalidades de engajamento
+        // (células que normalmente estariam no range podem ficar inacessíveis)
+        const maxRange = range + 10; // buffer para penalidades grandes
+
+        for (let dx = -maxRange; dx <= maxRange; dx++) {
+          for (let dy = -maxRange; dy <= maxRange; dy++) {
+            if (dx === 0 && dy === 0) continue;
+
+            const nx = selectedUnit.posX + dx;
+            const ny = selectedUnit.posY + dy;
+
+            if (nx < 0 || nx >= GRID_WIDTH || ny < 0 || ny >= GRID_HEIGHT)
+              continue;
+
+            const key = `${nx},${ny}`;
+
+            // Verificar se não tem unidade viva, cadáver NEM obstáculo na célula de destino
             if (
-              Math.abs(dx) + Math.abs(dy) <= range &&
-              (dx !== 0 || dy !== 0)
-            ) {
-              const nx = selectedUnit.posX + dx;
-              const ny = selectedUnit.posY + dy;
-              if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
-                const key = `${nx},${ny}`;
-                // Verificar se não tem unidade viva, cadáver NEM obstáculo
-                if (
-                  !unitPositionMap.has(key) &&
-                  !corpsePositionMap.has(key) &&
-                  !obstaclePositionMap.has(key)
-                ) {
-                  movable.add(key);
-                }
-              }
+              unitPositionMap.has(key) ||
+              corpsePositionMap.has(key) ||
+              obstaclePositionMap.has(key)
+            )
+              continue;
+
+            // Calcular informações completas de movimento (incluindo verificação de caminho)
+            const moveInfo = getFullMovementInfo(
+              selectedUnit,
+              nx,
+              ny,
+              units,
+              OBSTACLES,
+              GRID_WIDTH,
+              GRID_HEIGHT
+            );
+
+            // Adicionar apenas se:
+            // 1. O custo total estiver dentro do range (movimento válido)
+            // 2. E o caminho NÃO estiver bloqueado
+            // (Células bloqueadas não são mais mostradas)
+            const inMoveRange = moveInfo.totalCost <= selectedUnit.movesLeft;
+
+            if (inMoveRange && !moveInfo.isBlocked) {
+              movable.set(key, moveInfo);
             }
           }
         }
@@ -308,12 +357,26 @@ export const ArenaBattleCanvas = memo(
       }, [
         isMyTurn,
         selectedUnit,
+        activeUnitId,
         unitPositionMap,
         corpsePositionMap,
         obstaclePositionMap,
+        units,
+        OBSTACLES,
         GRID_WIDTH,
         GRID_HEIGHT,
       ]);
+
+      // Manter compatibilidade com código que usa Set (apenas células NÃO bloqueadas)
+      const movableCells = useMemo((): Set<string> => {
+        const cells = new Set<string>();
+        movableCellsMap.forEach((info, key) => {
+          if (!info.isBlocked) {
+            cells.add(key);
+          }
+        });
+        return cells;
+      }, [movableCellsMap]);
 
       // Células atacáveis como Set (8 direções - omnidirecional)
       // Só mostra quando pendingAction === "attack"
@@ -323,6 +386,11 @@ export const ArenaBattleCanvas = memo(
         // Só mostrar células atacáveis quando ação de ataque estiver selecionada
         if (pendingAction !== "attack") return new Set();
         if (!selectedUnit) return new Set();
+        // Verificar se é a unidade ativa OU se activeUnitId está indefinido e é minha unidade
+        const isActiveOrPending = activeUnitId
+          ? selectedUnit.id === activeUnitId
+          : selectedUnit.ownerId === currentUserId;
+        if (!isActiveOrPending) return new Set();
         // Pode atacar se tem ações OU ataques extras restantes
         const hasExtraAttacks = (selectedUnit.attacksLeftThisTurn ?? 0) > 0;
         if (selectedUnit.actionsLeft <= 0 && !hasExtraAttacks) return new Set();
@@ -371,33 +439,56 @@ export const ArenaBattleCanvas = memo(
           unit: BattleUnit,
           isOwned: boolean
         ) => {
-          // Unidade morta - desenha X simples
+          // Determinar animação baseada no estado da unidade
+          // Prioridade: animação de sprite ativa > movimento > estado (morto/vivo)
+          let animation: SpriteAnimation;
+          let useCustomFrame = false;
+          let customFrame = 0;
+
+          const activeSpriteAnim = getSpriteAnimation(unit.id);
+          const unitIsMoving = isMoving(unit.id);
+
           if (!unit.isAlive) {
-            ctx.fillStyle = UI_COLORS.deadUnit;
-            const cx = x + size / 2;
-            const cy = y + size / 2;
-            ctx.fillRect(cx - 6, cy - 2, 4, 4);
-            ctx.fillRect(cx + 2, cy - 2, 4, 4);
-            ctx.fillRect(cx - 2, cy + 2, 4, 4);
-            return;
+            animation = "Dead";
+          } else if (activeSpriteAnim) {
+            // Animação de combate ativa (ataque, dano)
+            animation = activeSpriteAnim;
+            useCustomFrame = true;
+            customFrame = getSpriteFrame(unit.id);
+          } else if (unitIsMoving) {
+            // Animação de movimento
+            animation = "Walk";
+          } else {
+            animation = "Idle";
           }
 
           // Obter sprite baseado no avatar da unidade
           // Prioridade: avatar > classCode > fallback baseado em ownership
           const spriteType =
             unit.avatar || unit.classCode || (isOwned ? "swordman" : "mage");
-          const loadedSprite = getSprite(spriteType);
+          const loadedSprite = getSprite(spriteType, animation);
 
           // Se o sprite está carregado, usa ele
           if (loadedSprite && spritesLoaded) {
             const { image: sprite, config } = loadedSprite;
-            const { frameWidth, frameHeight, idleFrames, idleRow } = config;
-            // Usa ref diretamente para evitar re-renders
-            const currentFrame = frameIndexRef.current % idleFrames;
+            const { frameWidth, frameHeight, frameCount, row, loop } = config;
+
+            // Determinar frame atual
+            let currentFrame: number;
+            if (useCustomFrame) {
+              // Usar frame da animação de combate
+              currentFrame = customFrame % frameCount;
+            } else if (!loop) {
+              // Animações não-loop (como Dead): mostrar último frame (pose final)
+              currentFrame = frameCount - 1;
+            } else {
+              // Animações em loop (Idle, Walk): usar frame global
+              currentFrame = frameIndexRef.current % frameCount;
+            }
 
             // Calcular posição no sprite sheet
             const srcX = currentFrame * frameWidth;
-            const srcY = idleRow * frameHeight;
+            const srcY = row * frameHeight;
 
             // Sprite maior, centralizado verticalmente
             const destSize = size * UNIT_RENDER_CONFIG.spriteScale;
@@ -526,7 +617,16 @@ export const ArenaBattleCanvas = memo(
             ctx.strokeRect(x + gap, y + gap, size - gap * 2, size - gap * 2);
           }
         },
-        [selectedUnitId, GRID_COLORS, spritesLoaded, getSprite, frameIndexRef]
+        [
+          selectedUnitId,
+          GRID_COLORS,
+          spritesLoaded,
+          getSprite,
+          frameIndexRef,
+          getSpriteAnimation,
+          getSpriteFrame,
+          isMoving,
+        ]
       );
 
       // Função para barras de HP/Proteção (não usada atualmente, mas mantida para referência)
@@ -775,16 +875,28 @@ export const ArenaBattleCanvas = memo(
 
         // === DESENHAR HIGHLIGHTS (células especiais) ===
         // Só itera pelas células destacadas, não todo o grid
-        movableCells.forEach((cellKey) => {
+        // (Células bloqueadas não são mais incluídas no mapa)
+        movableCellsMap.forEach((cellInfo, cellKey) => {
           const [x, y] = cellKey.split(",").map(Number);
           const cellX = x * cellSize;
           const cellY = y * cellSize;
-          // Verde brilhante fixo para preview de movimento
-          ctx.fillStyle = "rgba(34, 197, 94, 0.4)";
-          ctx.fillRect(cellX, cellY, cellSize, cellSize);
-          ctx.strokeStyle = "rgba(34, 197, 94, 0.8)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+
+          // Cores baseadas no tipo de célula
+          if (cellInfo.hasEngagementPenalty) {
+            // Laranja - movimento com custo de engajamento
+            ctx.fillStyle = GRID_COLORS.cellMovableEngagement;
+            ctx.fillRect(cellX, cellY, cellSize, cellSize);
+            ctx.strokeStyle = GRID_COLORS.cellMovableEngagementBorder;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+          } else {
+            // Verde - movimento normal
+            ctx.fillStyle = GRID_COLORS.cellMovableNormal;
+            ctx.fillRect(cellX, cellY, cellSize, cellSize);
+            ctx.strokeStyle = GRID_COLORS.cellMovableNormalBorder;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+          }
         });
 
         attackableCells.forEach((cellKey) => {
@@ -946,7 +1058,7 @@ export const ArenaBattleCanvas = memo(
         hoveredCell,
         battle.currentPlayerId,
         currentUserId,
-        movableCells,
+        movableCellsMap,
         attackableCells,
         visibleCells,
         cellSize,
@@ -970,7 +1082,7 @@ export const ArenaBattleCanvas = memo(
         hoveredCell,
         selectedUnitId,
         battle.currentPlayerId,
-        movableCells,
+        movableCellsMap,
         attackableCells,
         visibleCells,
         spritesLoaded,
@@ -1070,6 +1182,9 @@ export const ArenaBattleCanvas = memo(
           const x = Math.floor(((e.clientX - rect.left) * scaleX) / cellSize);
           const y = Math.floor(((e.clientY - rect.top) * scaleY) / cellSize);
 
+          // Armazenar posição do mouse para tooltip
+          setMousePosition({ clientX: e.clientX, clientY: e.clientY });
+
           if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
             setHoveredCell((prev) => {
               if (prev?.x === x && prev?.y === y) return prev;
@@ -1084,6 +1199,7 @@ export const ArenaBattleCanvas = memo(
 
       const handleMouseLeave = useCallback(() => {
         setHoveredCell(null);
+        setMousePosition(null);
       }, []);
 
       const handleClick = useCallback(
@@ -1144,48 +1260,99 @@ export const ArenaBattleCanvas = memo(
         ref,
         () => ({
           centerOnUnit,
+          playAnimation: (unitId: string, animation: SpriteAnimation) => {
+            startSpriteAnimation(unitId, animation);
+            needsRedrawRef.current = true;
+          },
         }),
-        [centerOnUnit]
+        [centerOnUnit, startSpriteAnimation]
       );
 
+      // Calcular info do tooltip para a célula hovered
+      const tooltipInfo = useMemo(() => {
+        if (!hoveredCell || !mousePosition) return null;
+        const cellKey = `${hoveredCell.x},${hoveredCell.y}`;
+        const cellInfo = movableCellsMap.get(cellKey);
+        if (!cellInfo) return null;
+
+        return {
+          totalCost: cellInfo.totalCost,
+          hasEngagementPenalty: cellInfo.hasEngagementPenalty,
+          type: cellInfo.type,
+        };
+      }, [hoveredCell, mousePosition, movableCellsMap]);
+
       return (
-        <CameraController
-          ref={cameraRef}
-          contentWidth={canvasWidth}
-          contentHeight={canvasHeight}
-          minZoom={0.5}
-          maxZoom={2}
-          initialZoom={1}
-          className="w-full h-full"
-          showZoomControls={true}
-          showResetButton={true}
-        >
-          <canvas
-            ref={canvasRef}
-            width={canvasWidth}
-            height={canvasHeight}
-            style={{
-              imageRendering: "pixelated",
-              cursor: (() => {
-                if (!hoveredCell) return "default";
-                const cellKey = `${hoveredCell.x},${hoveredCell.y}`;
-                // Unidade clicável (viva)
-                if (unitPositionMap.has(cellKey)) return "pointer";
-                // Célula de movimento
-                if (movableCells.has(cellKey)) return "pointer";
-                // Célula de ataque
-                if (attackableCells.has(cellKey)) return "crosshair";
-                // Default
-                return "default";
-              })(),
-              transition: "filter 0.5s ease-in-out, cursor 0.1s ease",
-            }}
-            className="border-4 border-metal-iron rounded-lg shadow-2xl arena"
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-            onClick={handleClick}
-          />
-        </CameraController>
+        <>
+          <CameraController
+            ref={cameraRef}
+            contentWidth={canvasWidth}
+            contentHeight={canvasHeight}
+            minZoom={0.5}
+            maxZoom={2}
+            initialZoom={1}
+            className="w-full h-full"
+            showZoomControls={false}
+            showResetButton={false}
+          >
+            <canvas
+              ref={canvasRef}
+              width={canvasWidth}
+              height={canvasHeight}
+              style={{
+                imageRendering: "pixelated",
+                cursor: (() => {
+                  if (!hoveredCell) return "default";
+                  const cellKey = `${hoveredCell.x},${hoveredCell.y}`;
+                  // Unidade clicável (viva)
+                  if (unitPositionMap.has(cellKey)) return "pointer";
+                  // Célula de movimento
+                  if (movableCells.has(cellKey)) return "pointer";
+                  // Célula de ataque
+                  if (attackableCells.has(cellKey)) return "crosshair";
+                  // Default
+                  return "default";
+                })(),
+                transition: "filter 0.5s ease-in-out, cursor 0.1s ease",
+              }}
+              className="border-4 border-metal-iron rounded-lg shadow-2xl arena"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              onClick={handleClick}
+            />
+          </CameraController>
+          {/* Tooltip de custo de movimento - usando Portal para renderizar fora do CameraController */}
+          {tooltipInfo &&
+            mousePosition &&
+            createPortal(
+              <div
+                className="fixed z-[9999] pointer-events-none"
+                style={{
+                  left: mousePosition.clientX + 12,
+                  top: mousePosition.clientY - 8,
+                }}
+              >
+                <div
+                  className={`px-2 py-1 rounded text-xs font-bold shadow-lg border ${
+                    tooltipInfo.hasEngagementPenalty
+                      ? "bg-orange-900/95 text-orange-200 border-orange-500"
+                      : "bg-green-900/95 text-green-200 border-green-500"
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>👟</span>
+                    <span>Custo: {tooltipInfo.totalCost}</span>
+                  </div>
+                  {tooltipInfo.hasEngagementPenalty && (
+                    <div className="text-orange-300 text-[10px] mt-0.5">
+                      ⚠️ Penalidade de engajamento
+                    </div>
+                  )}
+                </div>
+              </div>,
+              document.body
+            )}
+        </>
       );
     }
   )

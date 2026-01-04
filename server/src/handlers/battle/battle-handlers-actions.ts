@@ -92,7 +92,13 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
       const unit = battle.units.find((u) => u.id === unitId);
       if (!unit || !unit.isAlive) {
-        return socket.emit("battle:error", { message: "Unidade inválida" });
+        console.log(`[BEGIN_ACTION] Unidade não encontrada:`, {
+          unitId,
+          allIds: battle.units.map((u) => u.id),
+        });
+        return socket.emit("battle:error", {
+          message: "[begin_action] Unidade inválida",
+        });
       }
       if (unit.ownerId !== userId) {
         return socket.emit("battle:error", {
@@ -388,7 +394,13 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
       const unit = battle.units.find((u) => u.id === unitId);
       if (!unit || !unit.isAlive) {
-        return socket.emit("battle:error", { message: "Unidade inválida" });
+        console.log(`[MOVE] Unidade não encontrada:`, {
+          unitId,
+          allIds: battle.units.map((u) => u.id),
+        });
+        return socket.emit("battle:error", {
+          message: "[move] Unidade inválida",
+        });
       }
 
       const result = executeMoveAction(
@@ -654,7 +666,13 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
       const unit = battle.units.find((u) => u.id === unitId);
       if (!unit || !unit.isAlive) {
-        return socket.emit("battle:error", { message: "Unidade inválida" });
+        console.log(`[DASH] Unidade não encontrada:`, {
+          unitId,
+          allIds: battle.units.map((u) => u.id),
+        });
+        return socket.emit("battle:error", {
+          message: "[dash] Unidade inválida",
+        });
       }
 
       const result = executeDashAction(unit);
@@ -689,7 +707,15 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
       const unit = battle.units.find((u) => u.id === unitId);
       if (!unit || !unit.isAlive) {
-        return socket.emit("battle:error", { message: "Unidade inválida" });
+        console.log(`[DODGE] Unidade não encontrada ou morta:`, {
+          unitId,
+          unitExists: !!unit,
+          isAlive: unit?.isAlive,
+          allUnitIds: battle.units.map((u) => u.id),
+        });
+        return socket.emit("battle:error", {
+          message: "[dodge] Unidade inválida",
+        });
       }
 
       const result = executeDodgeAction(unit);
@@ -812,7 +838,13 @@ export function registerBattleActionHandlers(io: Server, socket: Socket): void {
 
         const caster = battle.units.find((u) => u.id === casterUnitId);
         if (!caster || !caster.isAlive) {
-          return socket.emit("battle:error", { message: "Unidade inválida" });
+          console.log(`[SKILL] Caster não encontrado:`, {
+            casterUnitId,
+            allIds: battle.units.map((u) => u.id),
+          });
+          return socket.emit("battle:error", {
+            message: "[skill] Unidade inválida",
+          });
         }
 
         // Buscar skill para info

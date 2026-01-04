@@ -158,10 +158,22 @@ export const CONDITIONS_INFO: Record<string, ConditionInfo> = {
   // =========================================================================
   // CONDIÇÕES DE SKILLS - MAGO
   // =========================================================================
-  ARCANE_MASTERY: {
+  GRIMOIRE: {
+    icon: "📖",
+    name: "Grimório",
+    description: "Aprende magias conjuradas visíveis permanentemente.",
+    color: "#6366f1",
+  },
+  MAGIC_WEAPON: {
     icon: "✨",
-    name: "Maestria Arcana",
-    description: "+1 em todos os testes de Foco.",
+    name: "Arma Mágica",
+    description: "Ataques causam dano Mágico ao invés de Físico.",
+    color: "#8b5cf6",
+  },
+  ARCANE_SHIELD: {
+    icon: "🛡️",
+    name: "Escudo Arcano",
+    description: "Redução de Dano igual à metade do Foco.",
     color: "#6366f1",
   },
   SHIELDED: {

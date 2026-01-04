@@ -5,10 +5,10 @@ import { useEffect, useRef } from "react";
 import { useEvents } from "../context/EventContext";
 import type { GameEvent } from "../../../../../shared/types/events.types";
 import {
-  getSeverityColor,
   getCategoryIcon,
   formatEventTime,
 } from "../../../../../shared/types/events.types";
+import { getSeverityColors } from "../../../config/colors.config";
 
 // =============================================================================
 // EVENT ITEM COMPONENT
@@ -19,7 +19,7 @@ interface EventItemProps {
 }
 
 function EventItem({ event }: EventItemProps) {
-  const severityColor = getSeverityColor(event.severity);
+  const severityColors = getSeverityColors(event.severity);
   const icon = getCategoryIcon(event.category);
 
   // Cores de fundo baseadas na severidade
@@ -40,7 +40,7 @@ function EventItem({ event }: EventItemProps) {
       <span className="text-base flex-shrink-0 mt-0.5">{icon}</span>
 
       <div className="flex-1 min-w-0">
-        <p className={`text-sm ${severityColor}`}>{event.message}</p>
+        <p className={`text-sm ${severityColors.text}`}>{event.message}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-xs text-gray-500 uppercase">
             {event.category}

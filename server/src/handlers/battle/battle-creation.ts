@@ -138,6 +138,13 @@ export async function createAndStartBattle({
     },
   };
 
+  // Fazer todos os sockets da sala do lobby entrarem também na sala do battleId
+  // Isso permite que o chat funcione usando battleId como contextId
+  const socketsInLobby = await io.in(lobbyId).fetchSockets();
+  for (const s of socketsInLobby) {
+    s.join(battleId);
+  }
+
   // Sempre emite o mesmo evento - o cliente trata igualmente
   io.to(lobbyId).emit("battle:battle_started", battleEventData);
 
