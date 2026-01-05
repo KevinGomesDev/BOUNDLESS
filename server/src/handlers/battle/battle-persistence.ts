@@ -160,6 +160,10 @@ export async function saveBattleToDB(battle: Battle): Promise<void> {
 
 export async function saveLobbyToDB(lobby: BattleLobby): Promise<void> {
   try {
+    // O host é sempre o primeiro player
+    const hostPlayer = lobby.players[0];
+    const hostKingdomId = hostPlayer?.kingdomId || "";
+
     await prisma.arenaLobby.upsert({
       where: { id: lobby.lobbyId },
       update: {
@@ -171,6 +175,7 @@ export async function saveLobbyToDB(lobby: BattleLobby): Promise<void> {
       create: {
         id: lobby.lobbyId,
         hostUserId: lobby.hostUserId,
+        hostKingdomId: hostKingdomId,
         maxPlayers: lobby.maxPlayers,
         players: JSON.stringify(lobby.players),
         vsBot: lobby.vsBot || false,

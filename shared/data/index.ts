@@ -1,6 +1,5 @@
 // shared/data/index.ts
 // Barrel export para dados compartilhados
-export * from "./skills.data";
 // Nota: spells.data NÃO é exportado aqui para evitar conflito de nomes
 // Import diretamente de "./spells.data" quando necessário
 export * from "./races";

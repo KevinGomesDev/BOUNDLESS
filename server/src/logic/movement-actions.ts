@@ -49,9 +49,7 @@ export function executeMoveAction(
   allUnits: BattleUnit[],
   obstacles: BattleObstacle[] = []
 ): MoveActionResult {
-  if (!unit.features.includes("move")) {
-    return { success: false, error: "Unit cannot move" };
-  }
+  // Movimentação é uma mecânica base, não uma skill - não precisa verificar features
   if (!unit.isAlive) {
     return { success: false, error: "Dead unit cannot move" };
   }

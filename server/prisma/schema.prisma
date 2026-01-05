@@ -94,6 +94,7 @@ enum Race {
 model Match {
   id             String   @id @default(uuid())
   status         String   @default("WAITING")
+  maxPlayers     Int      @default(2)
   currentRound   Int      @default(1)
   currentTurn    TurnType @default(ADMINISTRACAO)
   crisisMeter    Int      @default(0)
@@ -274,13 +275,11 @@ model ArenaLobby {
   hostKingdomId  String
   hostUsername   String   @default("")
   hostKingdomName String  @default("")
-  guestUserId    String?
-  guestSocketId  String?
-  guestKingdomId String?
-  guestUsername  String?
-  guestKingdomName String?
   status         String   @default("WAITING") // WAITING | READY | BATTLING | ENDED
   battleId       String?  // ID da batalha quando status = BATTLING
+  maxPlayers     Int      @default(2)  // Número máximo de jogadores
+  players        String   @default("[]") // JSON array de jogadores [{userId, kingdomId, ...}]
+  vsBot          Boolean  @default(false) // Se é uma partida contra bot
   events         GameEvent[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -310,6 +309,11 @@ model Battle {
   terrainType      String   @default("PLAINS")  // FOREST | PLAINS | MOUNTAIN | DESERT | ICE | WASTELAND | SWAMP | RUINS
   territorySize    TerritorySize   @default(MEDIUM)  // SMALL | MEDIUM | LARGE
   obstacles        String   @default("[]")      // JSON: [{id, posX, posY, emoji}...]
+  // Multi-player support
+  maxPlayers       Int      @default(2)           // Número máximo de jogadores
+  playerIds        String   @default("[]")       // JSON: [userId1, userId2, ...]
+  kingdomIds       String   @default("[]")       // JSON: [kingdomId1, kingdomId2, ...]
+  playerColors     String   @default("[]")       // JSON: ["#color1", "#color2", ...]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   units            BattleUnit[]
@@ -334,6 +338,7 @@ model BattleUnit {
   troopSlot   Int?        // Para TROOP: índice do template (0-4)
   level       Int         @default(1)  // Nível da unidade
   classCode   String?     // Código da classe (ex: BARBARIAN, WARRIOR)
+  features    String      @default("[]") // Skills/features da unidade (JSON) - actions disponíveis
   learnedSkills String    @default("[]") // Skills aprendidas do DB (JSON) - fonte: Unit.features
   equipment   String      @default("[]") // Itens equipados (JSON)
   spells      String      @default("[]") // Códigos das spells disponíveis (JSON)

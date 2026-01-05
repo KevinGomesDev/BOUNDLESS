@@ -4,12 +4,12 @@
 
 import { prisma } from "../../lib/prisma";
 import { getResourceName } from "../../../../shared/config/global.config";
+import { MAX_HEROES_PER_KINGDOM } from "../../../../shared/data/units";
 import {
   HERO_TEMPLATES,
   getHeroTemplate,
-  HeroTemplate,
+  type HeroTemplate,
 } from "../../../../shared/data/heroes.data";
-import { MAX_HEROES_PER_KINGDOM } from "../../../../shared/data/units";
 
 // Re-export funções genéricas de unit.utils.ts para compatibilidade
 export {

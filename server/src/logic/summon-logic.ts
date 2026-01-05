@@ -239,7 +239,7 @@ export function createEidolon(
     level: 1,
     race: "EIDOLON",
     classCode: undefined,
-    features: template.actions, // Skills disponíveis para o Eidolon
+    features: template.actionCodes || [], // Skills disponíveis para o Eidolon
     equipment: [],
     spells: [],
     combat: stats.combat,

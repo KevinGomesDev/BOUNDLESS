@@ -8,13 +8,13 @@ import {
   canLevelUp,
   processLevelUp,
   canHeroChooseFeature,
-  addHeroSkill,
   addExperience,
 } from "../utils/army/hero.utils";
 import {
   canPurchaseLevelUp,
   purchaseLevelUp,
   calculateLevelUpCost,
+  addUnitFeature,
 } from "../utils/army/unit.utils";
 import { canRegentChooseFeature } from "../utils/army/regent.utils";
 import { TurnType } from "../types";
@@ -67,7 +67,7 @@ export const registerUnitHandlers = (io: Server, socket: Socket) => {
         if (unit.category === "HERO" && skillCode) {
           const newLevel = result.unit?.level || unit.level + 1;
           if (canHeroChooseFeature(newLevel)) {
-            await addHeroSkill(unitId, skillCode);
+            await addUnitFeature(unitId, skillCode, "features", true);
           }
         }
 
@@ -243,7 +243,7 @@ export const registerUnitHandlers = (io: Server, socket: Socket) => {
         // Herói pode escolher skill em níveis específicos
         if (unit.category === "HERO" && classFeature) {
           if (canHeroChooseFeature(unit.level)) {
-            await addHeroSkill(unitId, classFeature);
+            await addUnitFeature(unitId, classFeature, "features", true);
           }
         }
 

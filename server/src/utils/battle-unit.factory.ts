@@ -438,7 +438,7 @@ export function createBotUnitsFromTemplate(
       ? JSON.stringify([regent.initialSkillCode])
       : "[]",
     equipment: "[]",
-    spells: "[]",
+    spells: regent.initialSpells ? JSON.stringify(regent.initialSpells) : "[]",
     conditions: "[]",
     unitCooldowns: "{}",
     combat: regent.combat,
