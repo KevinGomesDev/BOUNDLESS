@@ -9,17 +9,24 @@ import React, {
   useImperativeHandle,
 } from "react";
 import { createPortal } from "react-dom";
-import type { ArenaBattle } from "../../types/arena.types";
+import type { ArenaBattleComputed } from "../../../../stores/arenaStore";
 import type {
-  BattleObstacle,
-  BattleUnit,
-  ObstacleType,
-} from "../../../../../../shared/types/battle.types";
+  BattleUnitState,
+  BattleObstacleState,
+} from "@/services/colyseus.service";
+import type { ObstacleType } from "../../../../../../shared/types/battle.types";
 import { getObstacleVisualConfig } from "../../../../../../shared/config/global.config";
 import {
   getFullMovementInfo,
   type MovementCellInfo,
 } from "../../../../../../shared/utils/engagement.utils";
+import {
+  hasLineOfSight,
+  obstaclesToBlockers,
+  unitsToBlockers,
+  type UnitForLoS,
+  type ObstacleForLoS,
+} from "../../../../../../shared/utils/line-of-sight.utils";
 import { useSprites, updateSpriteFrame } from "./useSprites";
 import { useUnitAnimations } from "./useUnitAnimations";
 import { UI_COLORS, UNIT_RENDER_CONFIG } from "./canvas.constants";
@@ -29,6 +36,7 @@ import {
   type CameraControllerRef,
 } from "../../../../components/CameraController";
 import { isPlayerControllable } from "../../utils/unit-control";
+import type { TargetingPreview } from "../../../../../../shared/utils/targeting.utils";
 
 // Re-export SpriteDirection for external use
 export type { SpriteDirection };
@@ -57,15 +65,15 @@ interface ActiveBubble {
 }
 
 interface ArenaBattleCanvasProps {
-  battle: ArenaBattle;
-  units: BattleUnit[];
+  battle: ArenaBattleComputed;
+  units: BattleUnitState[];
   currentUserId: string;
   selectedUnitId: string | null;
   /** ID da unidade ativa no turno atual */
-  activeUnitId?: string;
+  activeUnitId?: string | null;
   onCellClick?: (x: number, y: number) => void;
-  onUnitClick?: (unit: BattleUnit) => void;
-  onObstacleClick?: (obstacle: BattleObstacle) => void;
+  onUnitClick?: (unit: BattleUnitState) => void;
+  onObstacleClick?: (obstacle: BattleObstacleState) => void;
   /** Handler para clique com botão direito (cancela ação pendente) */
   onRightClick?: () => void;
   /** Direção para virar a unidade selecionada (baseado no movimento/clique) */
@@ -74,8 +82,6 @@ interface ArenaBattleCanvasProps {
   pendingAction?: string | null;
   /** Balões de fala ativos (unitId -> mensagem) */
   activeBubbles?: Map<string, ActiveBubble>;
-  /** IDs de unidades para destacar como alvos válidos */
-  highlightedUnitIds?: Set<string>;
   /** Preview de área de spell/skill (tamanho e cor) */
   spellAreaPreview?: {
     size: number; // Ex: 3 = 3x3
@@ -84,6 +90,10 @@ interface ArenaBattleCanvasProps {
     rangeDistance?: number; // Distância máxima do caster (bloqueio de área)
     casterPos?: { x: number; y: number }; // Posição do caster para calcular distância
   } | null;
+  /** Handler para quando o mouse passa sobre uma célula */
+  onCellHover?: (cell: { x: number; y: number } | null) => void;
+  /** Preview de targeting calculado pelo sistema unificado */
+  targetingPreview?: TargetingPreview | null;
 }
 
 /**
@@ -103,11 +113,12 @@ export const ArenaBattleCanvas = memo(
         onUnitClick,
         onObstacleClick,
         onRightClick,
+        onCellHover,
         unitDirection,
         pendingAction,
         activeBubbles,
-        highlightedUnitIds,
         spellAreaPreview,
+        targetingPreview,
       },
       ref
     ) => {
@@ -239,7 +250,7 @@ export const ArenaBattleCanvas = memo(
 
       // Map de posições de unidades vivas para lookup O(1)
       const unitPositionMap = useMemo(() => {
-        const map = new Map<string, BattleUnit>();
+        const map = new Map<string, BattleUnitState>();
         units.forEach((unit) => {
           if (unit.isAlive) {
             map.set(`${unit.posX},${unit.posY}`, unit);
@@ -250,7 +261,7 @@ export const ArenaBattleCanvas = memo(
 
       // Map de cadáveres para lookup O(1) (unidades mortas que não foram removidas)
       const corpsePositionMap = useMemo(() => {
-        const map = new Map<string, BattleUnit>();
+        const map = new Map<string, BattleUnitState>();
         units.forEach((unit) => {
           if (!unit.isAlive && !unit.conditions?.includes("CORPSE_REMOVED")) {
             map.set(`${unit.posX},${unit.posY}`, unit);
@@ -261,6 +272,7 @@ export const ArenaBattleCanvas = memo(
 
       // === FOG OF WAR - Células visíveis pelo jogador atual ===
       // Calcula quais células são visíveis baseado no visionRange de cada unidade aliada
+      // Considera Line of Sight (obstáculos e unidades bloqueiam visão)
       const visibleCells = useMemo((): Set<string> => {
         const visible = new Set<string>();
 
@@ -279,6 +291,34 @@ export const ArenaBattleCanvas = memo(
           }
           return visible;
         }
+
+        // Preparar bloqueadores para cálculo de Line of Sight
+        // Obstáculos não destruídos
+        const obstacleBlockers = obstaclesToBlockers(
+          OBSTACLES.map((obs) => ({
+            posX: obs.posX,
+            posY: obs.posY,
+            destroyed: obs.destroyed,
+          }))
+        );
+
+        // Unidades vivas (excluindo as do próprio jogador para não bloquear a própria visão)
+        const enemyUnits = units.filter(
+          (u) => u.ownerId !== currentUserId && u.isAlive
+        );
+        const unitBlockers = unitsToBlockers(
+          enemyUnits.map((u) => ({
+            id: u.id,
+            posX: u.posX,
+            posY: u.posY,
+            isAlive: u.isAlive,
+            size: u.size,
+          })),
+          [] // Não excluir nenhum
+        );
+
+        // Combinar todos os bloqueadores
+        const allBlockers = [...obstacleBlockers, ...unitBlockers];
 
         // Para cada unidade aliada, adicionar células visíveis
         myUnits.forEach((unit) => {
@@ -318,7 +358,22 @@ export const ArenaBattleCanvas = memo(
                       targetY >= 0 &&
                       targetY < GRID_HEIGHT
                     ) {
-                      visible.add(`${targetX},${targetY}`);
+                      const cellKey = `${targetX},${targetY}`;
+                      // Se já está visível, não precisa verificar novamente
+                      if (visible.has(cellKey)) continue;
+
+                      // Verificar Line of Sight (obstáculos e unidades bloqueiam)
+                      if (
+                        hasLineOfSight(
+                          unitCellX,
+                          unitCellY,
+                          targetX,
+                          targetY,
+                          allBlockers
+                        )
+                      ) {
+                        visible.add(cellKey);
+                      }
                     }
                   }
                 }
@@ -328,11 +383,11 @@ export const ArenaBattleCanvas = memo(
         });
 
         return visible;
-      }, [units, currentUserId, GRID_WIDTH, GRID_HEIGHT]);
+      }, [units, currentUserId, GRID_WIDTH, GRID_HEIGHT, OBSTACLES]);
 
       // Map de obstáculos para lookup O(1) (apenas não destruídos)
       const obstaclePositionMap = useMemo(() => {
-        const map = new Map<string, BattleObstacle>();
+        const map = new Map<string, BattleObstacleState>();
         OBSTACLES.forEach((obs) => {
           if (!obs.destroyed) {
             map.set(`${obs.posX},${obs.posY}`, obs);
@@ -430,12 +485,18 @@ export const ArenaBattleCanvas = memo(
       }, [movableCellsMap]);
 
       // Células atacáveis como Set (8 direções - omnidirecional)
-      // Só mostra quando pendingAction === "attack"
+      // NOTA: Esta lógica é mantida para compatibilidade, mas o novo targetingPreview
+      // deve ser usado preferencialmente quando disponível
       const attackableCells = useMemo((): Set<string> => {
+        // Se há targetingPreview, usar o novo sistema ao invés do legado
+        if (targetingPreview) return new Set();
         // Só mostrar quando for meu turno
         if (!isMyTurn) return new Set();
         // Só mostrar células atacáveis quando ação de ataque estiver selecionada
-        if (pendingAction !== "attack") return new Set();
+        // Aceita tanto "attack" quanto "ATTACK" para compatibilidade
+        const isAttackAction =
+          pendingAction === "attack" || pendingAction === "ATTACK";
+        if (!isAttackAction) return new Set();
         if (!selectedUnit) return new Set();
         // Verificar se é a unidade ativa OU se activeUnitId está indefinido e é minha unidade controlável
         const isActiveOrPending = activeUnitId
@@ -478,6 +539,7 @@ export const ArenaBattleCanvas = memo(
         currentUserId,
         OBSTACLES,
         pendingAction,
+        targetingPreview,
       ]);
 
       // =========================================
@@ -515,7 +577,7 @@ export const ArenaBattleCanvas = memo(
       const drawObstacle3D = useCallback(
         (
           ctx: CanvasRenderingContext2D,
-          obstacle: BattleObstacle,
+          obstacle: BattleObstacleState,
           cellSize: number,
           cameraPos: { x: number; y: number }
         ) => {
@@ -631,9 +693,8 @@ export const ArenaBattleCanvas = memo(
           x: number,
           y: number,
           size: number,
-          unit: BattleUnit,
-          isOwned: boolean,
-          isHighlighted: boolean = false
+          unit: BattleUnitState,
+          isOwned: boolean
         ) => {
           // Determinar animação baseada no estado da unidade
           // Prioridade: animação de sprite ativa > movimento > estado (morto/vivo)
@@ -802,35 +863,6 @@ export const ArenaBattleCanvas = memo(
             const gap = 2;
             ctx.strokeRect(x + gap, y + gap, size - gap * 2, size - gap * 2);
           }
-
-          // Highlight de alvo válido - círculo verde pulsante
-          if (isHighlighted && unit.isAlive) {
-            ctx.save();
-            // Animação de pulso suave
-            const pulse = Math.sin(animationTimeRef.current / 200) * 0.2 + 0.8;
-            ctx.strokeStyle = `rgba(34, 197, 94, ${pulse})`; // Verde (green-500)
-            ctx.lineWidth = 3;
-            const gap = 1;
-            // Desenhar retângulo arredondado
-            const radius = 6;
-            const rx = x + gap;
-            const ry = y + gap;
-            const rw = size - gap * 2;
-            const rh = size - gap * 2;
-            ctx.beginPath();
-            ctx.moveTo(rx + radius, ry);
-            ctx.lineTo(rx + rw - radius, ry);
-            ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
-            ctx.lineTo(rx + rw, ry + rh - radius);
-            ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
-            ctx.lineTo(rx + radius, ry + rh);
-            ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
-            ctx.lineTo(rx, ry + radius);
-            ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
-            ctx.closePath();
-            ctx.stroke();
-            ctx.restore();
-          }
         },
         [
           selectedUnitId,
@@ -897,7 +929,8 @@ export const ArenaBattleCanvas = memo(
           conditions: string[]
         ) => {
           conditions.slice(0, 3).forEach((cond, i) => {
-            ctx.fillStyle = CONDITION_COLORS[cond] || "#ffffff";
+            ctx.fillStyle =
+              (CONDITION_COLORS as Record<string, string>)[cond] || "#ffffff";
             ctx.fillRect(x + 4 + i * 6, y + 2, 4, 4);
           });
         },
@@ -1124,6 +1157,67 @@ export const ArenaBattleCanvas = memo(
           ctx.strokeRect(cellX, cellY, cellSize, cellSize);
         });
 
+        // === TARGETING PREVIEW (Sistema de Mira Direcional) ===
+        // Renderiza apenas as células afetadas (impact) na direção do mouse
+        if (targetingPreview && targetingPreview.affectedCells.length > 0) {
+          // Desenhar células que serão afetadas (impact) - Vermelho
+          targetingPreview.affectedCells.forEach((cell, index) => {
+            const cellX = cell.x * cellSize;
+            const cellY = cell.y * cellSize;
+
+            // Verificar se há unidade ou obstáculo nesta célula
+            const unitInCell = units.find(
+              (u) => u.isAlive && u.posX === cell.x && u.posY === cell.y
+            );
+            const obstacleInCell = OBSTACLES.find(
+              (o) => !o.destroyed && o.posX === cell.x && o.posY === cell.y
+            );
+            const hasTarget = !!unitInCell || !!obstacleInCell;
+
+            // Pulsação sutil para indicar mira ativa
+            const pulse =
+              Math.sin(animationTimeRef.current / 150 + index * 0.5) * 0.15 +
+              0.85;
+
+            if (hasTarget) {
+              // Com alvo - vermelho intenso com glow
+              ctx.fillStyle = `rgba(239, 68, 68, ${0.5 * pulse})`; // Vermelho
+              ctx.strokeStyle = `rgba(239, 68, 68, ${0.9 * pulse})`;
+              ctx.lineWidth = 3;
+            } else {
+              // Sem alvo - vermelho mais suave (ainda indica área de impacto)
+              ctx.fillStyle = `rgba(239, 68, 68, ${0.3 * pulse})`; // Vermelho suave
+              ctx.strokeStyle = `rgba(239, 68, 68, ${0.6 * pulse})`;
+              ctx.lineWidth = 2;
+            }
+
+            ctx.fillRect(cellX, cellY, cellSize, cellSize);
+            ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+
+            // Desenhar crosshair no centro da célula de mira
+            if (index === 0) {
+              const centerX = cellX + cellSize / 2;
+              const centerY = cellY + cellSize / 2;
+              const crossSize = cellSize * 0.25;
+
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * pulse})`;
+              ctx.lineWidth = 2;
+
+              // Linha horizontal
+              ctx.beginPath();
+              ctx.moveTo(centerX - crossSize, centerY);
+              ctx.lineTo(centerX + crossSize, centerY);
+              ctx.stroke();
+
+              // Linha vertical
+              ctx.beginPath();
+              ctx.moveTo(centerX, centerY - crossSize);
+              ctx.lineTo(centerX, centerY + crossSize);
+              ctx.stroke();
+            }
+          });
+        }
+
         // === INDICADOR DE RANGE PARA SPELL/SKILL ===
         // Desenha todos os blocos FORA do rangeDistance em vermelho translúcido
         if (
@@ -1309,22 +1403,55 @@ export const ArenaBattleCanvas = memo(
         }
 
         // === DESENHAR OBSTÁCULOS (não destruídos e visíveis) - 2.5D ===
-        // Calcular posição da câmera para perspectiva
-        // Usa centro do canvas como padrão, ou posição do mouse se disponível
-        const canvasBounds = canvas?.getBoundingClientRect();
-        const cameraPos =
-          mousePosition && canvasBounds
-            ? {
-                x:
-                  (mousePosition.clientX - canvasBounds.left) /
-                  (canvasBounds.width / canvasWidth),
-                y:
-                  (mousePosition.clientY - canvasBounds.top) /
-                  (canvasBounds.height / canvasHeight),
-              }
-            : { x: canvasWidth / 2, y: canvasHeight / 2 };
+        // Calcular posição da perspectiva baseada nas unidades do jogador
+        // Prioridade: 1) Unidade selecionada, 2) Unidade do jogador mais próxima do centro
+        const gridCenterX = (GRID_WIDTH * cellSize) / 2;
+        const gridCenterY = (GRID_HEIGHT * cellSize) / 2;
+        let perspectivePos = { x: gridCenterX, y: gridCenterY };
 
-        // Ordenar obstáculos por distância à câmera (mais distantes primeiro)
+        // Primeiro, tentar usar a unidade selecionada
+        const perspectiveUnit = selectedUnitId
+          ? units.find((u) => u.id === selectedUnitId)
+          : null;
+
+        if (perspectiveUnit && perspectiveUnit.isAlive) {
+          // Usar posição da unidade selecionada
+          perspectivePos = {
+            x: perspectiveUnit.posX * cellSize + cellSize / 2,
+            y: perspectiveUnit.posY * cellSize + cellSize / 2,
+          };
+        } else {
+          // Fallback: usar a unidade do jogador mais próxima do centro do grid
+          const myAliveUnits = units.filter(
+            (u) => u.ownerId === currentUserId && u.isAlive
+          );
+
+          if (myAliveUnits.length > 0) {
+            // Encontrar a unidade mais próxima do centro do grid
+            let closestUnit = myAliveUnits[0];
+            let closestDistSq = Infinity;
+
+            for (const unit of myAliveUnits) {
+              const unitCenterX = unit.posX * cellSize + cellSize / 2;
+              const unitCenterY = unit.posY * cellSize + cellSize / 2;
+              const distSq =
+                (unitCenterX - gridCenterX) ** 2 +
+                (unitCenterY - gridCenterY) ** 2;
+
+              if (distSq < closestDistSq) {
+                closestDistSq = distSq;
+                closestUnit = unit;
+              }
+            }
+
+            perspectivePos = {
+              x: closestUnit.posX * cellSize + cellSize / 2,
+              y: closestUnit.posY * cellSize + cellSize / 2,
+            };
+          }
+        }
+
+        // Ordenar obstáculos por distância à perspectiva (mais distantes primeiro)
         const sortedObstacles = [...OBSTACLES]
           .filter(
             (obs) =>
@@ -1336,15 +1463,17 @@ export const ArenaBattleCanvas = memo(
             const bCenterX = b.posX * cellSize + cellSize / 2;
             const bCenterY = b.posY * cellSize + cellSize / 2;
             const aDistSq =
-              (aCenterX - cameraPos.x) ** 2 + (aCenterY - cameraPos.y) ** 2;
+              (aCenterX - perspectivePos.x) ** 2 +
+              (aCenterY - perspectivePos.y) ** 2;
             const bDistSq =
-              (bCenterX - cameraPos.x) ** 2 + (bCenterY - cameraPos.y) ** 2;
+              (bCenterX - perspectivePos.x) ** 2 +
+              (bCenterY - perspectivePos.y) ** 2;
             return bDistSq - aDistSq; // Mais distante primeiro
           });
 
         // Renderizar obstáculos ordenados
         sortedObstacles.forEach((obstacle) => {
-          drawObstacle3D(ctx, obstacle, cellSize, cameraPos);
+          drawObstacle3D(ctx, obstacle, cellSize, perspectivePos);
         });
 
         // === DESENHAR UNIDADES ===
@@ -1361,10 +1490,7 @@ export const ArenaBattleCanvas = memo(
           const cellX = visualPos.x * cellSize;
           const cellY = visualPos.y * cellSize;
 
-          // Verificar se unidade está destacada como alvo válido
-          const isHighlighted = highlightedUnitIds?.has(unit.id) ?? false;
-
-          drawUnit(ctx, cellX, cellY, cellSize, unit, isOwned, isHighlighted);
+          drawUnit(ctx, cellX, cellY, cellSize, unit, isOwned);
 
           if (unit.isAlive) {
             drawConditions(ctx, cellX, cellY, unit.conditions);
@@ -1478,11 +1604,12 @@ export const ArenaBattleCanvas = memo(
         OBSTACLES,
         getVisualPosition,
         drawStaticGrid,
-        highlightedUnitIds,
         drawObstacle3D,
         mousePosition,
         canvasWidth,
         canvasHeight,
+        targetingPreview,
+        spellAreaPreview,
       ]);
 
       // === MARCAR PARA REDESENHO ===
@@ -1498,7 +1625,6 @@ export const ArenaBattleCanvas = memo(
         visibleCells,
         spritesLoaded,
         activeBubbles,
-        highlightedUnitIds,
         // frameIndex removido - agora controlado pelo loop de animação
       ]);
 
@@ -1608,6 +1734,11 @@ export const ArenaBattleCanvas = memo(
         },
         [GRID_WIDTH, GRID_HEIGHT, canvasWidth, canvasHeight, cellSize]
       );
+
+      // Notificar parent sobre mudança de hoveredCell (fora do setState para evitar warning)
+      useEffect(() => {
+        onCellHover?.(hoveredCell);
+      }, [hoveredCell, onCellHover]);
 
       const handleMouseLeave = useCallback(() => {
         setHoveredCell(null);

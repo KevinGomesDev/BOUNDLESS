@@ -109,8 +109,10 @@ export interface ArenaBattle {
   status: "ACTIVE" | "ENDED";
   currentTurnIndex: number;
   currentPlayerId: string;
-  activeUnitId?: string; // Unidade ativa escolhida pelo jogador neste turno
-  actionOrder: string[];
+  activeUnitId?: string; // Unidade ativa (travada após mover/agir)
+  selectedUnitId?: string; // Unidade selecionada (ainda pode mudar)
+  unitLocked?: boolean; // Se true, não pode mais mudar a unidade selecionada
+  actionOrder: string[]; // IDs dos jogadores (não das unidades)
   units: BattleUnit[];
   turnTimer: number;
 }

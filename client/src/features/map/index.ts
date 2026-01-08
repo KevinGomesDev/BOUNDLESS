@@ -1,5 +1,6 @@
 // Map Feature - Public API
-export { MapProvider, MapContext } from "./context/MapContext";
+// Migrado para Zustand - Context removido
+
 export {
   useMap,
   useMapState,
@@ -14,4 +15,9 @@ export type {
   MapContextType,
   MapAction,
 } from "./types/map.types";
-export type { TerritoryArea, AvailableStructure } from "./components";
+export type {
+  TerritoryArea,
+  AvailableStructure,
+  MapTerritory,
+  MapPlayer,
+} from "./components";

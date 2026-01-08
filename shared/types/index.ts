@@ -9,3 +9,7 @@ export * from "./skills.types";
 export * from "./spells.types";
 export * from "./units.types";
 export * from "./character.types";
+export * from "./audio.types";
+// QTE types agora exportados de shared/qte
+export * from "../qte";
+export * from "./commands.types";

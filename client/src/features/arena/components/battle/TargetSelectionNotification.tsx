@@ -1,5 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { getSkillInfo } from "../../../../../../shared/data/skills.data";
+import {
+  getSkillInfo,
+  findSkillByCode,
+} from "../../../../../../shared/data/skills.data";
 import { getSpellByCode } from "../../../../../../shared/data/spells.data";
 
 interface TargetSelectionNotificationProps {
@@ -39,11 +42,23 @@ export function TargetSelectionNotification({
     }
   } else {
     const skill = getSkillInfo(actionCode);
-    if (skill) {
+    const skillDef = findSkillByCode(actionCode);
+    if (skill && skillDef) {
+      // Texto de alvo baseado no range da skill
+      let targetText = "uma unidade alvo";
+      if (skillDef.range === "MELEE" || skillDef.range === "ADJACENT") {
+        targetText = "um alvo adjacente";
+      } else if (skillDef.range === "RANGED") {
+        targetText = "um alvo no alcance";
+      } else if (skillDef.range === "AREA") {
+        targetText = "uma posição para a área";
+      } else if (skillDef.targetType === "GROUND") {
+        targetText = "uma posição no mapa";
+      }
       actionInfo = {
         icon: skill.icon,
         name: skill.name,
-        targetText: "uma unidade alvo",
+        targetText,
       };
     }
   }
@@ -125,9 +140,9 @@ export function TargetSelectionNotification({
             </h2>
 
             <p className="text-gray-300 text-sm leading-relaxed">
-              Selecione{" "}
+              Mire e{" "}
               <span className="text-red-400 font-semibold">
-                {actionInfo.targetText}
+                clique para confirmar
               </span>
             </p>
 

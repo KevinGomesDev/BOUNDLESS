@@ -8,6 +8,7 @@ import {
   ArenaConfigSchema,
   BattleLogEntry,
 } from "./common.schema";
+import { GRID_CONFIG } from "../../../../shared/config/global.config";
 
 /**
  * Jogador em um lobby de arena
@@ -67,13 +68,17 @@ export class ArenaBattleState extends Schema {
   @type("string") status: string = "ACTIVE"; // ACTIVE | PAUSED | ENDED
   @type("number") round: number = 1;
   @type("number") currentTurnIndex: number = 0;
-  @type("string") activeUnitId: string = "";
-  @type("string") currentPlayerId: string = ""; // ID do jogador que controla a unidade ativa
+  @type("string") activeUnitId: string = ""; // Unidade que "travou" (fez ação/movimento)
+  @type("string") selectedUnitId: string = ""; // Unidade selecionada (ainda pode mudar)
+  @type("string") currentPlayerId: string = ""; // ID do jogador que controla o turno atual
+  @type("boolean") unitLocked: boolean = false; // Se true, a unidade está travada (não pode mudar seleção)
   @type("number") turnTimer: number = 60;
 
-  // Grid
-  @type("number") gridWidth: number = 12;
-  @type("number") gridHeight: number = 8;
+  // Grid (valores padrão de GRID_CONFIG.defaultSize = MEDIUM)
+  @type("number") gridWidth: number =
+    GRID_CONFIG.territorySizes[GRID_CONFIG.defaultSize].width;
+  @type("number") gridHeight: number =
+    GRID_CONFIG.territorySizes[GRID_CONFIG.defaultSize].height;
 
   // Jogadores
   @type([BattlePlayerSchema]) players = new ArraySchema<BattlePlayerSchema>();

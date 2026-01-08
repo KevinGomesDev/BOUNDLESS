@@ -10,7 +10,7 @@ import {
 } from "../../../shared/types/ability.types";
 import { scanConditionsForAction } from "../logic/conditions";
 import { processUnitDeath } from "../logic/death-logic";
-import { applyDualProtectionDamage } from "../utils/battle.utils";
+import { applyDamage } from "../utils/damage.utils";
 
 // =============================================================================
 // HELPERS
@@ -163,7 +163,7 @@ function executeFire(
     if (finalDamage < 0) finalDamage = 0;
 
     // Aplicar dano usando o sistema de proteção dual (absorve na proteção mágica primeiro)
-    const damageResult = applyDualProtectionDamage(
+    const damageResult = applyDamage(
       targetUnit.physicalProtection,
       targetUnit.magicalProtection,
       targetUnit.currentHp,

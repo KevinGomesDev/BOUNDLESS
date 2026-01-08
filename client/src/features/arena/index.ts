@@ -1,15 +1,5 @@
 // Arena Feature - Public API
-
-// Context (Colyseus)
-export {
-  ArenaColyseusProvider,
-  useArenaColyseus,
-} from "./context/ArenaColyseusContext";
-export {
-  arenaReducer,
-  initialArenaState,
-  arenaActions,
-} from "./context/arenaReducer";
+// Migrado para Zustand - Context removido
 
 // Hooks
 export {
@@ -20,6 +10,7 @@ export {
   useArenaBattle,
 } from "./hooks/useArena";
 export { useBattleKeyboard } from "./hooks/useBattleKeyboard";
+export { useQTE, useActiveQTE } from "./hooks/useQTE";
 
 // Components - Main View
 export { ArenaBattleView } from "./components";
@@ -46,6 +37,9 @@ export {
   ConditionBadge,
   AttributeTooltip,
 } from "./components/shared";
+
+// Components - QTE
+export { QTEOverlay } from "./components/QTEOverlay";
 
 // Utils
 export { arenaLog, lobbyLog } from "./utils";

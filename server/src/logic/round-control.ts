@@ -14,6 +14,7 @@
 import type { BattleUnit } from "../utils/battle-unit.factory";
 import { CONDITIONS, removeNextTurnConditions } from "./conditions";
 import { getMaxMarksByCategory } from "../utils/battle.utils";
+import { applyDamage } from "../utils/damage.utils";
 import { tickUnitCooldowns } from "./skill-executors";
 
 // =============================================================================
@@ -99,9 +100,18 @@ export function processUnitTurnEndConditions(unit: BattleUnit): TurnEndResult {
     }
   }
 
-  // 3. Aplicar dano
+  // 3. Aplicar dano (dano verdadeiro - condições ignoram proteção)
   if (damageFromConditions > 0) {
-    unit.currentHp = Math.max(0, unit.currentHp - damageFromConditions);
+    const result = applyDamage(
+      unit.physicalProtection,
+      unit.magicalProtection,
+      unit.currentHp,
+      damageFromConditions,
+      "VERDADEIRO"
+    );
+    unit.physicalProtection = result.newPhysicalProtection;
+    unit.magicalProtection = result.newMagicalProtection;
+    unit.currentHp = result.newHp;
     if (unit.currentHp <= 0) {
       unit.isAlive = false;
     }
@@ -265,9 +275,9 @@ export function checkExhaustion(units: BattleUnit[]): ExhaustionCheckResult {
   }
 
   // Verificar se todas as unidades vivas estão exaustas
+  // Exaustão ocorre quando actionMarks <= 0
   const allExhausted = aliveUnits.every((unit) => {
-    const maxMarks = getMaxMarksByCategory(unit.category);
-    return unit.actionMarks >= maxMarks;
+    return unit.actionMarks <= 0;
   });
 
   if (!allExhausted) {

@@ -1,66 +1,153 @@
-// Re-export from ArenaColyseusContext
-// Este arquivo mantém compatibilidade com código antigo
+// client/src/features/arena/hooks/useArena.ts
+// Hook para Arena usando Zustand store
 
-import { useContext } from "react";
-import {
-  useArenaColyseus,
-  ArenaColyseusContext,
-} from "../context/ArenaColyseusContext";
+import { useEffect } from "react";
+import { useArenaStore, useAuthStore } from "../../../stores";
 
-export { useArenaColyseus as useArena };
+export function useArena() {
+  const store = useArenaStore();
+  const userId = useAuthStore((state) => state.user?.id);
 
-// Hooks opcionais - podem ser removidos se não usados
-export function useArenaOptional() {
-  const context = useContext(ArenaColyseusContext);
-  return context;
-}
+  // Listeners são inicializados pelo StoreInitializer - não duplicar aqui
 
-/**
- * Hook para acessar apenas o estado da Arena
- */
-export function useArenaState() {
-  const { state } = useArenaColyseus();
-  return state;
-}
+  // Recompute battle when relevant state changes
+  useEffect(() => {
+    store.computeBattle(userId);
+  }, [
+    userId,
+    store.units.length,
+    store.players.length,
+    store.winnerId,
+    store.rematchRequests.length,
+  ]);
 
-/**
- * Hook para verificar se está em um lobby
- */
-export function useArenaLobby() {
-  const { state, leaveLobby, startBattle } = useArenaColyseus();
   return {
-    lobbyId: state.lobbyId,
-    isHost: state.isHost,
-    isInLobby: state.lobbyId !== null,
-    leaveLobby,
-    startBattle,
+    state: {
+      lobbyId: store.lobbyId,
+      isHost: store.isHost,
+      lobbies: store.lobbies,
+      battleId: store.battleId,
+      isInBattle: store.isInBattle,
+      status: store.status,
+      round: store.round,
+      turnTimer: store.turnTimer,
+      gridWidth: store.gridWidth,
+      gridHeight: store.gridHeight,
+      players: store.players,
+      units: store.units,
+      activeUnitId: store.activeUnitId,
+      selectedUnitId: store.selectedUnitId,
+      currentPlayerId: store.currentPlayerId,
+      unitLocked: store.unitLocked,
+      actionOrder: store.actionOrder,
+      obstacles: store.obstacles,
+      winnerId: store.winnerId,
+      winReason: store.winReason,
+      rematchRequests: store.rematchRequests,
+      isLoading: store.isLoading,
+      error: store.error,
+      battle: store.battle,
+      battleResult: store.battleResult,
+      rematchPending: store.rematchPending,
+      opponentWantsRematch: store.opponentWantsRematch,
+    },
+
+    // Lobby listing
+    listLobbies: store.listLobbies,
+
+    // Lobby
+    createLobby: store.createLobby,
+    joinLobby: store.joinLobby,
+    leaveLobby: store.leaveLobby,
+    setReady: store.setReady,
+    startBattle: store.startBattle,
+
+    // Battle
+    selectUnit: store.selectUnit,
+    beginAction: store.beginAction,
+    moveUnit: store.moveUnit,
+    attackUnit: store.attackUnit,
+    endAction: store.endAction,
+    executeAction: store.executeAction,
+    castSpell: store.castSpell,
+    surrender: store.surrender,
+    requestRematch: store.requestRematch,
+
+    // Utilities
+    getUnit: store.getUnit,
+    getMyUnits: () => store.getMyUnits(userId || ""),
+    clearError: store.clearError,
+    dismissBattleResult: store.dismissBattleResult,
   };
 }
 
-/**
- * Hook para acessar dados da batalha
- */
-export function useArenaBattle() {
-  const {
-    state,
-    beginAction,
-    moveUnit,
-    attackUnit,
-    endAction,
-    executeAction,
-    castSpell,
-    surrender,
-  } = useArenaColyseus();
+// Alias for compatibility
+export { useArena as useArenaColyseus };
+
+export function useArenaOptional() {
+  const store = useArenaStore();
+  return store;
+}
+
+export function useArenaState() {
+  const store = useArenaStore();
   return {
-    status: state.status,
-    units: state.units,
-    isInBattle: state.status === "ACTIVE",
-    beginAction,
-    moveUnit,
-    attackUnit,
-    endAction,
-    executeAction,
-    castSpell,
-    surrender,
+    lobbyId: store.lobbyId,
+    isHost: store.isHost,
+    lobbies: store.lobbies,
+    battleId: store.battleId,
+    isInBattle: store.isInBattle,
+    status: store.status,
+    round: store.round,
+    turnTimer: store.turnTimer,
+    gridWidth: store.gridWidth,
+    gridHeight: store.gridHeight,
+    players: store.players,
+    units: store.units,
+    activeUnitId: store.activeUnitId,
+    selectedUnitId: store.selectedUnitId,
+    currentPlayerId: store.currentPlayerId,
+    unitLocked: store.unitLocked,
+    actionOrder: store.actionOrder,
+    obstacles: store.obstacles,
+    winnerId: store.winnerId,
+    winReason: store.winReason,
+    rematchRequests: store.rematchRequests,
+    isLoading: store.isLoading,
+    error: store.error,
+    battle: store.battle,
+    battleResult: store.battleResult,
+    rematchPending: store.rematchPending,
+    opponentWantsRematch: store.opponentWantsRematch,
+  };
+}
+
+export function useArenaLobby() {
+  const store = useArenaStore();
+  return {
+    lobbyId: store.lobbyId,
+    isHost: store.isHost,
+    isInLobby: store.lobbyId !== null,
+    leaveLobby: store.leaveLobby,
+    startBattle: store.startBattle,
+  };
+}
+
+export function useArenaBattle() {
+  const store = useArenaStore();
+  return {
+    status: store.status,
+    units: store.units,
+    selectedUnitId: store.selectedUnitId,
+    unitLocked: store.unitLocked,
+    isInBattle: store.status === "ACTIVE",
+    selectUnit: store.selectUnit,
+    beginAction: store.beginAction,
+    moveUnit: store.moveUnit,
+    attackUnit: store.attackUnit,
+    endAction: store.endAction,
+    executeAction: store.executeAction,
+    castSpell: store.castSpell,
+    surrender: store.surrender,
   };
 }

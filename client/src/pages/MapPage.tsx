@@ -1,71 +1,74 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMatch } from "../features/match";
+import { useMap } from "../features/map/hooks/useMap";
 import {
   MapCanvas,
   TopHUD,
   RightSidebar,
   TerritoryModal,
 } from "../features/map";
-import type { Territory } from "../features/map";
+import type { Territory, MapTerritory } from "../features/map";
 
 /**
  * Map Page - Visualização principal do jogo
  * Tela principal quando há partida ativa
  */
 const MapPage: React.FC = () => {
-  const {
-    requestMapData,
-    matchMapData,
-    isLoading,
-    error,
-    currentMatch,
-    completeMatchState,
-    myPlayerId,
-    getPreparationData,
-  } = useMatch();
-  const [isLoadingMap, setIsLoadingMap] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { state } = useMatch();
+  const { state: mapState, requestMapData } = useMap();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Estado do modal de território - este é o único jeito de construir
   const [openTerritoryModal, setOpenTerritoryModal] =
     useState<Territory | null>(null);
 
-  const matchId = completeMatchState?.matchId || currentMatch?.id || "";
-  const inPreparation =
-    completeMatchState?.status === "PREPARATION" ||
-    currentMatch?.status === "PREPARATION";
-  const inAdministration = completeMatchState?.currentTurn === "ADMINISTRACAO";
-  const canBuild = inPreparation || inAdministration;
+  const matchId = state.matchId || "";
+  const matchStatus = state.status;
+  const inPreparation = matchStatus === "PREPARATION";
+  const canBuild = inPreparation || state.phase === "ADMINISTRATION";
 
-  // Carregar mapa ao montar
+  // Redirecionar para dashboard se não há partida ativa
   useEffect(() => {
-    const loadMap = async () => {
-      setIsLoadingMap(true);
-      setLocalError(null);
-      try {
-        await requestMapData();
-      } catch (err: any) {
-        console.error("Erro ao carregar mapa:", err);
-        setLocalError(err.message || "Erro ao carregar mapa");
-      } finally {
-        setIsLoadingMap(false);
-      }
-    };
+    if (!matchId || matchStatus === "IDLE" || matchStatus === "FINISHED") {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [matchId, matchStatus, navigate]);
 
-    loadMap();
-  }, [requestMapData]);
+  // Carregar dados do mapa ao montar
+  useEffect(() => {
+    if (matchId && mapState.territories.length === 0 && !mapState.isLoading) {
+      setIsLoading(true);
+      requestMapData(matchId)
+        .catch((err) => setError(err?.message || "Failed to load map"))
+        .finally(() => setIsLoading(false));
+    }
+  }, [
+    matchId,
+    mapState.territories.length,
+    mapState.isLoading,
+    requestMapData,
+  ]);
 
   // Clique em território - abre modal se for do jogador e puder construir
   const handleTerritoryClick = useCallback(
-    (territory: Territory) => {
+    (territory: MapTerritory) => {
       // Verifica se é um território do jogador atual
-      const isOwnTerritory = territory.ownerId === myPlayerId;
+      const isOwnTerritory = territory.ownerId === state.myPlayerId;
 
       if (isOwnTerritory && canBuild) {
-        setOpenTerritoryModal(territory);
+        // Encontra o território completo no mapState
+        const fullTerritory = mapState.territories.find(
+          (t) => t.id === territory.id
+        );
+        if (fullTerritory) {
+          setOpenTerritoryModal(fullTerritory);
+        }
       }
     },
-    [myPlayerId, canBuild]
+    [state.myPlayerId, canBuild, mapState.territories]
   );
 
   // Fecha modal de território
@@ -75,13 +78,10 @@ const MapPage: React.FC = () => {
 
   // Callback quando construção é bem-sucedida
   const handleBuildSuccess = useCallback(() => {
-    // Atualiza dados de preparação para refletir nova construção
-    if (matchId) {
-      getPreparationData(matchId).catch(() => {});
-    }
-  }, [matchId, getPreparationData]);
+    // O estado será atualizado via Colyseus automaticamente
+  }, []);
 
-  const displayError = localError || error;
+  const displayError = error || state.error || mapState.error;
 
   return (
     <div className="relative min-h-screen flex flex-col bg-surface-900">
@@ -108,21 +108,22 @@ const MapPage: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {(isLoadingMap || isLoading) && !matchMapData && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 bg-surface-900/80">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-astral-silver text-lg">Loading map...</p>
+      {(isLoading || mapState.isLoading) &&
+        mapState.territories.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 bg-surface-900/80">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-astral-silver text-lg">Loading map...</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Map Canvas - Área principal */}
-      {matchMapData && (
+      {mapState.territories.length > 0 && (
         <div className="flex-1 relative flex items-center justify-center pr-80">
           <MapCanvas
-            territories={matchMapData.territories}
-            players={matchMapData.players}
+            territories={mapState.territories}
+            players={state.players || []}
             width={Math.min(1400, window.innerWidth - 400)}
             height={Math.min(900, window.innerHeight - 100)}
             onTerritoryClick={handleTerritoryClick}
@@ -131,10 +132,10 @@ const MapPage: React.FC = () => {
       )}
 
       {/* Territory Modal - Sobrepõe apenas o mapa, não fullscreen */}
-      {openTerritoryModal && myPlayerId && matchId && (
+      {openTerritoryModal && state.myPlayerId && matchId && (
         <TerritoryModal
           territory={openTerritoryModal}
-          playerId={myPlayerId}
+          playerId={state.myPlayerId}
           matchId={matchId}
           onClose={handleCloseTerritory}
           onBuildSuccess={handleBuildSuccess}

@@ -2,14 +2,17 @@
 // Componente de chat reutilizável
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useChat } from "../context/ChatContext";
+import { useChat } from "../hooks/useChat";
 import { useAuth } from "../../auth";
 import { CHAT_CONFIG } from "../../../../../shared/types/chat.types";
 import { Button } from "@/components/Button";
+import { useCommands, isCommand } from "../../commands";
 
 interface ChatBoxProps {
   /** ID da unidade atual (para batalha) */
   currentUnitId?: string;
+  /** ID da unidade selecionada (para comandos) */
+  selectedUnitId?: string;
   /** Variante de estilo */
   variant?: "compact" | "full";
   /** Placeholder do input */
@@ -22,22 +25,40 @@ interface ChatBoxProps {
   showHeader?: boolean;
   /** Título do header */
   title?: string;
+  /** Se comandos estão habilitados (apenas em batalha) */
+  enableCommands?: boolean;
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = ({
   currentUnitId,
+  selectedUnitId,
   variant = "full",
   placeholder = "Digite uma mensagem...",
   maxHeight = "200px",
   onClose,
   showHeader = true,
   title = "Chat",
+  enableCommands = false,
 }) => {
   const { state, sendMessage, closeChat } = useChat();
   const { user } = useAuth();
   const [inputValue, setInputValue] = useState("");
+  const [commandFeedback, setCommandFeedback] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Hook de comandos
+  const { executeCommand, isLoading: commandLoading } = useCommands({
+    selectedUnitId,
+    onSuccess: (result) => {
+      setCommandFeedback(result.message);
+      setTimeout(() => setCommandFeedback(null), 5000);
+    },
+    onError: (error) => {
+      setCommandFeedback(`❌ ${error}`);
+      setTimeout(() => setCommandFeedback(null), 5000);
+    },
+  });
 
   // Auto-scroll para última mensagem
   useEffect(() => {
@@ -56,8 +77,18 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       e?.preventDefault();
 
       const trimmed = inputValue.trim();
-      if (!trimmed || state.isLoading) return;
+      if (!trimmed || state.isLoading || commandLoading) return;
 
+      // Verificar se é um comando
+      if (enableCommands && isCommand(trimmed)) {
+        const wasCommand = await executeCommand(trimmed);
+        if (wasCommand) {
+          setInputValue("");
+          return;
+        }
+      }
+
+      // Caso contrário, envia como mensagem normal
       try {
         await sendMessage(trimmed, currentUnitId);
         setInputValue("");
@@ -65,7 +96,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
         console.error("Erro ao enviar mensagem:", error);
       }
     },
-    [inputValue, currentUnitId, sendMessage, state.isLoading]
+    [
+      inputValue,
+      currentUnitId,
+      sendMessage,
+      state.isLoading,
+      commandLoading,
+      enableCommands,
+      executeCommand,
+    ]
   );
 
   const handleKeyDown = useCallback(
@@ -197,8 +236,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             setInputValue(e.target.value.slice(0, CHAT_CONFIG.maxLength))
           }
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={state.isLoading}
+          placeholder={enableCommands ? "Mensagem ou /comando..." : placeholder}
+          disabled={state.isLoading || commandLoading}
           className={`
             flex-1 px-2 py-1.5 rounded
             bg-surface-800/50 border border-surface-500/30
@@ -206,18 +245,26 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             focus:outline-none focus:border-stellar-amber/50
             disabled:opacity-50
             ${isCompact ? "text-xs" : "text-sm"}
+            ${inputValue.startsWith("/") ? "border-stellar-gold/50" : ""}
           `}
         />
         <Button
           type="submit"
           variant="primary"
           size="xs"
-          disabled={state.isLoading || !inputValue.trim()}
-          isLoading={state.isLoading}
+          disabled={state.isLoading || commandLoading || !inputValue.trim()}
+          isLoading={state.isLoading || commandLoading}
         >
           ➤
         </Button>
       </form>
+
+      {/* Command Feedback */}
+      {commandFeedback && (
+        <div className="px-2 py-1 text-stellar-gold text-xs text-center bg-stellar-gold/10 border-t border-stellar-gold/20">
+          {commandFeedback}
+        </div>
+      )}
 
       {/* Error */}
       {state.error && (

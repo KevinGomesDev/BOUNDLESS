@@ -1,13 +1,32 @@
 import React, { useEffect, useRef, useState } from "react";
-import type { Territory } from "../types/map.types";
-import type { MatchKingdom } from "../../match/types/match.types";
+
+// Tipos mínimos necessários para o MapCanvas
+export interface MapTerritory {
+  id: string;
+  type?: string;
+  terrainType: string;
+  polygonData: string;
+  ownerId: string | null;
+  size?: string;
+  isCapital?: boolean;
+  centerX?: number;
+  centerY?: number;
+  mapIndex?: number;
+}
+
+export interface MapPlayer {
+  id?: string;
+  odataId?: string;
+  playerColor?: string;
+  color?: string;
+}
 
 interface MapCanvasProps {
-  territories: Territory[];
-  players: MatchKingdom[];
+  territories: MapTerritory[];
+  players: MapPlayer[];
   width?: number;
   height?: number;
-  onTerritoryClick?: (territory: Territory) => void;
+  onTerritoryClick?: (territory: MapTerritory) => void;
 }
 
 const TERRAIN_COLORS: Record<string, string> = {
@@ -35,9 +54,8 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredTerritory, setHoveredTerritory] = useState<string | null>(null);
-  const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(
-    null
-  );
+  const [selectedTerritory, setSelectedTerritory] =
+    useState<MapTerritory | null>(null);
 
   // Calcular bounds do mapa
   const calculateBounds = () => {
@@ -135,7 +153,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
 
   const drawTerritory = (
     ctx: CanvasRenderingContext2D,
-    territory: Territory,
+    territory: MapTerritory,
     scale: number,
     offsetX: number,
     offsetY: number,
@@ -148,9 +166,12 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
 
     // Se tem dono, misturar com cor do jogador
     if (territory.ownerId) {
-      const player = players.find((p) => p.id === territory.ownerId);
+      const player = players.find(
+        (p) => (p.id || p.odataId) === territory.ownerId
+      );
       if (player) {
-        fillColor = blendColors(fillColor, player.playerColor, 0.3);
+        const playerColor = player.playerColor || player.color || "#888888";
+        fillColor = blendColors(fillColor, playerColor, 0.3);
       }
     }
 
@@ -213,7 +234,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
 
   const highlightTerritory = (
     ctx: CanvasRenderingContext2D,
-    territory: Territory,
+    territory: MapTerritory,
     scale: number,
     offsetX: number,
     offsetY: number,

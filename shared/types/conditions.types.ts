@@ -64,6 +64,7 @@ export interface ConditionEffects {
   markedByHunter?: boolean; // Marcado por Hunter's Mark
   advantageOnNextAttack?: boolean; // Vantagem no próximo ataque
   disadvantageOnAttacks?: boolean; // Desvantagem em ataques
+  guaranteedCrit?: boolean; // Próximo ataque é crítico garantido (QTE)
   shieldAllyDamageTransfer?: number; // Dano transferido de aliados adjacentes para si
   chargeBonusDamage?: number; // Dano bônus de investida
   chargeMinDistance?: number; // Distância mínima para investida

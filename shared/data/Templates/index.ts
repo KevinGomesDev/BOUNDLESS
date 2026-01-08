@@ -42,3 +42,6 @@ export * from "./EventsTemplates";
 
 // Conditions
 export * from "./ConditionsTemplates";
+
+// Commands
+export * from "./CommandsTemplates";

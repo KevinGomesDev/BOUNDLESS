@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface TurnNotificationProps {
   // Props de identificação de turno
-  currentPlayerId: string | undefined;
+  currentPlayerId: string | null | undefined;
   myUserId: string | undefined;
   round: number;
   isRoundStart?: boolean;

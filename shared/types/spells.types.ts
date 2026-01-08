@@ -4,6 +4,7 @@ import {
   type AbilityTargetType,
   type AbilityEffectType,
   type DynamicValue,
+  type TargetingShape,
   DEFAULT_RANGE_DISTANCE,
 } from "./ability.types";
 
@@ -13,6 +14,7 @@ export type {
   AbilityTargetType,
   AbilityEffectType,
   DynamicValue,
+  TargetingShape,
 };
 export { DEFAULT_RANGE_DISTANCE };
 
@@ -41,6 +43,7 @@ export interface SpellDefinition {
 
   // === ÁREA ===
   areaSize?: DynamicValue; // Tamanho da área de efeito (ex: 3 = 3x3)
+  targetingShape?: TargetingShape; // Forma do targeting/área de efeito (SINGLE = padrão)
 
   // === DANO/CURA ===
   baseDamage?: DynamicValue; // Dano base da spell (pode ser número ou ATTRIBUTE.FOCUS)

@@ -2,6 +2,7 @@
 // Componente de Topbar unificado que muda conteúdo baseado no contexto
 
 import React, { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useColyseusConnection } from "../../core";
 import { useAuth } from "../../features/auth";
 import { EventHistoryButton } from "../../features/events";
@@ -157,15 +158,21 @@ const UserInfo: React.FC = () => {
  * Botão de logout - minimalista
  */
 const LogoutButton: React.FC = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
 
   if (!user) return null;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
 
   return (
     <Button
       variant="danger"
       size="sm"
-      onClick={() => logout()}
+      onClick={handleLogout}
       title="Sair"
       icon={
         <svg

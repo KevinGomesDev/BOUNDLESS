@@ -1,5 +1,6 @@
 // Game Data Feature - Public API
-export { GameDataProvider, GameDataContext } from "./context/GameDataContext";
+// Migrado para Zustand - Context removido
+
 export {
   useGameData,
   useGameDataState,

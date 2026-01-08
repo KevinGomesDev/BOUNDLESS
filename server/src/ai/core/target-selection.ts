@@ -1,9 +1,17 @@
 // server/src/ai/core/target-selection.ts
 // Lógica de seleção de alvos para a IA
 
-import { BattleUnit } from "../../../../shared/types/battle.types";
+import {
+  BattleUnit,
+  BattleObstacle,
+} from "../../../../shared/types/battle.types";
 import type { AIBehaviorType, AIProfile } from "../types/ai.types";
 import { manhattanDistance } from "./pathfinding";
+import {
+  hasLineOfSightFull,
+  type UnitForLoS,
+  type ObstacleForLoS,
+} from "../../../../shared/utils/line-of-sight.utils";
 
 interface Position {
   x: number;
@@ -31,7 +39,8 @@ export function getVisionRange(unit: BattleUnit): number {
 }
 
 /**
- * Verifica se um alvo está dentro da visão da unidade
+ * Verifica se um alvo está dentro da visão da unidade (apenas distância)
+ * @deprecated Use isInVisionWithLoS para considerar obstáculos
  */
 export function isInVision(unit: BattleUnit, target: BattleUnit): boolean {
   const distance = manhattanDistance(
@@ -42,10 +51,54 @@ export function isInVision(unit: BattleUnit, target: BattleUnit): boolean {
 }
 
 /**
+ * Verifica se um alvo está dentro da visão da unidade considerando Line of Sight
+ * Leva em conta distância E bloqueadores (obstáculos + unidades)
+ */
+export function isInVisionWithLoS(
+  unit: BattleUnit,
+  target: BattleUnit,
+  obstacles: BattleObstacle[],
+  allUnits: BattleUnit[]
+): boolean {
+  // Primeiro verificar distância
+  const distance = manhattanDistance(
+    { x: unit.posX, y: unit.posY },
+    { x: target.posX, y: target.posY }
+  );
+  if (distance > getVisionRange(unit)) return false;
+
+  // Converter para formato de LoS
+  const obstaclesForLoS: ObstacleForLoS[] = obstacles.map((obs) => ({
+    posX: obs.posX,
+    posY: obs.posY,
+    destroyed: obs.destroyed,
+  }));
+
+  const unitsForLoS: UnitForLoS[] = allUnits.map((u) => ({
+    id: u.id,
+    posX: u.posX,
+    posY: u.posY,
+    isAlive: u.isAlive,
+    size: u.size,
+  }));
+
+  // Verificar Line of Sight
+  return hasLineOfSightFull(
+    unit.posX,
+    unit.posY,
+    target.posX,
+    target.posY,
+    obstaclesForLoS,
+    unitsForLoS,
+    unit.id,
+    target.id
+  );
+}
+
+/**
  * Filtra unidades baseado no campo de visão da unidade observadora
- * - Unidades aliadas: sempre visíveis
- * - Unidades inimigas: somente se dentro do visionRange
- * - Unidades mortas: não visíveis
+ * Versão sem LoS (compatibilidade)
+ * @deprecated Use filterVisibleUnitsWithLoS para considerar obstáculos
  */
 export function filterVisibleUnits(
   observerUnit: BattleUnit,
@@ -63,6 +116,32 @@ export function filterVisibleUnits(
 
     // Inimigos: verificar se estão dentro do campo de visão
     return isInVision(observerUnit, u);
+  });
+}
+
+/**
+ * Filtra unidades baseado no campo de visão da unidade observadora com Line of Sight
+ * - Unidades aliadas: sempre visíveis
+ * - Unidades inimigas: somente se dentro do visionRange E com linha de visão
+ * - Unidades mortas: não visíveis
+ */
+export function filterVisibleUnitsWithLoS(
+  observerUnit: BattleUnit,
+  allUnits: BattleUnit[],
+  obstacles: BattleObstacle[]
+): BattleUnit[] {
+  return allUnits.filter((u) => {
+    // Sempre ver a si mesmo
+    if (u.id === observerUnit.id) return true;
+
+    // Unidades do mesmo dono são sempre visíveis
+    if (u.ownerId === observerUnit.ownerId) return true;
+
+    // Unidades mortas não são visíveis
+    if (!u.isAlive) return false;
+
+    // Inimigos: verificar se estão dentro do campo de visão COM Line of Sight
+    return isInVisionWithLoS(observerUnit, u, obstacles, allUnits);
   });
 }
 

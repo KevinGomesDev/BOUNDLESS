@@ -43,7 +43,6 @@ export interface UseSkillExecutionReturn {
     target: BattleUnit,
     skill?: SkillDefinition
   ) => boolean;
-  getHighlightedUnitIds: (caster: BattleUnit | null) => Set<string>;
 }
 
 // =============================================================================
@@ -220,29 +219,6 @@ export function useSkillExecution(
     [pendingSkill]
   );
 
-  /**
-   * Retorna IDs das unidades que devem ser destacadas como alvos válidos
-   */
-  const getHighlightedUnitIds = useCallback(
-    (caster: BattleUnit | null): Set<string> => {
-      if (!pendingSkill || !caster) return new Set();
-
-      const highlighted = new Set<string>();
-
-      for (const target of validTargets) {
-        highlighted.add(target.id);
-      }
-
-      // Incluir self se permitido
-      if (canSelfCast) {
-        highlighted.add(caster.id);
-      }
-
-      return highlighted;
-    },
-    [pendingSkill, validTargets, canSelfCast]
-  );
-
   return {
     pendingSkill,
     validTargets,
@@ -253,6 +229,5 @@ export function useSkillExecution(
     executeSkillSelf,
     getSkillsForUnit,
     isValidTarget,
-    getHighlightedUnitIds,
   };
 }

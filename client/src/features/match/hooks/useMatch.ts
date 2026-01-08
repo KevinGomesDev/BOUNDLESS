@@ -1,61 +1,129 @@
-// Re-export from MatchColyseusContext
-// Este arquivo mantém compatibilidade com código antigo
+// client/src/features/match/hooks/useMatch.ts
+// Hook para Match usando Zustand store
 
-import { useMatchColyseus } from "../context/MatchColyseusContext";
+import { useMatchStore, useAuthStore } from "../../../stores";
 
-export { useMatchColyseus as useMatch };
+export function useMatch() {
+  const store = useMatchStore();
+  const userId = useAuthStore((state) => state.user?.id);
 
-/**
- * Hook para acessar apenas o estado do Match
- */
+  // Listeners são inicializados pelo StoreInitializer - não duplicar aqui
+
+  return {
+    state: {
+      matchId: store.matchId,
+      isHost: store.isHost,
+      status: store.status,
+      phase: store.phase,
+      currentTurn: store.currentTurn,
+      maxTurns: store.maxTurns,
+      turnTimer: store.turnTimer,
+      turnTimeLimit: store.turnTimeLimit,
+      activePlayerId: store.activePlayerId,
+      isMyTurn: store.isMyTurn,
+      players: store.players,
+      myPlayerId: store.myPlayerId,
+      territories: store.territories,
+      mapWidth: store.mapWidth,
+      mapHeight: store.mapHeight,
+      activeCrisis: store.activeCrisis,
+      winnerId: store.winnerId,
+      winReason: store.winReason,
+      openMatches: store.openMatches,
+      isLoading: store.isLoading,
+      error: store.error,
+    },
+
+    // Room management
+    createMatch: store.createMatch,
+    joinMatch: store.joinMatch,
+    leaveMatch: store.leaveMatch,
+
+    // Lobby
+    listOpenMatches: store.listOpenMatches,
+
+    // Preparation phase
+    setReady: store.setReady,
+    placeUnit: store.placeUnit,
+
+    // Turn actions
+    startTurn: store.startTurn,
+    endTurn: store.endTurn,
+    moveArmy: store.moveArmy,
+    attackTerritory: store.attackTerritory,
+    buildStructure: store.buildStructure,
+    recruitUnit: store.recruitUnit,
+    collectResources: store.collectResources,
+
+    // Utilities
+    getTerritory: store.getTerritory,
+    getMyTerritories: store.getMyTerritories,
+    getPlayer: store.getPlayer,
+    getMyPlayer: store.getMyPlayer,
+    clearError: store.clearError,
+  };
+}
+
+// Alias for compatibility
+export { useMatch as useMatchColyseus };
+
 export function useMatchState() {
-  const { state } = useMatchColyseus();
-  return state;
+  const store = useMatchStore();
+  return {
+    matchId: store.matchId,
+    isHost: store.isHost,
+    status: store.status,
+    phase: store.phase,
+    currentTurn: store.currentTurn,
+    maxTurns: store.maxTurns,
+    turnTimer: store.turnTimer,
+    turnTimeLimit: store.turnTimeLimit,
+    activePlayerId: store.activePlayerId,
+    isMyTurn: store.isMyTurn,
+    players: store.players,
+    myPlayerId: store.myPlayerId,
+    territories: store.territories,
+    mapWidth: store.mapWidth,
+    mapHeight: store.mapHeight,
+    activeCrisis: store.activeCrisis,
+    winnerId: store.winnerId,
+    winReason: store.winReason,
+    openMatches: store.openMatches,
+    isLoading: store.isLoading,
+    error: store.error,
+  };
 }
 
-/**
- * Hook para acessar o match atual (por compatibilidade)
- */
 export function useCurrentMatch() {
-  const { state } = useMatchColyseus();
+  const store = useMatchStore();
   return {
-    matchId: state.matchId,
-    status: state.status,
-    phase: state.phase,
+    matchId: store.matchId,
+    status: store.status,
+    phase: store.phase,
   };
 }
 
-/**
- * Hook para listar partidas abertas (stub - funcionalidade via Colyseus matchmaker)
- */
 export function useOpenMatches() {
-  // Com Colyseus, partidas abertas são gerenciadas via matchmaker
-  return [];
+  return useMatchStore((state) => state.openMatches);
 }
 
-/**
- * Hook para dados de preparação (por compatibilidade)
- */
 export function usePreparationData() {
-  const { state } = useMatchColyseus();
+  const store = useMatchStore();
+  const myPlayer = store.players.find((p) => p.odataId === store.myPlayerId);
   return {
-    players: state.players,
-    territories: state.territories,
-    isReady: state.players.find((p) => p.odataUserId === state.myPlayerId)
-      ?.isReady,
+    players: store.players,
+    territories: store.territories,
+    isReady: myPlayer?.isReady,
   };
 }
 
-/**
- * Hook para dados do mapa (por compatibilidade)
- */
 export function useMatchMapData() {
-  const { state } = useMatchColyseus();
+  const store = useMatchStore();
   return {
-    territories: state.territories,
-    mapWidth: state.mapWidth,
-    mapHeight: state.mapHeight,
-    players: state.players,
-    status: state.status,
+    territories: store.territories,
+    mapWidth: store.mapWidth,
+    mapHeight: store.mapHeight,
+    players: store.players,
+    status: store.status,
   };
 }

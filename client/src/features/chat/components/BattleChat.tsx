@@ -1,54 +1,55 @@
 // client/src/features/chat/components/BattleChat.tsx
 // Chat para batalha - abre com Enter, exibe balões sobre unidades
 
-import React, { useEffect, useCallback } from "react";
-import { ChatProvider, useChat } from "../context/ChatContext";
+import React, { useEffect } from "react";
+import { useChatStore } from "../../../stores";
+import { useChat } from "../hooks/useChat";
 import { ChatBox } from "./ChatBox";
 import { BattleBubbles } from "./BattleBubbles";
 import type { BattleUnit } from "../../../../../shared/types/battle.types";
+import { useEnterKey } from "../../../hooks/useHotkey";
 
-interface BattleChatInnerProps {
+interface BattleChatProps {
+  battleId: string;
   currentUnitId?: string;
+  /** ID da unidade atualmente selecionada (para comandos) */
+  selectedUnitId?: string;
   units?: BattleUnit[];
   currentUserId?: string;
 }
 
-const BattleChatInner: React.FC<BattleChatInnerProps> = ({
+export const BattleChat: React.FC<BattleChatProps> = ({
+  battleId,
   currentUnitId,
+  selectedUnitId,
   units = [],
   currentUserId = "",
 }) => {
-  const { state, openChat, closeChat, toggleChat } = useChat();
+  const isOpen = useChatStore((s) => s.isOpen);
+  const activeBubbles = useChatStore((s) => s.activeBubbles);
+  const openChat = useChatStore((s) => s.openChat);
+  const closeChat = useChatStore((s) => s.closeChat);
+  const toggleChat = useChatStore((s) => s.toggleChat);
+  const setContext = useChatStore((s) => s.setContext);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const reset = useChatStore((s) => s.reset);
 
-  // Handler para tecla Enter
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      // Ignorar se estiver em um input
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        toggleChat();
-      }
-    },
-    [toggleChat]
-  );
-
+  // Define o contexto do chat como BATTLE
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
+    setContext("BATTLE", battleId);
+    loadHistory();
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      reset();
     };
-  }, [handleKeyDown]);
+  }, [battleId, setContext, loadHistory, reset]);
 
-  if (!state.isOpen) {
+  // Toggle chat com Enter usando react-hotkeys-hook
+  useEnterKey(toggleChat, {
+    enabled: !isOpen,
+    ignoreInputs: true,
+  });
+
+  if (!isOpen) {
     // Indicador sutil de que o chat existe + Balões de fala
     return (
       <>
@@ -56,7 +57,7 @@ const BattleChatInner: React.FC<BattleChatInnerProps> = ({
         <BattleBubbles
           units={units}
           currentUserId={currentUserId}
-          activeBubbles={state.activeBubbles}
+          activeBubbles={activeBubbles}
         />
 
         <div className="fixed bottom-4 right-4 z-40">
@@ -86,48 +87,24 @@ const BattleChatInner: React.FC<BattleChatInnerProps> = ({
       <BattleBubbles
         units={units}
         currentUserId={currentUserId}
-        activeBubbles={state.activeBubbles}
+        activeBubbles={activeBubbles}
       />
 
       <div className="fixed bottom-4 right-4 z-40 w-72">
         <ChatBox
           currentUnitId={currentUnitId}
+          selectedUnitId={selectedUnitId}
           variant="compact"
-          placeholder="Mensagem... (Enter para enviar)"
+          placeholder="Mensagem ou /comando..."
           maxHeight="150px"
           title="Chat de Batalha"
           onClose={closeChat}
+          enableCommands={true}
         />
       </div>
     </>
   );
 };
 
-// Componente wrapper com Provider
-interface BattleChatProps {
-  battleId: string;
-  currentUnitId?: string;
-  units?: BattleUnit[];
-  currentUserId?: string;
-}
-
-export const BattleChat: React.FC<BattleChatProps> = ({
-  battleId,
-  currentUnitId,
-  units = [],
-  currentUserId = "",
-}) => {
-  return (
-    <ChatProvider context="BATTLE" contextId={battleId}>
-      <BattleChatInner
-        currentUnitId={currentUnitId}
-        units={units}
-        currentUserId={currentUserId}
-      />
-    </ChatProvider>
-  );
-};
-
 // Hook para acessar balões de dentro do ArenaBattleCanvas
-// (precisa ser usado dentro de ChatProvider)
-export { useChat as useBattleChat };
+export const useBattleChat = useChat;

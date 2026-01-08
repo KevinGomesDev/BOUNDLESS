@@ -1,10 +1,5 @@
 // Match Feature - Public API
-
-// Context (Colyseus)
-export {
-  MatchColyseusProvider,
-  useMatchColyseus,
-} from "./context/MatchColyseusContext";
+// Migrado para Zustand - Context removido
 
 // Hooks
 export {

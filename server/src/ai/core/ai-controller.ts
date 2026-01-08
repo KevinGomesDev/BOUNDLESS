@@ -23,7 +23,7 @@ import {
   findSkillByCode,
   isCommonAction,
 } from "../../../../shared/data/skills.data";
-import { filterVisibleUnits } from "./target-selection";
+import { filterVisibleUnitsWithLoS } from "./target-selection";
 
 // ID especial para o "jogador" IA
 export const AI_PLAYER_ID = "__AI__";
@@ -69,7 +69,7 @@ export function isAITurn(battle: ArenaBattle): boolean {
 /**
  * Cria o contexto de batalha para a IA
  * Suporta tanto Battle (servidor) quanto ArenaBattle (client)
- * IMPORTANTE: Filtra unidades baseado no campo de visão (fog of war)
+ * IMPORTANTE: Filtra unidades baseado no campo de visão (fog of war) com Line of Sight
  */
 export function createBattleContext(
   battle:
@@ -88,14 +88,17 @@ export function createBattleContext(
   // Suportar ambos os formatos (battleId do client, id do servidor)
   const battleId = (battle as ArenaBattle).battleId || (battle as any).id;
 
-  // Filtrar unidades baseado no campo de visão da unidade
-  const visibleUnits = filterVisibleUnits(unit, battle.units);
+  // Obter obstáculos
+  const obstacles = battle.config.map.obstacles || [];
+
+  // Filtrar unidades baseado no campo de visão da unidade (com Line of Sight)
+  const visibleUnits = filterVisibleUnitsWithLoS(unit, battle.units, obstacles);
 
   return {
     battleId,
     round: battle.round,
     units: visibleUnits, // Somente unidades visíveis!
-    obstacles: battle.config.map.obstacles || [],
+    obstacles,
     gridSize: {
       width: battle.config.grid.width,
       height: battle.config.grid.height,

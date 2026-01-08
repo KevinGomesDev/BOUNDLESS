@@ -15,6 +15,7 @@ import {
   type UnitSize,
 } from "../../../shared/config/global.config";
 import type { BattleUnit } from "../../../shared/types/battle.types";
+import { applyDamage } from "../utils/damage.utils";
 
 // =============================================================================
 // TIPOS
@@ -358,8 +359,17 @@ export function transferDamageToEidolon(
   eidolon: BattleUnit,
   damage: number
 ): { damageDealt: number; eidolonDefeated: boolean } {
-  // Dano verdadeiro vai direto no HP
-  eidolon.currentHp = Math.max(0, eidolon.currentHp - damage);
+  // Usar função centralizada de dano (dano verdadeiro para Eidolon)
+  const result = applyDamage(
+    eidolon.physicalProtection,
+    eidolon.magicalProtection,
+    eidolon.currentHp,
+    damage,
+    "VERDADEIRO"
+  );
+  eidolon.physicalProtection = result.newPhysicalProtection;
+  eidolon.magicalProtection = result.newMagicalProtection;
+  eidolon.currentHp = result.newHp;
 
   const eidolonDefeated = eidolon.currentHp <= 0;
   if (eidolonDefeated) {
@@ -367,7 +377,7 @@ export function transferDamageToEidolon(
   }
 
   return {
-    damageDealt: damage,
+    damageDealt: result.damageToHp,
     eidolonDefeated,
   };
 }

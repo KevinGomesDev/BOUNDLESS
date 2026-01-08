@@ -1,5 +1,5 @@
-import { useEffect, useCallback } from "react";
 import type { BattleUnit } from "../../../../../shared/types/battle.types";
+import { useMovementKeys } from "../../../hooks/useHotkey";
 
 interface UseBattleKeyboardOptions {
   selectedUnit: BattleUnit | null;
@@ -11,6 +11,7 @@ interface UseBattleKeyboardOptions {
 
 /**
  * Hook para controle WASD do movimento de unidades na batalha
+ * Usa react-hotkeys-hook internamente
  */
 export function useBattleKeyboard({
   selectedUnit,
@@ -19,52 +20,18 @@ export function useBattleKeyboard({
   onMoveDirection,
   enabled = true,
 }: UseBattleKeyboardOptions): void {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (!enabled || !selectedUnit || !isMyTurn || !canMove) return;
+  const canAct = enabled && !!selectedUnit && isMyTurn && canMove;
 
-      // Ignorar se estiver em input/textarea
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      let dx = 0;
-      let dy = 0;
-
-      switch (e.key.toLowerCase()) {
-        case "w":
-        case "arrowup":
-          dy = -1;
-          break;
-        case "s":
-        case "arrowdown":
-          dy = 1;
-          break;
-        case "a":
-        case "arrowleft":
-          dx = -1;
-          break;
-        case "d":
-        case "arrowright":
-          dx = 1;
-          break;
-        default:
-          return;
-      }
-
-      e.preventDefault();
-      onMoveDirection(dx, dy);
+  useMovementKeys(
+    {
+      onUp: () => onMoveDirection(0, -1),
+      onDown: () => onMoveDirection(0, 1),
+      onLeft: () => onMoveDirection(-1, 0),
+      onRight: () => onMoveDirection(1, 0),
     },
-    [enabled, selectedUnit, isMyTurn, canMove, onMoveDirection]
+    {
+      enabled: canAct,
+      ignoreInputs: true,
+    }
   );
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [enabled, handleKeyDown]);
 }

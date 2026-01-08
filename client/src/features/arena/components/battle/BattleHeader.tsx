@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef } from "react";
-import type { ArenaBattle, ArenaKingdom } from "../../types/arena.types";
-import type { BattleUnit } from "../../../../../../shared/types/battle.types";
+import type { ArenaBattleComputed } from "../../../../stores/arenaStore";
+import type { BattleUnitState } from "@/services/colyseus.service";
 import { getHpColor } from "../../../../config/colors.config";
 import { Tooltip } from "@/components/Tooltip";
 import {
@@ -38,7 +38,7 @@ const formatTimer = (seconds: number): string => {
 
 /** Ícone de unidade na linha de iniciativa */
 const InitiativeIcon: React.FC<{
-  unit: BattleUnit;
+  unit: BattleUnitState;
   colorIndex: number;
   isActive: boolean;
   isSelected: boolean;
@@ -131,7 +131,7 @@ const InitiativeIcon: React.FC<{
 
 /** Badge de reino */
 const KingdomTag: React.FC<{
-  kingdom: ArenaKingdom;
+  kingdom: { kingdomName: string; ownerId: string };
   colorIndex: number;
   unitsAlive: number;
   totalUnits: number;
@@ -177,11 +177,11 @@ const KingdomTag: React.FC<{
 // =============================================================================
 
 interface BattleHeaderProps {
-  battle: ArenaBattle;
-  units: BattleUnit[];
+  battle: ArenaBattleComputed;
+  units: BattleUnitState[];
   currentUserId: string;
   selectedUnitId?: string;
-  onUnitClick?: (unit: BattleUnit) => void;
+  onUnitClick?: (unit: BattleUnitState) => void;
   onEndTurn?: () => void;
   canEndTurn?: boolean;
 }
@@ -197,9 +197,10 @@ export const BattleHeader: React.FC<BattleHeaderProps> = ({
 }) => {
   // Processar dados
   const { kingdomStats, sortedUnits, kingdomColorMap } = useMemo(() => {
+    type KingdomInfo = ArenaBattleComputed["kingdoms"][number];
     const kingdomsMap = new Map<
       string,
-      { kingdom: ArenaKingdom; units: BattleUnit[] }
+      { kingdom: KingdomInfo; units: BattleUnitState[] }
     >();
 
     battle.kingdoms.forEach((kingdom) => {

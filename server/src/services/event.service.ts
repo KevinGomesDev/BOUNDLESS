@@ -10,7 +10,10 @@ import type {
   EventContext,
   EventsPageResponse,
 } from "../../../shared/types/events.types";
-import type { BattleUnit } from "../../../shared/types/battle.types";
+import type {
+  BattleUnit,
+  BattleObstacle,
+} from "../../../shared/types/battle.types";
 import {
   getPlayersWithVisionAt,
   getPlayersWithVisionAtAny,
@@ -380,6 +383,8 @@ export async function getEventsLegacy(
 interface EventVisibilityParams {
   /** Todas as unidades da batalha para cálculo de visão */
   allUnits: BattleUnit[];
+  /** Obstáculos da batalha para cálculo de Line of Sight (opcional) */
+  obstacles?: BattleObstacle[];
   /** Posição(ões) do evento - se qualquer uma for visível, o jogador recebe o evento */
   positions: Array<{ x: number; y: number }>;
   /** IDs de jogadores que SEMPRE devem receber o evento (ex: dono da unidade morta) */
@@ -407,8 +412,12 @@ export async function createCombatEvent(params: {
   let targetUserIds: string[] | undefined;
 
   if (params.visibility) {
-    const { allUnits, positions, alwaysInclude } = params.visibility;
-    const playersWithVision = getPlayersWithVisionAtAny(allUnits, positions);
+    const { allUnits, obstacles, positions, alwaysInclude } = params.visibility;
+    const playersWithVision = getPlayersWithVisionAtAny(
+      allUnits,
+      positions,
+      obstacles
+    );
 
     // Adicionar jogadores que sempre devem receber
     if (alwaysInclude) {
@@ -458,8 +467,12 @@ export async function createMovementEvent(params: {
   let targetUserIds: string[] | undefined;
 
   if (params.visibility) {
-    const { allUnits, positions, alwaysInclude } = params.visibility;
-    const playersWithVision = getPlayersWithVisionAtAny(allUnits, positions);
+    const { allUnits, obstacles, positions, alwaysInclude } = params.visibility;
+    const playersWithVision = getPlayersWithVisionAtAny(
+      allUnits,
+      positions,
+      obstacles
+    );
 
     // Adicionar jogadores que sempre devem receber
     if (alwaysInclude) {
@@ -531,8 +544,12 @@ export async function createConditionEvent(params: {
   let targetUserIds: string[] | undefined;
 
   if (params.visibility) {
-    const { allUnits, positions, alwaysInclude } = params.visibility;
-    const playersWithVision = getPlayersWithVisionAtAny(allUnits, positions);
+    const { allUnits, obstacles, positions, alwaysInclude } = params.visibility;
+    const playersWithVision = getPlayersWithVisionAtAny(
+      allUnits,
+      positions,
+      obstacles
+    );
 
     // Adicionar jogadores que sempre devem receber
     if (alwaysInclude) {
@@ -585,8 +602,12 @@ export async function createSkillEvent(params: {
   let targetUserIds: string[] | undefined;
 
   if (params.visibility) {
-    const { allUnits, positions, alwaysInclude } = params.visibility;
-    const playersWithVision = getPlayersWithVisionAtAny(allUnits, positions);
+    const { allUnits, obstacles, positions, alwaysInclude } = params.visibility;
+    const playersWithVision = getPlayersWithVisionAtAny(
+      allUnits,
+      positions,
+      obstacles
+    );
 
     // Adicionar jogadores que sempre devem receber
     if (alwaysInclude) {

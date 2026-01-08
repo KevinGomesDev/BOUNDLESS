@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMatch } from "../features/match";
 import { useArena } from "../features/arena";
 import { EventHistory } from "../features/events";
@@ -15,10 +16,8 @@ import {
   MatchLobby,
   ArenaLobby,
 } from "../components/Dashboard";
-import { ArenaBattleView } from "../features/arena";
 import { SessionGuard } from "../components/SessionGuard";
 import { Topbar } from "../components/Topbar";
-import MapPage from "./MapPage";
 import { CreateKingdomModal, useKingdom } from "../features/kingdom";
 import { GlobalChat } from "../features/chat";
 import { CharacterCreatorModal } from "../features/character-creator";
@@ -139,6 +138,7 @@ const ArenaSectionWrapper: React.FC = () => {
  * Visão única com todas as seções lado a lado
  */
 const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const { state: matchState } = useMatch();
   const { state: arenaState } = useArena();
   const { kingdoms } = useKingdom();
@@ -153,15 +153,19 @@ const DashboardPage: React.FC = () => {
   // Verificar limite de reinos
   const isKingdomLimitReached = kingdoms.length >= MAX_KINGDOMS_PER_USER;
 
-  // Se há uma partida ativa, vai direto para o mapa
-  if (matchState.matchId && matchState.status !== "IDLE") {
-    return <MapPage />;
-  }
+  // Redirecionar para partida se ativa
+  useEffect(() => {
+    if (matchState.matchId && matchState.status !== "IDLE") {
+      navigate("/match", { replace: true });
+    }
+  }, [matchState.matchId, matchState.status, navigate]);
 
-  // Se está em batalha de arena, mostrar tela de batalha
-  if (arenaState.isInBattle || arenaState.winnerId) {
-    return <ArenaBattleView />;
-  }
+  // Redirecionar para arena se em batalha
+  useEffect(() => {
+    if (arenaState.isInBattle || arenaState.winnerId) {
+      navigate("/arena", { replace: true });
+    }
+  }, [arenaState.isInBattle, arenaState.winnerId, navigate]);
 
   return (
     <div className="relative min-h-screen flex flex-col bg-cosmos-void">

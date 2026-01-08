@@ -1,4 +1,5 @@
-import React, { useEffect, useCallback } from "react";
+import React from "react";
+import { useEscapeKey } from "../../../../hooks/useHotkey";
 
 interface PauseMenuProps {
   isOpen: boolean;
@@ -14,20 +15,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   onClose,
   onSurrender,
 }) => {
-  // Fechar com ESC (toggle)
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
-      }
-    },
-    [isOpen, onClose]
-  );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  // Fechar com ESC usando react-hotkeys-hook
+  useEscapeKey(onClose, { enabled: isOpen });
 
   if (!isOpen) return null;
 

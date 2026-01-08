@@ -5,6 +5,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useArena } from "../hooks/useArena";
 import { useAuth } from "../../auth";
 import {
@@ -21,7 +22,8 @@ import {
 } from "./battle";
 import { TurnNotification } from "./shared";
 import { FullScreenLoading } from "@/components/FullScreenLoading";
-import { ChatProvider, useChat } from "../../chat";
+import { useChatStore } from "../../../stores";
+import { useChat } from "../../chat";
 import { ChatBox } from "../../chat/components/ChatBox";
 import type { BattleUnit } from "../../../../../shared/types/battle.types";
 import { getSpellByCode } from "../../../../../shared/data/spells.data";
@@ -31,48 +33,69 @@ import {
 } from "../../../../../shared/data/skills.data";
 import { resolveDynamicValue } from "../../../../../shared/types/ability.types";
 import { getFullMovementInfo } from "../../../../../shared/utils/engagement.utils";
-import {
-  getValidSkillTargets,
-  isValidSkillTarget,
-} from "../../../../../shared/utils/skill-validation";
+import { isValidSkillTarget } from "../../../../../shared/utils/skill-validation";
 import {
   isValidSpellTarget,
   isValidSpellPosition,
 } from "../../../../../shared/utils/spell-validation";
+import { useTargeting } from "../hooks/useTargeting";
 import { colyseusService } from "../../../services/colyseus.service";
 import {
   isPlayerControllable,
   getControllableUnits,
 } from "../utils/unit-control";
+import {
+  useHotkey,
+  useMovementKeys,
+  useEnterKey,
+} from "../../../hooks/useHotkey";
+import { useQTE, QTEOverlay } from "../../qte";
 
 /**
  * ArenaBattleView - Wrapper com ChatProvider
  */
 export const ArenaBattleView: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
-    state: { battle },
+    state: { battle, isInBattle, winnerId },
   } = useArena();
+
+  // Se não está em batalha e não tem resultado, redireciona para dashboard
+  useEffect(() => {
+    if (!isInBattle && !winnerId && !battle) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isInBattle, winnerId, battle, navigate]);
 
   // Precisa do battleId para o ChatProvider
   if (!battle || !user) {
     return <FullScreenLoading message="Preparando a arena de batalha..." />;
   }
 
-  return (
-    <ChatProvider context="BATTLE" contextId={battle.battleId}>
-      <ArenaBattleViewInner />
-    </ChatProvider>
-  );
+  return <ArenaBattleViewInner battleId={battle.battleId} />;
 };
 
 /**
- * ArenaBattleViewInner - Conteúdo da batalha (dentro do ChatProvider)
+ * ArenaBattleViewInner - Conteúdo da batalha
  */
-const ArenaBattleViewInner: React.FC = () => {
+const ArenaBattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
   const { user } = useAuth();
-  const { state: chatState } = useChat();
+  const activeBubbles = useChatStore((s) => s.activeBubbles);
+  const setContext = useChatStore((s) => s.setContext);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const reset = useChatStore((s) => s.reset);
   const canvasRef = useRef<ArenaBattleCanvasRef>(null);
+
+  // Configura o contexto do chat para BATTLE
+  useEffect(() => {
+    setContext("BATTLE", battleId);
+    loadHistory();
+    return () => {
+      reset();
+    };
+  }, [battleId, setContext, loadHistory, reset]);
+
   const {
     state: {
       battle,
@@ -95,6 +118,10 @@ const ArenaBattleViewInner: React.FC = () => {
 
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null); // Ação aguardando alvo
+  const [hoveredCell, setHoveredCell] = useState<{
+    x: number;
+    y: number;
+  } | null>(null); // Célula sob o mouse (para targeting)
   const [unitDirection, setUnitDirection] = useState<{
     unitId: string;
     direction: SpriteDirection;
@@ -105,6 +132,31 @@ const ArenaBattleViewInner: React.FC = () => {
   const isMovingRef = useRef<boolean>(false); // Lock para evitar cliques rápidos
   const cameraCenteredRef = useRef<string | null>(null); // Controla se já centralizou a câmera neste turno
   const lastRoundRef = useRef<number | null>(null); // Rastreia a última rodada para detectar mudança
+
+  // Hook do QTE (Quick Time Event)
+  const {
+    state: qteState,
+    isLocalResponder: isQTEResponder,
+    respondToQTE,
+    isQTEVisualActive,
+  } = useQTE({
+    battleId,
+    localPlayerId: user?.id ?? null,
+  });
+
+  // Encontrar nomes das unidades do QTE
+  const qteAttackerUnit = useMemo(() => {
+    if (!qteState.activeQTE?.attackerUnitId) return null;
+    return (
+      units.find((u) => u.id === qteState.activeQTE?.attackerUnitId) ?? null
+    );
+  }, [qteState.activeQTE?.attackerUnitId, units]);
+
+  const qteResponderUnit = useMemo(() => {
+    if (!qteState.activeQTE?.responderId) return null;
+    // O responder pode ser o defensor (unitId diferente do attackerUnitId)
+    return units.find((u) => u.id === qteState.activeQTE?.unitId) ?? null;
+  }, [qteState.activeQTE?.responderId, qteState.activeQTE?.unitId, units]);
 
   // Ouvir eventos de combate para disparar animações e centralizar câmera
   useEffect(() => {
@@ -206,39 +258,36 @@ const ArenaBattleViewInner: React.FC = () => {
     };
   }, [units, user]);
 
-  // Handler para atalhos de teclado (ESC = menu pausa, Espaço = finalizar turno)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar se estiver digitando em um input/textarea
-      const target = e.target as HTMLElement;
-      const isTyping =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
-
-      if (e.key === "Escape" && !isPauseMenuOpen) {
+  // Handler para ESC - abrir menu de pausa
+  useHotkey(
+    "escape",
+    () => {
+      if (!isPauseMenuOpen) {
         setIsPauseMenuOpen(true);
       }
-      // Espaço finaliza o turno se for meu turno e tenho unidade selecionada
-      // MAS não se estiver digitando no chat
-      if (e.key === " " && battle && user && !isTyping) {
-        e.preventDefault(); // Evitar scroll da página
-        const isMyTurn = battle.currentPlayerId === user.id;
-        const myUnit = units.find(
-          (u) => isPlayerControllable(u, user.id) && u.isAlive
+    },
+    { ignoreInputs: false }
+  );
+
+  // Handler para Espaço - finalizar turno
+  useHotkey(
+    "space",
+    () => {
+      if (!battle || !user) return;
+      const isMyTurn = battle.currentPlayerId === user.id;
+      const myUnit = units.find(
+        (u) => isPlayerControllable(u, user.id) && u.isAlive
+      );
+      if (isMyTurn && myUnit && myUnit.hasStartedAction) {
+        console.log(
+          "%c[ArenaBattleView] ⌨️ Espaço pressionado - Finalizando turno",
+          "color: #f59e0b; font-weight: bold;"
         );
-        if (isMyTurn && myUnit && myUnit.hasStartedAction) {
-          console.log(
-            "%c[ArenaBattleView] ⌨️ Espaço pressionado - Finalizando turno",
-            "color: #f59e0b; font-weight: bold;"
-          );
-          endAction(myUnit.id);
-        }
+        endAction(myUnit.id);
       }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPauseMenuOpen, battle, user, units, endAction]);
+    },
+    { ignoreInputs: true }
+  );
 
   // Resetar flags quando muda de turno
   useEffect(() => {
@@ -327,11 +376,12 @@ const ArenaBattleViewInner: React.FC = () => {
       }
 
       // Iniciar ação se ainda não iniciou
-      const hasNoActiveUnit = !battle.activeUnitId;
+      // Verificar se a unidade ativa é a minha e se ainda não chamei beginAction
+      const isMyActiveUnit = battle.activeUnitId === myUnit.id;
       const unitNotStarted = !myUnit.hasStartedAction;
       const notCalledYet = beginActionCalledRef.current !== turnKey;
 
-      if (hasNoActiveUnit && unitNotStarted && notCalledYet) {
+      if (isMyActiveUnit && unitNotStarted && notCalledYet) {
         console.log(
           `[ArenaBattleView] 🎬 Auto-iniciando ação para ${myUnit.name}`
         );
@@ -376,10 +426,23 @@ const ArenaBattleViewInner: React.FC = () => {
     }
   }, [arenaError]);
 
-  // Handler para centralizar mapa em uma unidade (chamado pelo BattleHeader)
-  const handleInitiativeUnitClick = useCallback((unit: BattleUnit) => {
-    canvasRef.current?.centerOnUnit(unit.id);
-  }, []);
+  // Handler para centralizar mapa em uma unidade E selecioná-la (chamado pelo BattleHeader)
+  const handleInitiativeUnitClick = useCallback(
+    (unit: BattleUnit) => {
+      // Selecionar a unidade se for do jogador (controlável)
+      if (user && isPlayerControllable(unit, user.id)) {
+        setSelectedUnitId(unit.id);
+        // Limpar ação pendente ao trocar de unidade
+        setPendingAction(null);
+        // Sempre centralizar câmera na unidade do jogador
+        canvasRef.current?.centerOnUnit(unit.id);
+      } else {
+        // Para unidades inimigas, só centralizar se estiver na visão do jogador
+        canvasRef.current?.centerOnUnitIfVisible(unit.id);
+      }
+    },
+    [user]
+  );
 
   // Se só temos battleResult (sem battle), mostrar apenas o modal de resultado
   if (!battle && battleResult && user) {
@@ -410,40 +473,48 @@ const ArenaBattleViewInner: React.FC = () => {
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
   const myUnits = getControllableUnits(units, user.id);
 
+  // Hook de targeting - calcula preview de células selecionáveis e afetadas
+  const { targetingPreview } = useTargeting({
+    selectedUnit,
+    pendingAction,
+    hoveredCell,
+    units,
+    gridConfig: {
+      width: battle.config.grid.width,
+      height: battle.config.grid.height,
+      obstacles: battle.config.map?.obstacles || [],
+    },
+  });
+
+  // Atualizar direção do sprite quando estiver em modo de mira
+  useEffect(() => {
+    if (!selectedUnit || !targetingPreview?.direction) return;
+
+    // Converter TargetingDirection para SpriteDirection (left/right)
+    const dir = targetingPreview.direction;
+    let spriteDir: SpriteDirection;
+
+    // EAST, NORTHEAST, SOUTHEAST = right
+    // WEST, NORTHWEST, SOUTHWEST = left
+    // NORTH, SOUTH = manter direção atual ou default right
+    if (dir === "EAST" || dir === "NORTHEAST" || dir === "SOUTHEAST") {
+      spriteDir = "right";
+    } else if (dir === "WEST" || dir === "NORTHWEST" || dir === "SOUTHWEST") {
+      spriteDir = "left";
+    } else {
+      // Para NORTH/SOUTH, manter a direção atual se existir
+      return;
+    }
+
+    setUnitDirection({ unitId: selectedUnit.id, direction: spriteDir });
+  }, [selectedUnit, targetingPreview?.direction]);
+
   // Unidade ativa do jogador (para passar pro TurnNotification)
   const myActiveUnit = units.find(
     (u) => isPlayerControllable(u, user.id) && u.isAlive
   );
 
-  // Calcular unidades destacadas como alvos válidos para skill/spell pendente
-  const highlightedUnitIds = useMemo(() => {
-    const highlighted = new Set<string>();
-
-    if (!selectedUnit || !pendingAction) return highlighted;
-
-    // Verificar se é uma skill (não é ação comum nem spell)
-    const isBasicAction = isCommonAction(pendingAction);
-    const isSpell = pendingAction.startsWith("spell:");
-
-    if (isBasicAction || isSpell) return highlighted;
-
-    // É uma skill - buscar definição
-    const skill = findSkillByCode(pendingAction);
-    if (!skill) return highlighted;
-
-    // Obter alvos válidos
-    const validTargets = getValidSkillTargets(selectedUnit, skill, units);
-    validTargets.forEach((target) => highlighted.add(target.id));
-
-    // Incluir self se skill permite
-    if (skill.targetType === "UNIT" || skill.targetType === "SELF") {
-      highlighted.add(selectedUnit.id);
-    }
-
-    return highlighted;
-  }, [selectedUnit, pendingAction, units]);
-
-  // Preview de área para spells e skills de área
+  // Preview de área para spells e skills de área (legado - mantido para compatibilidade)
   const areaPreview = useMemo(() => {
     if (!pendingAction || !selectedUnit) return null;
 
@@ -601,40 +672,16 @@ const ArenaBattleViewInner: React.FC = () => {
     ]
   );
 
-  // Event listener para teclas WASD
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar se estiver digitando em um input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      switch (e.key.toLowerCase()) {
-        case "w":
-          e.preventDefault();
-          handleKeyboardMove("up");
-          break;
-        case "s":
-          e.preventDefault();
-          handleKeyboardMove("down");
-          break;
-        case "a":
-          e.preventDefault();
-          handleKeyboardMove("left");
-          break;
-        case "d":
-          e.preventDefault();
-          handleKeyboardMove("right");
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyboardMove]);
+  // Teclas WASD para movimento usando react-hotkeys-hook
+  useMovementKeys(
+    {
+      onUp: () => handleKeyboardMove("up"),
+      onDown: () => handleKeyboardMove("down"),
+      onLeft: () => handleKeyboardMove("left"),
+      onRight: () => handleKeyboardMove("right"),
+    },
+    { ignoreInputs: true }
+  );
 
   const handleUnitClick = (unit: BattleUnit) => {
     console.log(
@@ -942,7 +989,98 @@ const ArenaBattleViewInner: React.FC = () => {
       return;
     }
 
-    // Se há uma spell pendente que targetiza posição
+    // === SISTEMA DE MIRA DIRECIONAL ===
+    // Se há uma ação pendente com targeting preview, confirmar na célula apontada
+    if (
+      pendingAction &&
+      targetingPreview &&
+      targetingPreview.isValidTarget &&
+      targetingPreview.affectedCells.length > 0
+    ) {
+      // Usar a primeira célula afetada como alvo (ou todas para ações de área)
+      const targetCell = targetingPreview.affectedCells[0];
+
+      // Verificar se é ATTACK (ação comum)
+      if (pendingAction === "ATTACK" || pendingAction === "attack") {
+        // Verificar se há uma unidade ou obstáculo na célula alvo
+        const targetUnit = units.find(
+          (u) => u.isAlive && u.posX === targetCell.x && u.posY === targetCell.y
+        );
+        const targetObstacle = battle.config.map?.obstacles?.find(
+          (o: { posX: number; posY: number; destroyed?: boolean }) =>
+            !o.destroyed && o.posX === targetCell.x && o.posY === targetCell.y
+        );
+
+        console.log(
+          "%c[ArenaBattleView] 🎯 Confirmando ataque direcional!",
+          "color: #ef4444; font-weight: bold;",
+          {
+            targetCell,
+            hasUnit: !!targetUnit,
+            hasObstacle: !!targetObstacle,
+          }
+        );
+
+        // Executar ataque - mesmo que não haja alvo, a ação é gasta
+        attackUnit(
+          selectedUnit.id,
+          targetUnit?.id,
+          targetObstacle
+            ? `obstacle_${targetCell.x}_${targetCell.y}`
+            : undefined,
+          { x: targetCell.x, y: targetCell.y }
+        );
+        setPendingAction(null);
+        return;
+      }
+
+      // Se é uma spell
+      if (pendingAction.startsWith("spell:")) {
+        const spellCode = pendingAction.replace("spell:", "");
+
+        // Verificar se há unidade alvo
+        const targetUnit = units.find(
+          (u) => u.isAlive && u.posX === targetCell.x && u.posY === targetCell.y
+        );
+
+        console.log(
+          "%c[ArenaBattleView] 🔮 Confirmando spell direcional!",
+          "color: #a855f7; font-weight: bold;",
+          { spellCode, targetCell, hasUnit: !!targetUnit }
+        );
+
+        castSpell(selectedUnit.id, spellCode, targetUnit?.id, {
+          x: targetCell.x,
+          y: targetCell.y,
+        });
+        setPendingAction(null);
+        return;
+      }
+
+      // Se é uma skill (não ação comum)
+      if (!isCommonAction(pendingAction)) {
+        const targetUnit = units.find(
+          (u) => u.isAlive && u.posX === targetCell.x && u.posY === targetCell.y
+        );
+
+        console.log(
+          "%c[ArenaBattleView] ✨ Confirmando skill direcional!",
+          "color: #fbbf24; font-weight: bold;",
+          { skillCode: pendingAction, targetCell, hasUnit: !!targetUnit }
+        );
+
+        executeAction("use_skill", selectedUnit.id, {
+          skillCode: pendingAction,
+          casterUnitId: selectedUnit.id,
+          targetUnitId: targetUnit?.id,
+          targetPosition: { x: targetCell.x, y: targetCell.y },
+        });
+        setPendingAction(null);
+        return;
+      }
+    }
+
+    // Se há uma spell pendente que targetiza posição (fallback para sistema antigo)
     if (pendingAction?.startsWith("spell:") && selectedUnit) {
       const spellCode = pendingAction.replace("spell:", "");
       const spell = getSpellByCode(spellCode);
@@ -1205,11 +1343,12 @@ const ArenaBattleViewInner: React.FC = () => {
           onCellClick={handleCellClick}
           onObstacleClick={handleObstacleClick}
           onRightClick={() => setPendingAction(null)}
+          onCellHover={setHoveredCell}
           unitDirection={unitDirection}
           pendingAction={pendingAction}
-          activeBubbles={chatState.activeBubbles}
-          highlightedUnitIds={highlightedUnitIds}
+          activeBubbles={activeBubbles}
           spellAreaPreview={areaPreview}
+          targetingPreview={targetingPreview}
         />
 
         {/* BattleHeader - Overlay na parte superior (dentro do Canvas) */}
@@ -1241,8 +1380,8 @@ const ArenaBattleViewInner: React.FC = () => {
           result={battleResult}
           units={battleResult.finalUnits}
           isWinner={battleResult.winnerId === user.id}
-          myKingdomName={myKingdom?.name ?? "Meu Reino"}
-          opponentKingdomName={opponentKingdom?.name ?? "Oponente"}
+          myKingdomName={myKingdom?.kingdomName ?? "Meu Reino"}
+          opponentKingdomName={opponentKingdom?.kingdomName ?? "Oponente"}
           myUserId={user.id}
           onRematch={requestRematch}
           onLeave={dismissBattleResult}
@@ -1250,6 +1389,22 @@ const ArenaBattleViewInner: React.FC = () => {
           opponentWantsRematch={opponentWantsRematch}
           vsBot={battleResult.vsBot}
         />
+      )}
+
+      {/* QTE Overlay - Quick Time Event para ataques */}
+      {qteState.activeQTE && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="pointer-events-auto">
+            <QTEOverlay
+              config={qteState.activeQTE}
+              onResponse={respondToQTE}
+              isResponder={isQTEResponder}
+              isVisualActive={isQTEVisualActive}
+              responderName={qteResponderUnit?.name ?? "Unidade"}
+              attackerName={qteAttackerUnit?.name ?? "Inimigo"}
+            />
+          </div>
+        </div>
       )}
 
       {/* Notificação de Turno (Início e Auto-End) */}
@@ -1260,8 +1415,8 @@ const ArenaBattleViewInner: React.FC = () => {
         isRoundStart={isRoundStart}
         currentPlayerKingdomName={
           isMyTurn
-            ? myKingdom?.name ?? "Meu Reino"
-            : opponentKingdom?.name ?? "Oponente"
+            ? myKingdom?.kingdomName ?? "Meu Reino"
+            : opponentKingdom?.kingdomName ?? "Oponente"
         }
         myUnitHasStartedAction={myActiveUnit?.hasStartedAction ?? false}
         myUnitMovesLeft={myActiveUnit?.movesLeft ?? 0}
@@ -1282,6 +1437,7 @@ const ArenaBattleViewInner: React.FC = () => {
           currentUnitId={
             selectedUnitId || battle.activeUnitId || myUnits[0]?.id
           }
+          selectedUnitId={selectedUnitId}
         />
       )}
     </div>
@@ -1293,35 +1449,15 @@ const ArenaBattleViewInner: React.FC = () => {
  */
 const BattleChatUI: React.FC<{
   currentUnitId?: string | null;
-}> = ({ currentUnitId }) => {
+  selectedUnitId?: string | null;
+}> = ({ currentUnitId, selectedUnitId }) => {
   const { state, openChat, closeChat, toggleChat } = useChat();
 
-  // Handler para tecla Enter
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        toggleChat();
-      }
-    },
-    [toggleChat]
-  );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [handleKeyDown]);
+  // Toggle chat com Enter usando react-hotkeys-hook
+  useEnterKey(toggleChat, {
+    enabled: !state.isOpen,
+    ignoreInputs: true,
+  });
 
   if (!state.isOpen) {
     return (
@@ -1349,11 +1485,13 @@ const BattleChatUI: React.FC<{
     <div className="fixed bottom-32 left-4 z-50 w-72">
       <ChatBox
         currentUnitId={currentUnitId || undefined}
+        selectedUnitId={selectedUnitId || undefined}
         variant="compact"
-        placeholder="Mensagem... (Enter para enviar)"
+        placeholder="Mensagem ou /comando..."
         maxHeight="150px"
         title="Chat de Batalha"
         onClose={closeChat}
+        enableCommands={true}
       />
     </div>
   );

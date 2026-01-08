@@ -1,28 +1,37 @@
-import { useContext } from "react";
-import { GameDataContext } from "../context/GameDataContext";
-import type { GameDataContextType } from "../types/game-data.types";
+// client/src/features/game/hooks/useGameData.ts
+// Hook para dados do jogo usando Zustand store
 
-export function useGameData(): GameDataContextType {
-  const context = useContext(GameDataContext);
+import { useGameDataStore } from "../../../stores";
 
-  if (!context) {
-    throw new Error("useGameData deve ser usado dentro de GameDataProvider");
-  }
+export function useGameData() {
+  const store = useGameDataStore();
 
-  return context;
+  return {
+    state: {
+      terrains: store.terrains,
+      structures: store.structures,
+      isLoading: store.isLoading,
+      error: store.error,
+    },
+    loadTerrains: store.loadTerrains,
+    loadStructures: store.loadStructures,
+  };
 }
 
 export function useGameDataState() {
-  const { state } = useGameData();
-  return state;
+  const store = useGameDataStore();
+  return {
+    terrains: store.terrains,
+    structures: store.structures,
+    isLoading: store.isLoading,
+    error: store.error,
+  };
 }
 
 export function useTerrains() {
-  const { state } = useGameData();
-  return state.terrains;
+  return useGameDataStore((state) => state.terrains);
 }
 
 export function useStructures() {
-  const { state } = useGameData();
-  return state.structures;
+  return useGameDataStore((state) => state.structures);
 }

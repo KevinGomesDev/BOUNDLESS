@@ -1,7 +1,5 @@
 // Kingdom Feature - Public API
-
-// ============ CONTEXT ============
-export { KingdomProvider, KingdomContext } from "./context/KingdomContext";
+// Migrado para Zustand - Context removido
 
 // ============ HOOKS ============
 export {

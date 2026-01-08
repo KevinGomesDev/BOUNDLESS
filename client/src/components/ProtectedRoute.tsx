@@ -1,4 +1,5 @@
 import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../features/auth";
 
 interface ProtectedRouteProps {
@@ -10,6 +11,7 @@ interface ProtectedRouteProps {
  */
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -23,7 +25,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!user) {
-    return null; // App.tsx vai redirecionar para HomePage
+    // Redirecionar para home, salvando a rota atual para depois
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;

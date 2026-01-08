@@ -16,6 +16,7 @@ import {
 } from "../../worldmap/generation/MapGenerator";
 import { CRISIS_DEFINITIONS } from "../../../../shared/data/crisis.data";
 import type { CrisisType } from "../../../../shared/types/match.types";
+import { pauseMatch } from "../../services/battle-persistence.service";
 
 const PLAYER_COLORS = [
   "#e63946",
@@ -54,6 +55,7 @@ export class MatchRoom extends Room<MatchState> {
   private turnTimer: Delayed | null = null;
   private inPreparation = true;
   private readyPlayers = new Set<string>();
+  private persistenceTimer: Delayed | null = null;
 
   async onCreate(options: MatchRoomOptions) {
     this.autoDispose = true;
@@ -69,6 +71,7 @@ export class MatchRoom extends Room<MatchState> {
       hostUserId: options.userId,
       maxPlayers: this.state.maxPlayers,
       playerCount: 0,
+      players: [] as string[],
       status: "WAITING",
     });
 
@@ -80,15 +83,31 @@ export class MatchRoom extends Room<MatchState> {
 
     console.log(`[MatchRoom] ${userId} entrando na partida ${this.roomId}`);
 
+    // Verificar se o jogador já existe (reconexão)
+    const existingPlayer = this.state.getPlayer(userId);
+    if (existingPlayer) {
+      // Permitir reconexão em qualquer status da partida
+      client.userData = { userId, kingdomId };
+
+      console.log(`[MatchRoom] Jogador ${userId} reconectado à partida`);
+
+      // Cancelar persistência pendente
+      this.cancelPersistence();
+
+      client.send("match:reconnected", {
+        matchId: this.roomId,
+        playerIndex: existingPlayer.playerIndex,
+        players: this.getPlayersInfo(),
+      });
+      return;
+    }
+
+    // Se a partida já iniciou e o jogador não existe, não permitir
     if (
       this.state.status !== "WAITING" &&
       this.state.status !== "PREPARATION"
     ) {
       throw new Error("Partida já iniciada");
-    }
-
-    if (this.state.getPlayer(userId)) {
-      throw new Error("Você já está nesta partida");
     }
 
     if (this.state.players.size >= this.state.maxPlayers) {
@@ -131,6 +150,7 @@ export class MatchRoom extends Room<MatchState> {
     this.setMetadata({
       ...this.metadata,
       playerCount: this.state.players.size,
+      players: Array.from(this.state.players.keys()),
     });
 
     client.send("match:joined", {
@@ -171,6 +191,7 @@ export class MatchRoom extends Room<MatchState> {
       this.setMetadata({
         ...this.metadata,
         playerCount: this.state.players.size,
+        players: Array.from(this.state.players.keys()),
       });
 
       this.broadcast("match:player_left", { userId });
@@ -181,13 +202,69 @@ export class MatchRoom extends Room<MatchState> {
         this.handlePlayerDisconnect(userId);
       }
     }
+
+    // Verificar se todos os jogadores desconectaram
+    this.checkAllDisconnected();
   }
 
-  onDispose() {
+  /**
+   * Verifica se todos os jogadores humanos desconectaram
+   */
+  private checkAllDisconnected() {
+    if (this.state.status === "ACTIVE" || this.state.status === "PREPARATION") {
+      // Para Match, verificamos se não há nenhum client conectado
+      if (this.clients.length === 0) {
+        console.log(
+          `[MatchRoom] Todos os jogadores desconectaram. Pausando partida em 30s...`
+        );
+
+        this.persistenceTimer = this.clock.setTimeout(async () => {
+          await this.pauseMatchToDb();
+        }, 30000);
+      }
+    }
+  }
+
+  /**
+   * Cancela a persistência se algum jogador reconectar
+   */
+  private cancelPersistence() {
+    if (this.persistenceTimer) {
+      this.persistenceTimer.clear();
+      this.persistenceTimer = null;
+      console.log(`[MatchRoom] Persistência cancelada - jogador reconectou`);
+    }
+  }
+
+  /**
+   * Pausa a partida no banco de dados
+   */
+  private async pauseMatchToDb() {
+    try {
+      await pauseMatch(this.roomId);
+      console.log(`[MatchRoom] Partida ${this.roomId} pausada no banco`);
+    } catch (error) {
+      console.error(`[MatchRoom] Erro ao pausar partida:`, error);
+    }
+  }
+
+  async onDispose() {
     console.log(`[MatchRoom] Partida ${this.roomId} sendo destruída`);
 
     if (this.turnTimer) {
       this.turnTimer.clear();
+    }
+
+    if (this.persistenceTimer) {
+      this.persistenceTimer.clear();
+    }
+
+    // Se a partida estava ativa, pausar no banco
+    if (this.state.status === "ACTIVE" || this.state.status === "PREPARATION") {
+      console.log(
+        `[MatchRoom] Partida ativa não finalizada. Pausando antes de destruir...`
+      );
+      await this.pauseMatchToDb();
     }
   }
 

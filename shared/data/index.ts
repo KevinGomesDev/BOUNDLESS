@@ -18,3 +18,4 @@ export * from "./summons.data";
 export * from "./turns.data";
 export * from "./crisis.data";
 export * from "./effect-metadata.data";
+export * from "./sounds.data";

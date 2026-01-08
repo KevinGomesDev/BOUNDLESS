@@ -299,7 +299,7 @@ const ACTION_COLORS = {
 
 interface UnitPanelProps {
   selectedUnit: BattleUnit | null;
-  activeUnitId: string | undefined;
+  activeUnitId: string | null | undefined;
   isMyTurn: boolean;
   currentUserId: string;
   pendingAction: string | null;

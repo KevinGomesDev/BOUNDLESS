@@ -403,8 +403,10 @@ export const COMMON_ACTION_ATTACK: SkillDefinition = {
   category: "ACTIVE",
   effectType: "OFFENSIVE",
   commonAction: true,
-  range: "ADJACENT",
+  range: "MELEE", // Usando range correto (MELEE ao invés de ADJACENT)
+  rangeDistance: 1, // Range base de 1, modificável por condições
   targetType: "UNIT",
+  targetingShape: "SINGLE", // Ataque único
   functionName: "executeAttackSkill",
   consumesAction: true,
   cooldown: 0,
@@ -418,6 +420,8 @@ export const COMMON_ACTION_DASH: SkillDefinition = {
   effectType: "UTILITY",
   commonAction: true,
   range: "SELF",
+  targetType: "SELF",
+  targetingShape: "SINGLE",
   functionName: "executeDash",
   consumesAction: true,
   cooldown: 0,
@@ -431,6 +435,8 @@ export const COMMON_ACTION_DODGE: SkillDefinition = {
   effectType: "BUFF",
   commonAction: true,
   range: "SELF",
+  targetType: "SELF",
+  targetingShape: "SINGLE",
   functionName: "executeDodge",
   consumesAction: true,
   cooldown: 0,

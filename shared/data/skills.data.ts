@@ -251,8 +251,10 @@ export function getSkillInfo(skillCode: string): SkillInfo | null {
   if (!skill) return null;
 
   // Determina se requer target baseado no range/targetType
+  // MELEE também requer target (seleção de célula/unidade adjacente)
   const requiresTarget =
     skill.range === "ADJACENT" ||
+    skill.range === "MELEE" ||
     skill.range === "RANGED" ||
     skill.range === "AREA";
 

@@ -59,14 +59,18 @@ export interface ArenaLobbyData {
 }
 
 /**
- * Jogador em uma batalha
+ * Jogador em uma batalha (sync com BattlePlayerSchema do servidor)
  */
 export interface BattlePlayer {
-  userId: string;
+  oderId: string; // ID do owner (userId)
   kingdomId: string;
   kingdomName: string;
+  username: string;
   playerIndex: number;
   playerColor: string;
+  isConnected: boolean;
+  isBot: boolean;
+  surrendered: boolean;
 }
 
 /**
@@ -81,11 +85,14 @@ export interface ArenaBattleData {
   players: BattlePlayer[];
   round: number;
   currentTurnIndex: number;
-  activeUnitId?: string; // Unidade ativa escolhida pelo jogador neste turno
+  currentPlayerId?: string; // ID do jogador que controla o turno atual
+  activeUnitId?: string; // Unidade ativa (travada após mover/agir)
+  selectedUnitId?: string; // Unidade selecionada (ainda pode mudar)
+  unitLocked?: boolean; // Se true, não pode mais mudar a unidade selecionada
   gridWidth: number;
   gridHeight: number;
   units: BattleUnit[];
-  actionOrder: string[];
+  actionOrder: string[]; // IDs dos jogadores (não das unidades)
   turnTimer: number;
   config: any; // ArenaConfig com mapa, clima e obstáculos
   isArena?: boolean;
@@ -157,9 +164,12 @@ export interface SessionActiveBattleResponse {
   battleStatus: ArenaBattleStatus;
   round: number;
   currentTurnIndex: number;
+  currentPlayerId?: string;
   activeUnitId?: string;
+  selectedUnitId?: string;
+  unitLocked?: boolean;
   units: any[];
-  actionOrder: string[];
+  actionOrder: string[]; // IDs dos jogadores
   gridWidth: number;
   gridHeight: number;
 }
@@ -218,9 +228,11 @@ export interface BattleBattleRestoredResponse {
   currentTurnIndex: number;
   currentPlayerId: string;
   activeUnitId?: string;
+  selectedUnitId?: string;
+  unitLocked?: boolean;
   turnTimer?: number;
   units: any[];
-  actionOrder: string[];
+  actionOrder: string[]; // IDs dos jogadores
   maxPlayers: number;
   kingdoms: {
     id: string;

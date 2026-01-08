@@ -1,14 +1,28 @@
 // client/src/features/chat/components/GlobalChat.tsx
 // Chat global para Dashboard
 
-import React from "react";
-import { ChatProvider, useChat } from "../context/ChatContext";
+import React, { useEffect } from "react";
+import { useChatStore } from "../../../stores";
 import { ChatBox } from "./ChatBox";
 
-const GlobalChatInner: React.FC = () => {
-  const { state, openChat, closeChat } = useChat();
+export const GlobalChat: React.FC = () => {
+  const isOpen = useChatStore((s) => s.isOpen);
+  const openChat = useChatStore((s) => s.openChat);
+  const closeChat = useChatStore((s) => s.closeChat);
+  const setContext = useChatStore((s) => s.setContext);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const reset = useChatStore((s) => s.reset);
 
-  if (!state.isOpen) {
+  // Define o contexto do chat como GLOBAL
+  useEffect(() => {
+    setContext("GLOBAL");
+    loadHistory();
+    return () => {
+      reset();
+    };
+  }, [setContext, loadHistory, reset]);
+
+  if (!isOpen) {
     return (
       <button
         onClick={openChat}
@@ -35,13 +49,5 @@ const GlobalChatInner: React.FC = () => {
       showHeader={false}
       onClose={closeChat}
     />
-  );
-};
-
-export const GlobalChat: React.FC = () => {
-  return (
-    <ChatProvider context="GLOBAL">
-      <GlobalChatInner />
-    </ChatProvider>
   );
 };

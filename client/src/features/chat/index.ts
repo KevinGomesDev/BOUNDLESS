@@ -1,8 +1,14 @@
 // client/src/features/chat/index.ts
 // Barrel export para feature de chat
+// Migrado para Zustand - Context removido
 
-// Context e hook
-export { ChatProvider, useChat } from "./context/ChatContext";
+// Hooks
+export {
+  useChat,
+  useChatMessages,
+  useChatBubbles,
+  useSendMessage,
+} from "./hooks/useChat";
 
 // Componentes
 export { ChatBox } from "./components/ChatBox";

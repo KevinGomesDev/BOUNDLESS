@@ -122,9 +122,11 @@ export function useSessionGuard(): SessionGuardResult {
     }
 
     // Verifica se precisa aguardar restauração de arena
+    // Para ARENA_BATTLE: aguarda até arenaState.battle existir
+    // Para ARENA_LOBBY: aguarda até arenaState.lobbyId existir
     const needsArenaRestore =
       (session.type === "ARENA_BATTLE" && !arenaState.battle) ||
-      (session.type === "ARENA_LOBBY" && !arenaState.currentLobby);
+      (session.type === "ARENA_LOBBY" && !arenaState.lobbyId);
 
     if (needsArenaRestore) {
       console.log(
@@ -143,7 +145,7 @@ export function useSessionGuard(): SessionGuardResult {
     sessionState.isChecking,
     sessionState.activeSession,
     arenaState?.battle,
-    arenaState?.currentLobby,
+    arenaState?.lobbyId,
   ]);
 
   /**
@@ -166,7 +168,7 @@ export function useSessionGuard(): SessionGuardResult {
 
     const isArenaRestored =
       (session.type === "ARENA_BATTLE" && arenaState.battle) ||
-      (session.type === "ARENA_LOBBY" && arenaState.currentLobby);
+      (session.type === "ARENA_LOBBY" && arenaState.lobbyId);
 
     if (isArenaRestored) {
       console.log(
@@ -174,7 +176,7 @@ export function useSessionGuard(): SessionGuardResult {
         "color: #22c55e; font-weight: bold;",
         {
           hasBattle: !!arenaState.battle,
-          hasLobby: !!arenaState.currentLobby,
+          hasLobby: !!arenaState.lobbyId,
         }
       );
       setGuardState("ready");
@@ -183,7 +185,7 @@ export function useSessionGuard(): SessionGuardResult {
     guardState,
     sessionState.activeSession,
     arenaState?.battle,
-    arenaState?.currentLobby,
+    arenaState?.lobbyId,
   ]);
 
   /**
@@ -201,7 +203,14 @@ export function useSessionGuard(): SessionGuardResult {
     timeoutRef.current = setTimeout(() => {
       console.warn(
         "%c[SessionGuard] ⚠️ Timeout aguardando restauração",
-        "color: #ef4444; font-weight: bold;"
+        "color: #ef4444; font-weight: bold;",
+        {
+          session: sessionState.activeSession,
+          hasBattle: !!arenaState?.battle,
+          hasLobbyId: !!arenaState?.lobbyId,
+          arenaStatus: arenaState?.status,
+          isInBattle: arenaState?.isInBattle,
+        }
       );
       setError("Timeout ao restaurar sessão");
       setGuardState("ready"); // Continua mesmo com erro para não bloquear

@@ -157,6 +157,20 @@ export const COMBAT_CONDITIONS: Record<string, ConditionDefinition> = {
       damagePerTurn: 1,
     },
   },
+
+  ADRENALINE_RUSH: {
+    id: "ADRENALINE_RUSH",
+    name: "Adrenalina",
+    description:
+      "Esquiva perfeita! +1 movimento e próximo ataque é crítico garantido.",
+    expiry: "next_turn",
+    icon: "⚡",
+    color: "#eab308",
+    effects: {
+      movementMod: 1,
+      guaranteedCrit: true,
+    },
+  },
 };
 
 // =============================================================================

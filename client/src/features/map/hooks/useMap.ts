@@ -1,28 +1,38 @@
-import { useContext } from "react";
-import { MapContext } from "../context/MapContext";
-import type { MapContextType } from "../types/map.types";
+// client/src/features/map/hooks/useMap.ts
+// Hook para gerenciamento de mapa usando Zustand store
 
-export function useMap(): MapContextType {
-  const context = useContext(MapContext);
+import { useMapStore } from "../../../stores";
 
-  if (!context) {
-    throw new Error("useMap deve ser usado dentro de MapProvider");
-  }
+export function useMap() {
+  const store = useMapStore();
 
-  return context;
+  return {
+    state: {
+      territories: store.territories,
+      selectedTerritory: store.selectedTerritory,
+      isLoading: store.isLoading,
+      error: store.error,
+    },
+    requestMapData: store.requestMapData,
+    selectTerritory: store.selectTerritory,
+    loadMapData: store.loadMapData,
+  };
 }
 
 export function useMapState() {
-  const { state } = useMap();
-  return state;
+  const store = useMapStore();
+  return {
+    territories: store.territories,
+    selectedTerritory: store.selectedTerritory,
+    isLoading: store.isLoading,
+    error: store.error,
+  };
 }
 
 export function useTerritories() {
-  const { state } = useMap();
-  return state.territories;
+  return useMapStore((state) => state.territories);
 }
 
 export function useSelectedTerritory() {
-  const { state } = useMap();
-  return state.selectedTerritory;
+  return useMapStore((state) => state.selectedTerritory);
 }

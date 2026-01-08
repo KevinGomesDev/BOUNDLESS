@@ -1,42 +1,49 @@
-import { useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
+// client/src/features/auth/hooks/useAuth.ts
+// Hook para autenticação usando Zustand store
+
+import { useAuthStore } from "../../../stores";
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const store = useAuthStore();
 
-  if (!context) {
-    throw new Error("useAuth deve ser usado dentro de AuthProvider");
-  }
-
-  // Retorna uma API mais amigável
   return {
     // Métodos
-    register: context.register,
-    login: context.login,
-    logout: context.logout,
-    restoreSession: context.restoreSession,
+    register: store.register,
+    login: store.login,
+    logout: store.logout,
+    restoreSession: store.restoreSession,
     // Estado
-    user: context.state.user,
-    isAuthenticated: context.state.isAuthenticated,
-    isServerValidated: context.state.isServerValidated,
-    isLoading: context.state.isLoading,
-    error: context.state.error,
+    user: store.user,
+    isAuthenticated: store.isAuthenticated,
+    isServerValidated: store.isServerValidated,
+    isLoading: store.isLoading,
+    error: store.error,
     // Acesso ao state completo
-    state: context.state,
+    state: {
+      user: store.user,
+      isAuthenticated: store.isAuthenticated,
+      isServerValidated: store.isServerValidated,
+      isLoading: store.isLoading,
+      error: store.error,
+    },
   };
 }
 
 export function useAuthState() {
-  const { state } = useAuth();
-  return state;
+  const store = useAuthStore();
+  return {
+    user: store.user,
+    isAuthenticated: store.isAuthenticated,
+    isServerValidated: store.isServerValidated,
+    isLoading: store.isLoading,
+    error: store.error,
+  };
 }
 
 export function useUser() {
-  const { state } = useAuth();
-  return state.user;
+  return useAuthStore((state) => state.user);
 }
 
 export function useIsAuthenticated() {
-  const { state } = useAuth();
-  return state.isAuthenticated;
+  return useAuthStore((state) => state.isAuthenticated);
 }

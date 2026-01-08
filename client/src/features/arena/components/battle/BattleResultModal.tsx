@@ -1,10 +1,15 @@
 import React, { useState, useMemo } from "react";
-import type { BattleEndedResponse } from "../../types/arena.types";
-import type { BattleUnit } from "../../../../../../shared/types/battle.types";
+import type { BattleUnitState } from "@/services/colyseus.service";
+
+interface BattleResultInfo {
+  battleId: string;
+  winnerId: string;
+  winReason: string;
+}
 
 interface BattleResultModalProps {
-  result: BattleEndedResponse;
-  units: BattleUnit[];
+  result: BattleResultInfo;
+  units: BattleUnitState[];
   isWinner: boolean;
   myKingdomName: string;
   opponentKingdomName: string;
@@ -79,7 +84,7 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   }, [myUnits, enemyUnits]);
 
   // Componente de unidade compacto para listas grandes
-  const UnitRow: React.FC<{ unit: BattleUnit; isEnemy: boolean }> = ({
+  const UnitRow: React.FC<{ unit: BattleUnitState; isEnemy: boolean }> = ({
     unit,
     isEnemy,
   }) => {
@@ -150,10 +155,10 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   };
 
   // Lista de unidades com scroll virtual para grandes quantidades
-  const UnitList: React.FC<{ unitList: BattleUnit[]; isEnemy: boolean }> = ({
-    unitList,
-    isEnemy,
-  }) => {
+  const UnitList: React.FC<{
+    unitList: BattleUnitState[];
+    isEnemy: boolean;
+  }> = ({ unitList, isEnemy }) => {
     // Ordenar: vivos primeiro, depois mortos
     const sortedUnits = useMemo(
       () =>
@@ -281,7 +286,9 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
             >
               {isWinner ? "VITÓRIA" : "DERROTA"}
             </h1>
-            <p className="text-astral-silver mt-2 text-sm">{result.reason}</p>
+            <p className="text-astral-silver mt-2 text-sm">
+              {result.winReason}
+            </p>
           </div>
         </div>
 

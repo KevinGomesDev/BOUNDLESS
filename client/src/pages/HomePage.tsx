@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth";
 import { AuthForm, type AuthFormData } from "@/components/AuthForm";
 import { ServerStatus } from "@/components/ServerStatus";
@@ -6,21 +7,24 @@ import { Button } from "@/components/Button";
 
 type ViewMode = "selection" | "login" | "register";
 
-interface HomePageProps {
-  onAuthSuccess?: () => void;
-}
-
 /**
  * Página inicial que permite escolher entre Login ou Registro
  * BOUNDLESS - Cosmic Theme
  */
-export const HomePage: React.FC<HomePageProps> = ({ onAuthSuccess }) => {
+export const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>("selection");
-  const { login, register, isLoading, error } = useAuth();
+  const { login, register, isLoading, error, user } = useAuth();
+
+  // Redirecionar para dashboard se já estiver logado
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleLoginSubmit = async (data: AuthFormData) => {
     await login(data.username, data.password);
-    onAuthSuccess?.();
   };
 
   const handleRegisterSubmit = async (data: AuthFormData) => {
@@ -28,7 +32,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onAuthSuccess }) => {
       throw new Error("Email é obrigatório");
     }
     await register(data.username, data.email, data.password);
-    onAuthSuccess?.();
   };
 
   const handleCancel = () => {

@@ -1,7 +1,8 @@
 // client/src/features/events/index.ts
 // Barrel export para feature de eventos
+// Migrado para Zustand - Context removido
 
-export { EventProvider, useEvents } from "./context/EventContext";
+export { useEvents, useEventsState, useToasts } from "./hooks/useEvents";
 export { EventLog, CompactEventLog } from "./components/EventLog";
 export {
   EventToastContainer,

@@ -1,5 +1,6 @@
 // Auth Feature - Public API
-export { AuthProvider, AuthContext } from "./context/AuthContext";
+// Migrado para Zustand - Context removido
+
 export {
   useAuth,
   useAuthState,

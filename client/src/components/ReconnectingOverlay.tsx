@@ -5,7 +5,8 @@ import { useColyseusConnection } from "../core";
  * Overlay que mostra quando está reconectando ao servidor
  */
 export const ReconnectingOverlay: React.FC = () => {
-  const { isReconnecting, reconnectAttempt, error } = useColyseusConnection();
+  const { state } = useColyseusConnection();
+  const { isReconnecting, reconnectAttempt, error } = state;
 
   if (!isReconnecting && !error) {
     return null;

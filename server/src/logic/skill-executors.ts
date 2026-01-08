@@ -29,7 +29,7 @@ import {
   getExtraAttacksFromConditions,
 } from "./conditions";
 import { calculateBaseMovement } from "./movement-actions";
-import { applyDualProtectionDamage } from "../utils/battle.utils";
+import { applyDamage } from "../utils/damage.utils";
 import {
   OBSTACLE_CONFIG,
   DEFENSE_CONFIG,
@@ -273,7 +273,7 @@ function executeTotalDestruction(
   const damage = caster.combat;
 
   // Aplicar dano físico no alvo usando sistema de proteção dual
-  const targetResult = applyDualProtectionDamage(
+  const targetResult = applyDamage(
     target.physicalProtection,
     target.magicalProtection,
     target.currentHp,
@@ -290,7 +290,7 @@ function executeTotalDestruction(
   }
 
   // Aplicar mesmo dano físico no caster usando sistema de proteção dual
-  const casterResult = applyDualProtectionDamage(
+  const casterResult = applyDamage(
     caster.physicalProtection,
     caster.magicalProtection,
     caster.currentHp,
@@ -662,7 +662,7 @@ function executeVolley(
       continue;
 
     // Dano físico - usar sistema de proteção dual
-    const damageResult = applyDualProtectionDamage(
+    const damageResult = applyDamage(
       unit.physicalProtection,
       unit.magicalProtection,
       unit.currentHp,
@@ -1203,7 +1203,7 @@ export function executeAttack(
   }
 
   // Aplicar dano na proteção apropriada (fluxo normal)
-  const protectionResult = applyDualProtectionDamage(
+  const protectionResult = applyDamage(
     target.physicalProtection,
     target.magicalProtection,
     target.currentHp,

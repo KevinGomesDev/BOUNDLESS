@@ -3,6 +3,13 @@
 // Altere valores aqui para ajustar o balanceamento globalmente
 
 import type { UnitCategory } from "../types/units.types";
+import {
+  hasLineOfSight,
+  type ObstacleForLoS,
+  type UnitForLoS,
+  obstaclesToBlockers,
+  unitsToBlockers,
+} from "../utils/line-of-sight.utils";
 
 // =============================================================================
 // NOMES DOS ATRIBUTOS
@@ -18,13 +25,9 @@ export type AttributeKey =
   | "vitality";
 
 export interface AttributeStyle {
-  /** Cor principal (hex) */
   color: string;
-  /** Cor secundária/escura (hex) */
   colorDark: string;
-  /** Cor da borda (hex com alpha) */
   borderColor: string;
-  /** Sombra glow (rgba string) */
   glowColor: string;
 }
 
@@ -104,7 +107,7 @@ export const ATTRIBUTE_NAMES: Record<AttributeKey, AttributeDefinition> = {
     key: "vitality",
     name: "Vitalidade",
     shortName: "VIT",
-    description: "Pontos de vida. HP Máximo = Vitalidade × 1.",
+    description: "Pontos de vida.",
     style: {
       color: "#22c55e", // Verde vida - saúde
       colorDark: "#15803d",
@@ -403,6 +406,83 @@ export function isCellVisibleByUnit(
 
   return false;
 }
+
+// =============================================================================
+// FUNÇÕES DE VISÃO COM LINE OF SIGHT (BLOQUEADORES)
+// =============================================================================
+// Versões que verificam se há obstáculos ou unidades bloqueando a linha de visão
+
+/**
+ * Verifica se uma célula está visível considerando Line of Sight
+ * Leva em conta distância E bloqueadores (obstáculos + unidades)
+ */
+export function isCellVisibleWithLoS(
+  unitX: number,
+  unitY: number,
+  cellX: number,
+  cellY: number,
+  visionRange: number,
+  obstacles: ObstacleForLoS[],
+  units: UnitForLoS[],
+  observerId?: string
+): boolean {
+  // Primeiro verificar distância
+  const distance = Math.abs(cellX - unitX) + Math.abs(cellY - unitY);
+  if (distance > visionRange) return false;
+
+  // Depois verificar linha de visão
+  const obstacleBlockers = obstaclesToBlockers(obstacles);
+  const unitBlockers = unitsToBlockers(units, observerId ? [observerId] : []);
+  const allBlockers = [...obstacleBlockers, ...unitBlockers];
+
+  return hasLineOfSight(unitX, unitY, cellX, cellY, allBlockers);
+}
+
+/**
+ * Verifica se uma célula está visível por uma unidade (considerando tamanho e LoS)
+ * Para unidades grandes, verifica a partir de qualquer célula ocupada
+ */
+export function isCellVisibleByUnitWithLoS(
+  unitPosX: number,
+  unitPosY: number,
+  unitSize: UnitSize,
+  unitFocus: number,
+  cellX: number,
+  cellY: number,
+  obstacles: ObstacleForLoS[],
+  units: UnitForLoS[],
+  observerId?: string
+): boolean {
+  const visionRange = calculateUnitVision(unitFocus);
+  const dimension = UNIT_SIZE_CONFIG[unitSize].dimension;
+
+  // Para cada célula ocupada pela unidade, verificar visibilidade com LoS
+  for (let dx = 0; dx < dimension; dx++) {
+    for (let dy = 0; dy < dimension; dy++) {
+      const checkX = unitPosX + dx;
+      const checkY = unitPosY + dy;
+      if (
+        isCellVisibleWithLoS(
+          checkX,
+          checkY,
+          cellX,
+          cellY,
+          visionRange,
+          obstacles,
+          units,
+          observerId
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// Re-exportar tipos de LoS para conveniência
+export type { ObstacleForLoS, UnitForLoS };
 
 // =============================================================================
 // CONFIGURAÇÃO DE TERRENO UNIFICADA

@@ -1,14 +1,32 @@
 // client/src/features/chat/components/MatchChat.tsx
 // Chat para partidas normais
 
-import React from "react";
-import { ChatProvider, useChat } from "../context/ChatContext";
+import React, { useEffect } from "react";
+import { useChatStore } from "../../../stores";
 import { ChatBox } from "./ChatBox";
 
-const MatchChatInner: React.FC = () => {
-  const { state, openChat, closeChat } = useChat();
+interface MatchChatProps {
+  matchId: string;
+}
 
-  if (!state.isOpen) {
+export const MatchChat: React.FC<MatchChatProps> = ({ matchId }) => {
+  const isOpen = useChatStore((s) => s.isOpen);
+  const openChat = useChatStore((s) => s.openChat);
+  const closeChat = useChatStore((s) => s.closeChat);
+  const setContext = useChatStore((s) => s.setContext);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const reset = useChatStore((s) => s.reset);
+
+  // Define o contexto do chat como MATCH
+  useEffect(() => {
+    setContext("MATCH", matchId);
+    loadHistory();
+    return () => {
+      reset();
+    };
+  }, [matchId, setContext, loadHistory, reset]);
+
+  if (!isOpen) {
     return (
       <button
         onClick={openChat}
@@ -38,17 +56,5 @@ const MatchChatInner: React.FC = () => {
         onClose={closeChat}
       />
     </div>
-  );
-};
-
-interface MatchChatProps {
-  matchId: string;
-}
-
-export const MatchChat: React.FC<MatchChatProps> = ({ matchId }) => {
-  return (
-    <ChatProvider context="MATCH" contextId={matchId}>
-      <MatchChatInner />
-    </ChatProvider>
   );
 };

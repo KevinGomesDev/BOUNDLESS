@@ -2,13 +2,14 @@
 // Modal/Drawer para visualizar histórico de eventos
 
 import { useEffect, useRef } from "react";
-import { useEvents } from "../context/EventContext";
+import { useEvents } from "../hooks/useEvents";
 import type { GameEvent } from "../../../../../shared/types/events.types";
 import {
   getCategoryIcon,
   formatEventTime,
 } from "../../../../../shared/types/events.types";
 import { getSeverityColors } from "../../../config/colors.config";
+import { useEscapeKey } from "../../../hooks/useHotkey";
 
 // =============================================================================
 // EVENT ITEM COMPONENT
@@ -63,22 +64,8 @@ export function EventHistory() {
   const { state, closeHistory, clearEvents, loadMore } = useEvents();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Fechar com ESC
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        closeHistory();
-      }
-    };
-
-    if (state.isHistoryOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-    }
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [state.isHistoryOpen, closeHistory]);
+  // Fechar com ESC usando react-hotkeys-hook
+  useEscapeKey(closeHistory, { enabled: state.isHistoryOpen });
 
   // Scroll infinito - carregar mais quando chegar no final
   useEffect(() => {

@@ -21,6 +21,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
+    "pathfinding": "^0.4.18",
     "zod": "^4.2.1"
   },
   "devDependencies": {
@@ -30,6 +31,7 @@
     "@types/express": "^5.0.5",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.4",
+    "@types/pathfinding": "^0.1.0",
     "nodemon": "^3.1.11",
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",

@@ -6,6 +6,7 @@ import {
   type AbilityTargetType,
   type AbilityEffectType,
   type DynamicValue,
+  type TargetingShape,
   DEFAULT_RANGE_DISTANCE,
 } from "./ability.types";
 
@@ -15,6 +16,7 @@ export type {
   AbilityTargetType,
   AbilityEffectType,
   DynamicValue,
+  TargetingShape,
 };
 export { DEFAULT_RANGE_DISTANCE };
 
@@ -111,6 +113,9 @@ export interface SkillDefinition {
 
   // Alvo (para ACTIVE com AREA)
   targetType?: SkillTargetType;
+
+  // Forma do targeting/área de efeito (SINGLE = padrão para ataques únicos)
+  targetingShape?: TargetingShape;
 
   // Visual
   icon?: string;

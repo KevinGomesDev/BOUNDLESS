@@ -3,71 +3,18 @@
 
 import { Client, Room } from "colyseus.js";
 import { Schema } from "@colyseus/schema";
+import type {
+  BattleUnit,
+  BattleObstacle,
+} from "../../../shared/types/battle.types";
+import type { BattlePlayer } from "../../../shared/types/session.types";
 
-// Tipos para state das rooms (espelhados do servidor)
-export interface BattleUnitState {
-  id: string;
-  sourceUnitId: string;
-  ownerId: string;
-  ownerKingdomId: string;
-  name: string;
-  avatar: string;
-  category: string;
-  troopSlot: number;
-  level: number;
-  race: string;
-  classCode: string;
-  features: string[];
-  equipment: string[];
-  combat: number;
-  speed: number;
-  focus: number;
-  resistance: number;
-  will: number;
-  vitality: number;
-  damageReduction: number;
-  currentHp: number;
-  maxHp: number;
-  currentMana: number;
-  maxMana: number;
-  posX: number;
-  posY: number;
-  movesLeft: number;
-  actionsLeft: number;
-  attacksLeftThisTurn: number;
-  isAlive: boolean;
-  actionMarks: number;
-  physicalProtection: number;
-  maxPhysicalProtection: number;
-  magicalProtection: number;
-  maxMagicalProtection: number;
-  conditions: string[];
-  spells: string[];
-  hasStartedAction: boolean;
-  grabbedByUnitId: string;
-  size: string;
-  visionRange: number;
-  isAIControlled: boolean;
-  aiBehavior: string;
-}
+// Re-exportar tipos do shared para compatibilidade
+export type BattleUnitState = BattleUnit;
+export type BattlePlayerState = BattlePlayer;
 
-export interface BattlePlayerState {
-  oderId: string;
-  kingdomId: string;
-  kingdomName: string;
-  username: string;
-  playerIndex: number;
-  playerColor: string;
-  isConnected: boolean;
-  isBot: boolean;
-  surrendered: boolean;
-}
-
-export interface BattleObstacleState {
-  id: string;
-  posX: number;
-  posY: number;
-  emoji: string;
+// Usa BattleObstacle do shared com campos required para Colyseus state
+export interface BattleObstacleState extends BattleObstacle {
   hp: number;
   maxHp: number;
   destroyed: boolean;
@@ -83,7 +30,9 @@ export interface ArenaBattleState {
   round: number;
   currentTurnIndex: number;
   activeUnitId: string;
-  currentPlayerId: string; // ID do jogador que controla a unidade ativa
+  selectedUnitId: string; // Unidade selecionada (ainda pode mudar)
+  currentPlayerId: string; // ID do jogador que controla o turno atual
+  unitLocked: boolean; // Se true, a unidade está travada (não pode mudar seleção)
   turnTimer: number;
   gridWidth: number;
   gridHeight: number;
@@ -198,6 +147,73 @@ export interface MatchStateData {
 }
 
 type RoomType = "global" | "arena" | "match";
+
+/**
+ * Serializa um objeto Colyseus Schema para um objeto JavaScript puro
+ * Necessário porque spread operator não funciona corretamente com Schema
+ */
+function serializeSchemaObject<T>(schemaObj: T): T {
+  if (!schemaObj || typeof schemaObj !== "object") return schemaObj;
+
+  // Se tem método toJSON, usar ele (alguns Colyseus Schemas têm isso)
+  if (typeof (schemaObj as any).toJSON === "function") {
+    return (schemaObj as any).toJSON();
+  }
+
+  // Copiar manualmente todas as propriedades
+  const result: any = {};
+  for (const key of Object.keys(schemaObj)) {
+    const value = (schemaObj as any)[key];
+    if (value === undefined || typeof value === "function") continue;
+
+    // Para ArraySchema ou arrays regulares, converter para array JS
+    if (
+      Array.isArray(value) ||
+      (value &&
+        typeof value.forEach === "function" &&
+        typeof value.length === "number")
+    ) {
+      const arr: any[] = [];
+      value.forEach((item: any) => {
+        if (item && typeof item === "object") {
+          arr.push(serializeSchemaObject(item));
+        } else {
+          arr.push(item);
+        }
+      });
+      result[key] = arr;
+    }
+    // Para MapSchema ou objetos Map
+    else if (
+      value &&
+      typeof value.forEach === "function" &&
+      typeof value.get === "function"
+    ) {
+      const obj: Record<string, any> = {};
+      value.forEach((v: any, k: string) => {
+        if (v && typeof v === "object") {
+          obj[k] = serializeSchemaObject(v);
+        } else {
+          obj[k] = v;
+        }
+      });
+      result[key] = obj;
+    }
+    // Para outros objetos com toJSON
+    else if (
+      value &&
+      typeof value === "object" &&
+      typeof value.toJSON === "function"
+    ) {
+      result[key] = value.toJSON();
+    }
+    // Valores primitivos
+    else {
+      result[key] = value;
+    }
+  }
+  return result as T;
+}
 
 class ColyseusService {
   private client: Client | null = null;
@@ -455,6 +471,7 @@ class ColyseusService {
     kingdomId: string;
     maxPlayers?: number;
     vsBot?: boolean;
+    restoreBattleId?: string; // ID da batalha para restaurar do banco
   }): Promise<Room<ArenaBattleState>> {
     if (!this.client) {
       throw new Error("Não conectado ao servidor");
@@ -474,6 +491,7 @@ class ColyseusService {
       kingdomId: options.kingdomId,
       maxPlayers: options.maxPlayers || 2,
       vsBot: options.vsBot === true,
+      restoreBattleId: options.restoreBattleId,
       token,
     };
 
@@ -605,6 +623,13 @@ class ColyseusService {
   }
 
   /**
+   * Obtém a room da arena atual
+   */
+  getArenaRoom(): Room<ArenaBattleState> | null {
+    return this.arenaRoom;
+  }
+
+  /**
    * Verifica se está em uma arena
    */
   isInArena(): boolean {
@@ -729,6 +754,13 @@ class ColyseusService {
    */
   getMatchState(): MatchState | null {
     return this.matchRoom?.state ?? null;
+  }
+
+  /**
+   * Obtém a room do match atual
+   */
+  getMatchRoom(): Room<MatchState> | null {
+    return this.matchRoom;
   }
 
   /**
@@ -1013,3 +1045,6 @@ class ColyseusService {
 
 // Singleton
 export const colyseusService = new ColyseusService();
+
+// Exportar função de serialização para uso em stores
+export { serializeSchemaObject };

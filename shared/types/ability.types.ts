@@ -161,3 +161,39 @@ export function mapLegacyRange(range: string | AbilityRange): AbilityRange {
       return "MELEE";
   }
 }
+
+// =============================================================================
+// TARGETING SHAPES (FORMAS DE ÁREA DE EFEITO)
+// =============================================================================
+
+/**
+ * Forma do padrão de targeting/área de efeito
+ * - SINGLE: Uma única célula (ataque básico, single target spells)
+ * - LINE: Linha reta em uma direção
+ * - CONE: Cone que se expande (ex: breath attacks)
+ * - CROSS: Cruz/+ shape (ex: explosões cardinais)
+ * - DIAMOND: Diamante/Losango (distância Manhattan, mais comum)
+ * - SQUARE: Quadrado/Área (distância Chebyshev)
+ * - RING: Anel ao redor (ex: shockwave)
+ */
+export type TargetingShape =
+  | "SINGLE"
+  | "LINE"
+  | "CONE"
+  | "CROSS"
+  | "DIAMOND"
+  | "SQUARE"
+  | "RING";
+
+/**
+ * Direção do targeting (para shapes direcionais)
+ */
+export type TargetingDirection =
+  | "NORTH"
+  | "SOUTH"
+  | "EAST"
+  | "WEST"
+  | "NORTHEAST"
+  | "NORTHWEST"
+  | "SOUTHEAST"
+  | "SOUTHWEST";

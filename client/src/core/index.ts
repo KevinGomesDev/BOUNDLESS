@@ -1,17 +1,11 @@
 // Core - Public API
+// Migrado para Zustand - Contexts removidos
 
-// Colyseus Connection
-export {
-  ColyseusProvider,
-  useColyseusConnection,
-} from "./context/ColyseusContext";
-export { useColyseus } from "./hooks/useColyseus";
+// Colyseus Connection (via Zustand store)
+export { useColyseus, useColyseusConnection } from "./hooks/useColyseus";
 // Note: useArena and useMatch hooks available via features/arena and features/match
-// Low-level Colyseus hooks are in core/hooks/ but not exported to avoid conflicts
 
-// Session Management
-export { SessionProvider, SessionContext } from "./context/SessionContext";
-export type { SessionContextType } from "./context/SessionContext";
+// Session Management (via Zustand store)
 export { useSession } from "./hooks/useSession";
 export { useSessionGuard } from "./hooks/useSessionGuard";
 export type { SessionGuardResult } from "./hooks/useSessionGuard";

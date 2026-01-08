@@ -2,7 +2,7 @@
 // Componente de log de eventos reutilizável
 
 import { useEffect, useRef } from "react";
-import { useEvents } from "../context/EventContext";
+import { useEvents } from "../hooks/useEvents";
 import type {
   GameEvent,
   EventContext as EventContextType,

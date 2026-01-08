@@ -1,5 +1,8 @@
-import { useContext, useCallback, useState } from "react";
-import { KingdomContext } from "../context/KingdomContext";
+// client/src/features/kingdom/hooks/useKingdom.ts
+// Hook para gerenciamento de reinos usando Zustand store
+
+import { useCallback, useState } from "react";
+import { useKingdomStore } from "../../../stores";
 import { kingdomApi, kingdomStaticApi } from "../api";
 import type {
   KingdomWithRelations,
@@ -8,51 +11,57 @@ import type {
   AlignmentDefinition,
   TroopPassiveDefinition,
   GameClassDefinition,
+  KingdomTemplateSummary,
+  KingdomTemplateDetails,
 } from "../types/kingdom.types";
 
 // ============ MAIN HOOK ============
 
 export function useKingdom() {
-  const context = useContext(KingdomContext);
-
-  if (!context) {
-    throw new Error("useKingdom deve ser usado dentro de KingdomProvider");
-  }
+  const store = useKingdomStore();
 
   return {
-    // Métodos do contexto
-    createKingdom: context.createKingdom,
-    createFromTemplate: context.createFromTemplate,
-    loadKingdoms: context.loadKingdoms,
-    selectKingdom: context.selectKingdom,
-    clearError: context.clearError,
+    // Métodos do store
+    createKingdom: store.createKingdom,
+    createFromTemplate: store.createFromTemplate,
+    loadKingdoms: store.loadKingdoms,
+    selectKingdom: store.selectKingdom,
+    clearError: store.clearError,
 
     // Estado
-    kingdoms: context.state.kingdoms,
-    currentKingdom: context.state.kingdom,
-    isLoading: context.state.isLoading,
-    error: context.state.error,
+    kingdoms: store.kingdoms,
+    currentKingdom: store.kingdom,
+    isLoading: store.isLoading,
+    error: store.error,
 
     // Acesso ao state completo
-    state: context.state,
+    state: {
+      kingdom: store.kingdom,
+      kingdoms: store.kingdoms,
+      isLoading: store.isLoading,
+      error: store.error,
+    },
   };
 }
 
 // ============ STATE HOOKS ============
 
 export function useKingdomState() {
-  const { state } = useKingdom();
-  return state;
+  const store = useKingdomStore();
+  return {
+    kingdom: store.kingdom,
+    kingdoms: store.kingdoms,
+    isLoading: store.isLoading,
+    error: store.error,
+  };
 }
 
 export function useKingdoms() {
-  const { state } = useKingdom();
-  return state.kingdoms;
+  return useKingdomStore((state) => state.kingdoms);
 }
 
 export function useCurrentKingdom() {
-  const { state } = useKingdom();
-  return state.kingdom;
+  return useKingdomStore((state) => state.kingdom);
 }
 
 // ============ KINGDOM DETAILS HOOK ============

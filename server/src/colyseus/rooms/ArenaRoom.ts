@@ -17,12 +17,29 @@ import {
   GRID_CONFIG,
   getGridDimensions,
   getRandomTerrain,
-  getRandomTerritorySize,
+  getRandomArenaSize,
   getObstacleCount,
   getRandomObstacleType,
+  getMaxMarksByCategory,
+  HP_CONFIG,
+  MANA_CONFIG,
   type ObstacleType,
 } from "../../../../shared/config/global.config";
 import type { BattleUnit } from "../../../../shared/types/battle.types";
+import {
+  saveArenaBattle,
+  loadBattle,
+  deleteBattle,
+  markBattleEnded,
+  type PersistedBattleState,
+} from "../../services/battle-persistence.service";
+import { QTEManager } from "../../qte";
+import type { QTEConfig, QTEResponse, QTEResult } from "../../../../shared/qte";
+import type { CommandPayload } from "../../../../shared/types/commands.types";
+import { handleCommand, parseCommandArgs } from "../../commands";
+import { findCommandByCode } from "../../../../shared/data/Templates/CommandsTemplates";
+import { getExtraAttacksFromConditions } from "../../logic/conditions";
+import { applyDamage } from "../../utils/damage.utils";
 
 // Cores dos jogadores (até 8)
 const PLAYER_COLORS = [
@@ -41,6 +58,7 @@ interface ArenaRoomOptions {
   kingdomId: string;
   maxPlayers?: number;
   vsBot?: boolean;
+  restoreBattleId?: string; // ID da batalha para restaurar do banco
 }
 
 interface JoinOptions {
@@ -58,7 +76,13 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     string,
     { timeout: Delayed; data: any }
   >();
+  private persistenceTimer: Delayed | null = null;
+  private allDisconnectedSince: number | null = null;
   private rematchRequests = new Set<string>();
+  private restoredFromDb = false;
+
+  /** Gerenciador de QTEs ativos */
+  private qteManager: QTEManager | null = null;
 
   async onCreate(options: ArenaRoomOptions) {
     this.autoDispose = true;
@@ -67,6 +91,24 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       `[ArenaRoom] Options recebidas:`,
       JSON.stringify(options, null, 2)
     );
+
+    // Verificar se é uma restauração de batalha do banco
+    if (options.restoreBattleId) {
+      const restored = await this.restoreFromDatabase(options.restoreBattleId);
+      if (restored) {
+        console.log(
+          `[ArenaRoom] Batalha ${options.restoreBattleId} restaurada do banco`
+        );
+        this.restoredFromDb = true;
+        this.lobbyPhase = false;
+        // Registrar handlers e sair
+        this.registerMessageHandlers();
+        return;
+      }
+      console.warn(
+        `[ArenaRoom] Falha ao restaurar batalha ${options.restoreBattleId}, criando nova`
+      );
+    }
 
     // Inicializar estado
     this.setState(new ArenaBattleState());
@@ -80,6 +122,8 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       hostUserId: options.userId,
       maxPlayers: this.state.maxPlayers,
       playerCount: 0,
+      players: [] as string[],
+      playerKingdoms: {} as Record<string, string>, // userId -> kingdomId
       vsBot: options.vsBot || false,
       status: "WAITING",
     });
@@ -93,6 +137,157 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     }
   }
 
+  /**
+   * Restaura uma batalha do banco de dados
+   */
+  private async restoreFromDatabase(battleId: string): Promise<boolean> {
+    try {
+      const persistedBattle = await loadBattle(battleId);
+      if (!persistedBattle) {
+        return false;
+      }
+
+      // Inicializar estado
+      this.setState(new ArenaBattleState());
+      this.state.battleId = battleId;
+      this.state.lobbyId = persistedBattle.lobbyId || battleId;
+      this.state.status = "ACTIVE";
+      this.state.round = persistedBattle.round;
+      this.state.gridWidth = persistedBattle.gridWidth;
+      this.state.gridHeight = persistedBattle.gridHeight;
+      this.state.maxPlayers = persistedBattle.maxPlayers;
+      this.state.currentTurnIndex = persistedBattle.currentTurnIndex;
+
+      // Restaurar actionOrder
+      persistedBattle.actionOrder.forEach((id) => {
+        this.state.actionOrder.push(id);
+      });
+
+      // Restaurar config
+      if (!this.state.config) {
+        this.state.config = new ArenaConfigSchema();
+      }
+      if (!this.state.config.map) {
+        this.state.config.map = new BattleMapConfigSchema();
+      }
+      this.state.config.map.terrainType = persistedBattle.terrainType;
+
+      // Restaurar obstáculos (ArenaBattleState.obstacles é ArraySchema)
+      for (const obs of persistedBattle.obstacles) {
+        const obstacle = new BattleObstacleSchema();
+        obstacle.id = obs.id;
+        obstacle.posX = obs.posX;
+        obstacle.posY = obs.posY;
+        obstacle.type = obs.type;
+        obstacle.hp = obs.hp;
+        obstacle.maxHp = obs.maxHp;
+        obstacle.destroyed = obs.destroyed ?? false;
+        this.state.obstacles.push(obstacle);
+      }
+
+      // Restaurar jogadores
+      for (let i = 0; i < persistedBattle.playerIds.length; i++) {
+        const player = new BattlePlayerSchema();
+        player.oderId = persistedBattle.playerIds[i];
+        player.kingdomId = persistedBattle.kingdomIds[i] || "";
+        player.playerIndex = i;
+        player.playerColor =
+          persistedBattle.playerColors[i] || PLAYER_COLORS[i];
+        player.isConnected = false; // Será true quando reconectar
+        player.isBot = player.oderId.startsWith("bot_");
+
+        // Buscar nome do reino
+        const kingdom = await prisma.kingdom.findUnique({
+          where: { id: player.kingdomId },
+          include: { owner: true },
+        });
+        player.kingdomName = kingdom?.name || "Reino";
+        player.username = kingdom?.owner?.username || "Player";
+
+        this.state.players.push(player);
+      }
+
+      // Restaurar unidades
+      for (const unit of persistedBattle.units) {
+        const battleUnit = new BattleUnitSchema();
+        battleUnit.id = unit.id;
+        battleUnit.sourceUnitId = unit.sourceUnitId || "";
+        battleUnit.ownerId = unit.ownerId || "";
+        battleUnit.ownerKingdomId = unit.ownerKingdomId || "";
+        battleUnit.name = unit.name;
+        battleUnit.avatar = unit.avatar || "";
+        battleUnit.category = unit.category;
+        battleUnit.troopSlot = unit.troopSlot ?? -1;
+        battleUnit.level = unit.level;
+        battleUnit.race = unit.race || "";
+        battleUnit.classCode = unit.classCode || "";
+        battleUnit.combat = unit.combat;
+        battleUnit.speed = unit.speed;
+        battleUnit.focus = unit.focus;
+        battleUnit.resistance = unit.resistance;
+        battleUnit.will = unit.will;
+        battleUnit.vitality = unit.vitality;
+        battleUnit.damageReduction = unit.damageReduction;
+        battleUnit.maxHp = unit.maxHp;
+        battleUnit.currentHp = unit.currentHp;
+        battleUnit.maxMana = unit.maxMana;
+        battleUnit.currentMana = unit.currentMana;
+        battleUnit.posX = unit.posX;
+        battleUnit.posY = unit.posY;
+        battleUnit.movesLeft = unit.movesLeft;
+        battleUnit.actionsLeft = unit.actionsLeft;
+        battleUnit.attacksLeftThisTurn = unit.attacksLeftThisTurn;
+        battleUnit.isAlive = unit.isAlive;
+        battleUnit.actionMarks = unit.actionMarks;
+        battleUnit.physicalProtection = unit.physicalProtection;
+        battleUnit.maxPhysicalProtection = unit.maxPhysicalProtection;
+        battleUnit.magicalProtection = unit.magicalProtection;
+        battleUnit.maxMagicalProtection = unit.maxMagicalProtection;
+        battleUnit.hasStartedAction = unit.hasStartedAction;
+        battleUnit.grabbedByUnitId = unit.grabbedByUnitId || "";
+        battleUnit.isAIControlled = unit.isAIControlled;
+        battleUnit.aiBehavior = unit.aiBehavior || "AGGRESSIVE";
+        battleUnit.size = unit.size;
+        battleUnit.visionRange = unit.visionRange;
+
+        // Restaurar arrays
+        unit.features.forEach((f) => battleUnit.features.push(f));
+        unit.equipment.forEach((e) => battleUnit.equipment.push(e));
+        unit.spells.forEach((s) => battleUnit.spells.push(s));
+        unit.conditions.forEach((c) => battleUnit.conditions.push(c));
+
+        // Restaurar cooldowns
+        Object.entries(unit.unitCooldowns).forEach(([key, value]) => {
+          battleUnit.unitCooldowns.set(key, value);
+        });
+
+        this.state.units.set(battleUnit.id, battleUnit);
+      }
+
+      // Atualizar metadata
+      this.setMetadata({
+        hostUserId: persistedBattle.playerIds[0],
+        maxPlayers: persistedBattle.maxPlayers,
+        playerCount: persistedBattle.playerIds.length,
+        players: persistedBattle.playerIds,
+        vsBot: persistedBattle.playerIds.some((id) => id.startsWith("bot_")),
+        status: "BATTLING",
+      });
+
+      // Deletar do banco (já está na memória agora)
+      await deleteBattle(battleId);
+
+      console.log(
+        `[ArenaRoom] Restauração completa: ${persistedBattle.units.length} unidades, ${persistedBattle.obstacles.length} obstáculos`
+      );
+
+      return true;
+    } catch (error) {
+      console.error(`[ArenaRoom] Erro ao restaurar batalha:`, error);
+      return false;
+    }
+  }
+
   async onJoin(client: Client, options: JoinOptions) {
     console.log(
       `[ArenaRoom] ${client.sessionId} entrou na sala ${this.roomId}`
@@ -102,7 +297,7 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
     // Verificar se ainda está em fase de lobby
     if (!this.lobbyPhase && this.state.status !== "WAITING") {
-      // Tentar reconectar jogador desconectado
+      // Tentar reconectar jogador desconectado (via disconnectedPlayers map)
       const disconnected = this.disconnectedPlayers.get(userId);
       if (disconnected) {
         disconnected.timeout.clear();
@@ -112,8 +307,31 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         const player = this.state.getPlayer(userId);
         if (player) {
           player.isConnected = true;
+          client.userData = { userId, kingdomId };
         }
 
+        // Cancelar persistência pendente
+        this.cancelPersistence();
+
+        console.log(
+          `[ArenaRoom] Jogador ${userId} reconectado via disconnectedPlayers`
+        );
+        client.send("battle:reconnected", { success: true });
+        return;
+      }
+
+      // Tentar reconectar jogador que já existe no state (refresh de página)
+      const existingPlayer = this.state.getPlayer(userId);
+      if (existingPlayer) {
+        existingPlayer.isConnected = true;
+        client.userData = { userId, kingdomId };
+
+        // Cancelar persistência pendente
+        this.cancelPersistence();
+
+        console.log(
+          `[ArenaRoom] Jogador ${userId} reconectado (já existe no state)`
+        );
         client.send("battle:reconnected", { success: true });
         return;
       }
@@ -121,9 +339,20 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       throw new Error("Batalha já iniciada");
     }
 
-    // Verificar se já está no lobby
-    if (this.state.getPlayer(userId)) {
-      throw new Error("Você já está neste lobby");
+    // Verificar se já está no lobby (em fase de lobby, pode reconectar também)
+    const existingPlayer = this.state.getPlayer(userId);
+    if (existingPlayer) {
+      // Se já existe, apenas reconectar
+      existingPlayer.isConnected = true;
+      client.userData = { userId, kingdomId };
+
+      console.log(`[ArenaRoom] Jogador ${userId} reconectado ao lobby`);
+      client.send("lobby:reconnected", {
+        lobbyId: this.roomId,
+        playerIndex: existingPlayer.playerIndex,
+        players: this.getPlayersInfo(),
+      });
+      return;
     }
 
     // Verificar limite de jogadores
@@ -163,10 +392,17 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
     this.state.players.push(player);
 
-    // Atualizar metadata
+    // Atualizar metadata com mapeamento de kingdomIds
+    const playerKingdoms: Record<string, string> = {};
+    this.state.players.forEach((p: BattlePlayerSchema) => {
+      playerKingdoms[p.oderId] = p.kingdomId;
+    });
+
     this.setMetadata({
       ...this.metadata,
       playerCount: this.state.players.length,
+      players: this.state.players.map((p: BattlePlayerSchema) => p.oderId),
+      playerKingdoms,
       status:
         this.state.players.length >= this.state.maxPlayers
           ? "READY"
@@ -252,11 +488,20 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         this.setMetadata({
           ...this.metadata,
           playerCount: this.state.players.length,
+          players: this.state.players.map((p: BattlePlayerSchema) => p.oderId),
           status: "WAITING",
         });
 
         this.broadcast("lobby:player_left", { userId });
       }
+      return;
+    }
+
+    // Se a batalha já terminou, não precisa fazer mais nada
+    if (this.state.status === "ENDED" || this.state.winnerId) {
+      console.log(
+        `[ArenaRoom] ${userId} saiu após fim da batalha - ignorando surrender`
+      );
       return;
     }
 
@@ -279,15 +524,110 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         this.handleSurrender(userId);
       }
     }
+
+    // Verificar se todos os jogadores humanos desconectaram
+    this.checkAllDisconnected();
   }
 
-  onDispose() {
+  /**
+   * Verifica se todos os jogadores humanos estão desconectados
+   * Se sim, persiste a batalha no banco de dados
+   */
+  private checkAllDisconnected() {
+    if (!this.lobbyPhase && this.state.status === "ACTIVE") {
+      const humanPlayers = this.state.players.filter(
+        (p: BattlePlayerSchema) => !p.isBot
+      );
+      const allDisconnected = humanPlayers.every(
+        (p: BattlePlayerSchema) => !p.isConnected
+      );
+
+      if (allDisconnected && humanPlayers.length > 0) {
+        this.allDisconnectedSince = Date.now();
+        console.log(
+          `[ArenaRoom] Todos os jogadores desconectaram. Persistindo batalha em 10s...`
+        );
+
+        // Aguardar 10 segundos antes de persistir (para permitir reconexão rápida)
+        this.persistenceTimer = this.clock.setTimeout(async () => {
+          await this.persistBattleToDb();
+        }, 10000);
+      }
+    }
+  }
+
+  /**
+   * Cancela a persistência se algum jogador reconectar
+   */
+  private cancelPersistence() {
+    if (this.persistenceTimer) {
+      this.persistenceTimer.clear();
+      this.persistenceTimer = null;
+      this.allDisconnectedSince = null;
+      console.log(`[ArenaRoom] Persistência cancelada - jogador reconectou`);
+    }
+  }
+
+  /**
+   * Persiste a batalha no banco de dados
+   */
+  private async persistBattleToDb() {
+    if (this.state.status !== "ACTIVE") {
+      console.log(`[ArenaRoom] Não persistindo - batalha não está ativa`);
+      return;
+    }
+
+    try {
+      const playerIds = this.state.players.map(
+        (p: BattlePlayerSchema) => p.oderId
+      );
+      const kingdomIds = this.state.players.map(
+        (p: BattlePlayerSchema) => p.kingdomId
+      );
+      const playerColors = this.state.players.map(
+        (p: BattlePlayerSchema) => p.playerColor
+      );
+
+      await saveArenaBattle(
+        this.roomId,
+        this.state,
+        playerIds,
+        kingdomIds,
+        playerColors
+      );
+
+      console.log(
+        `[ArenaRoom] Batalha ${this.roomId} persistida no banco de dados`
+      );
+    } catch (error) {
+      console.error(`[ArenaRoom] Erro ao persistir batalha:`, error);
+    }
+  }
+
+  async onDispose() {
     console.log(`[ArenaRoom] Sala ${this.roomId} sendo destruída`);
 
-    // Limpar timer
+    // Limpar timers
     if (this.turnTimer) {
       this.turnTimer.clear();
       this.turnTimer = null;
+    }
+
+    if (this.persistenceTimer) {
+      this.persistenceTimer.clear();
+      this.persistenceTimer = null;
+    }
+
+    // Se a batalha estava ativa e não terminada, persistir no banco
+    if (
+      !this.lobbyPhase &&
+      this.state.status === "ACTIVE" &&
+      !this.state.winnerId
+    ) {
+      console.log(
+        `[ArenaRoom] Batalha ativa não finalizada. Persistindo antes de destruir...`
+      );
+      await this.persistBattleToDb();
     }
   }
 
@@ -339,8 +679,14 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
     this.onMessage(
       "battle:attack",
-      (client, { attackerId, targetId, targetObstacleId }) => {
-        this.handleAttack(client, attackerId, targetId, targetObstacleId);
+      (client, { attackerId, targetId, targetObstacleId, targetPosition }) => {
+        this.handleAttack(
+          client,
+          attackerId,
+          targetId,
+          targetObstacleId,
+          targetPosition
+        );
       }
     );
 
@@ -368,6 +714,13 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       }
     );
 
+    // Handler para respostas de QTE
+    this.onMessage("qte:response", (client, response: QTEResponse) => {
+      const userData = client.userData as { userId: string } | undefined;
+      if (!userData) return;
+      this.handleQTEResponse(client, response);
+    });
+
     this.onMessage("battle:surrender", (client, _message) => {
       const userData = client.userData as { userId: string } | undefined;
       if (!userData) return;
@@ -378,6 +731,41 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       const userData = client.userData as { userId: string } | undefined;
       if (!userData) return;
       this.handleRematchRequest(userData.userId);
+    });
+
+    // Event subscription handlers (para UI de logs)
+    this.onMessage(
+      "event:subscribe",
+      (
+        client,
+        { context, contextId }: { context: string; contextId: string }
+      ) => {
+        // Por enquanto, apenas confirmar a inscrição
+        // Os logs são enviados via state.logs
+        client.send("event:subscribed", {
+          context,
+          contextId,
+          events: Array.from(this.state.logs || []),
+        });
+      }
+    );
+
+    this.onMessage("event:unsubscribe", (_client, _message) => {
+      // Nada a fazer - os logs são sincronizados via state
+    });
+
+    // Command handler para comandos de chat de batalha
+    this.onMessage("battle:command", (client, payload: CommandPayload) => {
+      const userData = client.userData as { userId: string } | undefined;
+      if (!userData) {
+        client.send("battle:command:response", {
+          commandCode: payload.commandCode,
+          result: { success: false, message: "Usuário não autenticado" },
+        });
+        return;
+      }
+
+      this.handleBattleCommand(client, payload, userData.userId);
     });
   }
 
@@ -396,7 +784,7 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
     // Gerar configuração do mapa
     const terrainType = getRandomTerrain();
-    const territorySize = getRandomTerritorySize();
+    const territorySize = getRandomArenaSize();
     const { width, height } = getGridDimensions(territorySize);
 
     this.state.gridWidth = width;
@@ -414,6 +802,9 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
     // Criar unidades para cada jogador
     await this.createBattleUnits();
+
+    // Inicializar QTE Manager
+    this.initializeQTEManager();
 
     // Definir ordem de ação
     this.calculateActionOrder();
@@ -500,8 +891,40 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
       if (!kingdom) continue;
 
+      // Converter TroopTemplates em formato compatível com troops
+      // TroopTemplates não têm HP/Mana, precisamos calcular a partir de vitality/will
+      const troops = kingdom.troopTemplates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        avatar: template.avatar,
+        category: "TROOP" as const,
+        troopSlot: template.slotIndex,
+        level: 1,
+        classCode: null,
+        features: JSON.stringify([template.passiveId]),
+        equipment: null,
+        spells: null,
+        conditions: null,
+        unitCooldowns: null,
+        combat: template.combat,
+        speed: template.speed,
+        focus: template.focus,
+        resistance: template.resistance,
+        will: template.will,
+        vitality: template.vitality,
+        damageReduction: null,
+        maxHp: template.vitality * HP_CONFIG.multiplier,
+        currentHp: template.vitality * HP_CONFIG.multiplier,
+        maxMana: template.will * MANA_CONFIG.multiplier,
+        currentMana: template.will * MANA_CONFIG.multiplier,
+        size: null,
+      }));
+
       const units = await createBattleUnitsForArena(
-        kingdom,
+        {
+          ...kingdom,
+          troops,
+        },
         player.oderId,
         player.playerIndex,
         this.state.gridWidth,
@@ -517,6 +940,11 @@ export class ArenaRoom extends Room<ArenaBattleState> {
   }
 
   private async createBotUnits(botPlayer: BattlePlayerSchema) {
+    console.log(
+      `[ArenaRoom] 🤖 createBotUnits chamado para player:`,
+      botPlayer.oderId
+    );
+
     // Implementação simplificada para bots
     // Na versão completa, usar createBotKingdom e createBattleUnitsForArena
     const botUnit = new BattleUnitSchema();
@@ -541,10 +969,21 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     botUnit.movesLeft = 5;
     botUnit.actionsLeft = 1;
     botUnit.attacksLeftThisTurn = 1;
+    botUnit.actionMarks = getMaxMarksByCategory("REGENT"); // Bots são REGENT = 3 marks
     botUnit.isAIControlled = true;
+    botUnit.isAlive = true;
 
     this.state.units.set(botUnit.id, botUnit);
     this.state.actionOrder.push(botUnit.id);
+
+    console.log(`[ArenaRoom] 🤖 Bot unit criado:`, {
+      id: botUnit.id,
+      name: botUnit.name,
+      isAIControlled: botUnit.isAIControlled,
+      isAlive: botUnit.isAlive,
+      posX: botUnit.posX,
+      posY: botUnit.posY,
+    });
   }
 
   private calculateActionOrder() {
@@ -565,11 +1004,26 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     // Definir primeira unidade como ativa
     if (this.state.actionOrder.length > 0) {
       this.state.currentTurnIndex = 0;
-      const firstUnit = this.state.actionOrder[0];
-      if (firstUnit) {
-        this.state.activeUnitId = firstUnit;
-        const unit = this.state.units.get(firstUnit);
-        this.state.currentPlayerId = unit?.ownerId || "";
+      const firstUnitId = this.state.actionOrder[0];
+      if (firstUnitId) {
+        this.state.activeUnitId = firstUnitId;
+        const unit = this.state.units.get(firstUnitId);
+        if (unit) {
+          this.state.currentPlayerId = unit.ownerId || "";
+          // Inicializar turno da primeira unidade
+          unit.movesLeft = unit.speed;
+          unit.actionsLeft = 1;
+          unit.attacksLeftThisTurn = 1;
+          unit.hasStartedAction = false;
+
+          // Se a primeira unidade é de IA, executar turno da IA
+          if (unit.isAIControlled) {
+            console.log(
+              `[ArenaRoom] 🤖 Primeira unidade é IA: ${unit.name}, iniciando turno da IA`
+            );
+            this.executeAITurn(unit);
+          }
+        }
       }
     }
   }
@@ -594,6 +1048,8 @@ export class ArenaRoom extends Room<ArenaBattleState> {
   }
 
   private advanceToNextUnit() {
+    console.log(`[ArenaRoom] advanceToNextUnit chamado`);
+
     // Encontrar próxima unidade viva
     let nextIndex =
       (this.state.currentTurnIndex + 1) % this.state.actionOrder.length;
@@ -626,6 +1082,10 @@ export class ArenaRoom extends Room<ArenaBattleState> {
           this.processRoundEnd();
         }
 
+        console.log(
+          `[ArenaRoom] Turno para: ${unit.name} (isAIControlled: ${unit.isAIControlled})`
+        );
+
         this.broadcast("battle:turn_changed", {
           activeUnitId: unitId,
           round: this.state.round,
@@ -634,6 +1094,9 @@ export class ArenaRoom extends Room<ArenaBattleState> {
 
         // Se é unidade de IA, executar turno
         if (unit.isAIControlled) {
+          console.log(
+            `[ArenaRoom] 🤖 Unidade de IA detectada, executando turno`
+          );
           this.executeAITurn(unit);
         }
 
@@ -668,8 +1131,14 @@ export class ArenaRoom extends Room<ArenaBattleState> {
   }
 
   private executeAITurn(unit: BattleUnitSchema) {
+    console.log(
+      `[ArenaRoom] 🤖 executeAITurn iniciado para: ${unit.name} (${unit.id})`
+    );
+
     // IA simplificada - mover em direção ao inimigo mais próximo e atacar
     setTimeout(() => {
+      console.log(`[ArenaRoom] 🤖 IA processando turno de: ${unit.name}`);
+
       // Encontrar inimigo mais próximo
       let closestEnemy: BattleUnitSchema | undefined = undefined;
       let closestDist = Infinity;
@@ -686,11 +1155,17 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       });
 
       if (!closestEnemy) {
+        console.log(
+          `[ArenaRoom] 🤖 IA: Nenhum inimigo encontrado, passando turno`
+        );
         this.advanceToNextUnit();
         return;
       }
 
       const enemy = closestEnemy as BattleUnitSchema;
+      console.log(
+        `[ArenaRoom] 🤖 IA: Inimigo mais próximo: ${enemy.name} a ${closestDist} células`
+      );
 
       // Mover em direção ao inimigo
       const dx = Math.sign(enemy.posX - unit.posX);
@@ -701,29 +1176,45 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         const newY = unit.posY + dy;
 
         if (this.isValidPosition(newX, newY)) {
+          const fromX = unit.posX;
+          const fromY = unit.posY;
           unit.posX = newX;
           unit.posY = newY;
           unit.movesLeft--;
 
+          console.log(
+            `[ArenaRoom] 🤖 IA: ${unit.name} moveu de (${fromX},${fromY}) para (${newX},${newY})`
+          );
+
           this.broadcast("battle:unit_moved", {
             unitId: unit.id,
-            fromX: unit.posX - dx,
-            fromY: unit.posY - dy,
+            fromX,
+            fromY,
             toX: newX,
             toY: newY,
             movesLeft: unit.movesLeft,
           });
+        } else {
+          console.log(
+            `[ArenaRoom] 🤖 IA: Posição (${newX},${newY}) inválida, não moveu`
+          );
         }
       }
 
-      // Atacar se adjacente
+      // Atacar se adjacente e tem recurso para atacar
       const newDist =
         Math.abs(enemy.posX - unit.posX) + Math.abs(enemy.posY - unit.posY);
-      if (newDist <= 1 && unit.attacksLeftThisTurn > 0) {
+      if (newDist <= 1 && this.canAttack(unit)) {
+        console.log(`[ArenaRoom] 🤖 IA: ${unit.name} atacando ${enemy.name}`);
         this.performAttack(unit, enemy);
+      } else {
+        console.log(
+          `[ArenaRoom] 🤖 IA: Distância ${newDist}, ataques restantes: ${unit.attacksLeftThisTurn}, ações: ${unit.actionsLeft}, não atacou`
+        );
       }
 
       // Fim do turno da IA
+      console.log(`[ArenaRoom] 🤖 IA: ${unit.name} finalizando turno`);
       this.advanceToNextUnit();
     }, 1000);
   }
@@ -757,26 +1248,100 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     return !occupied;
   }
 
-  private performAttack(attacker: BattleUnitSchema, target: BattleUnitSchema) {
-    const damage = Math.max(1, attacker.combat - target.damageReduction);
+  /**
+   * Verifica se a unidade pode atacar e consome recursos corretamente.
+   * @returns true se o ataque pode ser executado, false se não há recursos
+   */
+  private consumeAttackResource(attacker: BattleUnitSchema): boolean {
+    // Se já tem ataques restantes (ex: ataques extras), apenas decrementa
+    if (attacker.attacksLeftThisTurn > 0) {
+      attacker.attacksLeftThisTurn--;
+      return true;
+    }
 
-    target.currentHp -= damage;
-    attacker.attacksLeftThisTurn--;
+    // Se não tem ataques restantes, precisa usar uma ação
+    if (attacker.actionsLeft <= 0) {
+      return false;
+    }
 
-    if (target.currentHp <= 0) {
-      target.currentHp = 0;
+    // Consumir ação e calcular ataques extras baseados em condições
+    attacker.actionsLeft--;
+    const conditions = Array.from(attacker.conditions).filter(
+      (c): c is string => typeof c === "string"
+    );
+    const hasProtection = attacker.physicalProtection > 0;
+    const extraAttacks = getExtraAttacksFromConditions(
+      conditions,
+      hasProtection
+    );
+
+    // O primeiro ataque da ação é consumido imediatamente
+    // Os extras ficam disponíveis em attacksLeftThisTurn
+    attacker.attacksLeftThisTurn = extraAttacks;
+
+    return true;
+  }
+
+  /**
+   * Verifica se a unidade tem recursos para atacar (sem consumir)
+   */
+  private canAttack(attacker: BattleUnitSchema): boolean {
+    return attacker.attacksLeftThisTurn > 0 || attacker.actionsLeft > 0;
+  }
+
+  /**
+   * Executa o ataque com modificadores do QTE
+   * @param attacker Unidade atacante
+   * @param target Unidade alvo
+   * @param attackModifier Modificador de dano do atacante (QTE) - padrão 1.0
+   * @param defenseModifier Modificador de redução do defensor (QTE) - padrão 1.0
+   */
+  private performAttack(
+    attacker: BattleUnitSchema,
+    target: BattleUnitSchema,
+    attackModifier: number = 1.0,
+    defenseModifier: number = 1.0
+  ) {
+    const baseDamage = Math.max(1, attacker.combat - target.damageReduction);
+
+    // Aplicar modificadores do QTE
+    const modifiedDamage = Math.floor(
+      baseDamage * attackModifier * defenseModifier
+    );
+    const finalDamage = Math.max(1, modifiedDamage);
+
+    // Aplicar dano usando função centralizada (ataque físico)
+    const result = applyDamage(
+      target.physicalProtection,
+      target.magicalProtection,
+      target.currentHp,
+      finalDamage,
+      "FISICO"
+    );
+    target.physicalProtection = result.newPhysicalProtection;
+    target.magicalProtection = result.newMagicalProtection;
+    target.currentHp = result.newHp;
+
+    const targetDefeated = target.currentHp <= 0;
+    if (targetDefeated) {
       target.isAlive = false;
     }
+
+    // Consumir recurso de ataque
+    this.consumeAttackResource(attacker);
 
     this.broadcast("battle:unit_attacked", {
       attackerId: attacker.id,
       targetId: target.id,
-      damage,
+      damage: finalDamage,
+      baseDamage,
+      attackModifier,
+      defenseModifier,
       targetHpAfter: target.currentHp,
-      targetDefeated: !target.isAlive,
+      targetDefeated,
     });
 
-    if (!target.isAlive) {
+    if (targetDefeated) {
       this.checkBattleEnd();
     }
   }
@@ -859,7 +1424,8 @@ export class ArenaRoom extends Room<ArenaBattleState> {
     client: Client,
     attackerId: string,
     targetId?: string,
-    targetObstacleId?: string
+    targetObstacleId?: string,
+    targetPosition?: { x: number; y: number }
   ) {
     const userData = client.userData as { userId: string } | undefined;
     if (!userData) return;
@@ -875,8 +1441,9 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       return;
     }
 
-    if (attacker.attacksLeftThisTurn <= 0) {
-      client.send("error", { message: "Sem ataques restantes" });
+    // Verificar se tem recursos para atacar (ação ou ataques extras)
+    if (!this.canAttack(attacker)) {
+      client.send("error", { message: "Sem ataques ou ações restantes" });
       return;
     }
 
@@ -896,7 +1463,8 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         return;
       }
 
-      this.performAttack(attacker, target);
+      // Iniciar QTE de ataque em vez de atacar diretamente
+      this.startAttackQTE(client, attacker, target);
     } else if (targetObstacleId) {
       // Atacar obstáculo
       const obstacle = this.state.obstacles.find(
@@ -915,8 +1483,10 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         return;
       }
 
+      // Consumir recurso de ataque
+      this.consumeAttackResource(attacker);
+
       obstacle.hp -= attacker.combat;
-      attacker.attacksLeftThisTurn--;
 
       if (obstacle.hp <= 0) {
         obstacle.destroyed = true;
@@ -928,6 +1498,64 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         damage: attacker.combat,
         destroyed: obstacle.destroyed,
       });
+    } else if (targetPosition) {
+      // Ataque direcional - verificar se há unidade ou obstáculo na posição
+      const distance =
+        Math.abs(targetPosition.x - attacker.posX) +
+        Math.abs(targetPosition.y - attacker.posY);
+
+      // Attack range base é 1 (melee), mas pode ser modificado por condições
+      const baseAttackRange = 1;
+      if (distance > baseAttackRange) {
+        client.send("error", { message: "Posição fora de alcance" });
+        return;
+      }
+
+      // Verificar se há uma unidade na posição
+      const unitAtPosition = Array.from(this.state.units.values()).find(
+        (u) =>
+          u.posX === targetPosition.x &&
+          u.posY === targetPosition.y &&
+          u.isAlive
+      );
+
+      if (unitAtPosition) {
+        // Atacar a unidade encontrada
+        this.handleAttack(client, attackerId, unitAtPosition.id);
+        return;
+      }
+
+      // Verificar se há um obstáculo na posição
+      const obstacleAtPosition = Array.from(this.state.obstacles.values()).find(
+        (o) =>
+          o.posX === targetPosition.x &&
+          o.posY === targetPosition.y &&
+          !o.destroyed
+      );
+
+      if (obstacleAtPosition) {
+        // Atacar o obstáculo encontrado
+        this.handleAttack(client, attackerId, undefined, obstacleAtPosition.id);
+        return;
+      }
+
+      // Nenhum alvo na posição - ataque no ar (miss)
+      // Consumir recurso de ataque
+      this.consumeAttackResource(attacker);
+      attacker.hasStartedAction = true;
+
+      // Notificar que o ataque foi no ar (miss)
+      this.broadcast("battle:attack_missed", {
+        attackerId,
+        targetPosition,
+        message: "O ataque não atingiu nenhum alvo!",
+        actionsLeft: attacker.actionsLeft,
+        attacksLeftThisTurn: attacker.attacksLeftThisTurn,
+      });
+
+      console.log(
+        `[ArenaRoom] ⚔️ Ataque no ar: ${attacker.name} atacou posição (${targetPosition.x}, ${targetPosition.y}) sem alvo`
+      );
     }
   }
 
@@ -998,6 +1626,62 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       targetPosition,
       success: true,
     });
+  }
+
+  /**
+   * Handler para comandos de batalha (ex: /spawn, /godmode)
+   */
+  private handleBattleCommand(
+    client: Client,
+    payload: CommandPayload,
+    userId: string
+  ) {
+    const { commandCode, args, selectedUnitId } = payload;
+
+    // Verificar se a batalha está ativa
+    if (this.state.status !== "ACTIVE") {
+      client.send("battle:command:response", {
+        commandCode,
+        result: {
+          success: false,
+          message: "Comandos só podem ser executados durante uma batalha ativa",
+        },
+      });
+      return;
+    }
+
+    // Buscar unidade selecionada se fornecida
+    let selectedUnit = null;
+    if (selectedUnitId) {
+      selectedUnit = this.state.units.get(selectedUnitId) || null;
+    }
+
+    // Criar contexto de execução
+    const context = {
+      battleState: this.state,
+      userId,
+      selectedUnit,
+      gridWidth: this.state.gridWidth,
+      gridHeight: this.state.gridHeight,
+    };
+
+    // Executar comando
+    const result = handleCommand(payload, context);
+
+    // Enviar resposta ao cliente
+    client.send("battle:command:response", {
+      commandCode,
+      result,
+    });
+
+    // Se sucesso, fazer broadcast de feedback para todos
+    if (result.success) {
+      this.broadcast("battle:command:executed", {
+        commandCode,
+        userId,
+        message: result.message,
+      });
+    }
   }
 
   private handleSurrender(userId: string) {
@@ -1093,6 +1777,15 @@ export class ArenaRoom extends Room<ArenaBattleState> {
         this.turnTimer.clear();
       }
 
+      // Marcar batalha como terminada no banco (se foi persistida antes)
+      markBattleEnded(
+        this.roomId,
+        this.state.winnerId || undefined,
+        this.state.winReason || undefined
+      ).catch((err) =>
+        console.error("[ArenaRoom] Erro ao marcar batalha como ENDED:", err)
+      );
+
       this.broadcast("battle:ended", {
         winnerId: this.state.winnerId,
         winReason: this.state.winReason,
@@ -1150,5 +1843,255 @@ export class ArenaRoom extends Room<ArenaBattleState> {
       weather: this.state.config.weather,
       timeOfDay: this.state.config.timeOfDay,
     };
+  }
+
+  // =========================================
+  // QTE (Quick Time Event) System
+  // =========================================
+
+  /**
+   * Inicializa o gerenciador de QTE para esta batalha
+   * Usa this.clock.currentTime como fonte de verdade para sincronização
+   */
+  private initializeQTEManager() {
+    // Funções de callback para o QTE Manager
+    const broadcastFn = (event: string, data: unknown) => {
+      this.broadcast(event, data);
+    };
+
+    const sendToClientFn = (userId: string, event: string, data: unknown) => {
+      this.clients.forEach((client) => {
+        const userData = client.userData as { userId: string } | undefined;
+        if (userData?.userId === userId) {
+          client.send(event, data);
+        }
+      });
+    };
+
+    // Função para obter o tempo do servidor (clock do Colyseus)
+    const getServerTime = () => this.clock.currentTime;
+
+    this.qteManager = new QTEManager(
+      broadcastFn,
+      sendToClientFn,
+      getServerTime
+    );
+
+    // Atualizar estado inicial
+    this.updateQTEManagerUnits();
+  }
+
+  /**
+   * Converte um BattleUnitSchema para BattleUnit (tipos simples)
+   */
+  private schemaUnitToBattleUnit(schema: BattleUnitSchema): BattleUnit {
+    return {
+      id: schema.id,
+      sourceUnitId: schema.sourceUnitId,
+      ownerId: schema.ownerId,
+      ownerKingdomId: schema.ownerKingdomId,
+      name: schema.name,
+      avatar: schema.avatar,
+      category: schema.category,
+      troopSlot: schema.troopSlot,
+      level: schema.level,
+      race: schema.race,
+      classCode: schema.classCode,
+      features: Array.from(schema.features).filter(
+        (f): f is string => f !== undefined
+      ),
+      equipment: Array.from(schema.equipment).filter(
+        (e): e is string => e !== undefined
+      ),
+      combat: schema.combat,
+      speed: schema.speed,
+      focus: schema.focus,
+      resistance: schema.resistance,
+      will: schema.will,
+      vitality: schema.vitality,
+      damageReduction: schema.damageReduction,
+      currentHp: schema.currentHp,
+      maxHp: schema.maxHp,
+      currentMana: schema.currentMana,
+      maxMana: schema.maxMana,
+      posX: schema.posX,
+      posY: schema.posY,
+      movesLeft: schema.movesLeft,
+      actionsLeft: schema.actionsLeft,
+      attacksLeftThisTurn: schema.attacksLeftThisTurn,
+      isAlive: schema.isAlive,
+      actionMarks: schema.actionMarks,
+      physicalProtection: schema.physicalProtection,
+      maxPhysicalProtection: schema.maxPhysicalProtection,
+      magicalProtection: schema.magicalProtection,
+      maxMagicalProtection: schema.maxMagicalProtection,
+      conditions: Array.from(schema.conditions).filter(
+        (c): c is string => c !== undefined
+      ),
+      spells: Array.from(schema.spells).filter(
+        (s): s is string => s !== undefined
+      ),
+      hasStartedAction: schema.hasStartedAction,
+      grabbedByUnitId: schema.grabbedByUnitId || undefined,
+      size: schema.size as BattleUnit["size"],
+      visionRange: schema.visionRange,
+      unitCooldowns: Object.fromEntries(schema.unitCooldowns.entries()),
+      isAIControlled: schema.isAIControlled,
+      aiBehavior: schema.aiBehavior as BattleUnit["aiBehavior"],
+    };
+  }
+
+  /**
+   * Inicia um QTE de ataque
+   */
+  private startAttackQTE(
+    client: Client,
+    attacker: BattleUnitSchema,
+    target: BattleUnitSchema
+  ) {
+    if (!this.qteManager) {
+      // Fallback: se QTE não está disponível, atacar diretamente
+      console.warn(
+        "[ArenaRoom] QTE Manager não inicializado, atacando diretamente"
+      );
+      this.performAttack(attacker, target);
+      return;
+    }
+
+    // Atualizar unidades no QTE Manager
+    this.updateQTEManagerUnits();
+
+    // Converter para BattleUnit
+    const attackerUnit = this.schemaUnitToBattleUnit(attacker);
+    const targetUnit = this.schemaUnitToBattleUnit(target);
+
+    // Calcular dano base
+    const baseDamage = Math.max(1, attacker.combat - target.damageReduction);
+
+    // Iniciar o fluxo de QTE com callback de conclusão
+    this.qteManager.initiateAttack(
+      attackerUnit,
+      targetUnit,
+      this.state.battleId,
+      baseDamage,
+      false, // isMagicAttack
+      (result) => {
+        // Callback quando o QTE completa
+        this.handleQTECombatComplete(attacker.id, target.id, result);
+      }
+    );
+  }
+
+  /**
+   * Callback chamado quando um combate QTE completa
+   */
+  private handleQTECombatComplete(
+    attackerId: string,
+    targetId: string,
+    result: import("../../qte").QTECombatResult
+  ) {
+    const attacker = this.state.units.get(attackerId);
+    const target = this.state.units.get(targetId);
+
+    if (!attacker || !target) return;
+
+    if (result.dodged) {
+      // A esquiva foi bem-sucedida - atualizar posição
+      if (result.newDefenderPosition) {
+        const fromX = target.posX;
+        const fromY = target.posY;
+        target.posX = result.newDefenderPosition.x;
+        target.posY = result.newDefenderPosition.y;
+
+        this.broadcast("battle:unit_dodged", {
+          unitId: targetId,
+          fromX,
+          fromY,
+          toX: result.newDefenderPosition.x,
+          toY: result.newDefenderPosition.y,
+        });
+      }
+
+      // Se foi esquiva perfeita, aplicar buff
+      if (result.defenderQTE?.grade === "PERFECT") {
+        target.conditions.push("ADRENALINE_RUSH");
+        this.broadcast("battle:condition_applied", {
+          unitId: targetId,
+          conditionId: "ADRENALINE_RUSH",
+        });
+      }
+
+      // Descontar ataque do atacante mesmo com esquiva
+      this.consumeAttackResource(attacker);
+
+      this.broadcast("battle:attack_dodged", {
+        attackerId,
+        targetId,
+        attackerQTE: result.attackerQTE,
+        defenderQTE: result.defenderQTE,
+      });
+    } else {
+      // Aplicar dano com modificadores
+      this.performAttack(
+        attacker,
+        target,
+        result.attackerDamageModifier,
+        result.defenderDamageModifier
+      );
+    }
+  }
+
+  /**
+   * Processa a resposta de um QTE
+   */
+  private handleQTEResponse(client: Client, response: QTEResponse) {
+    if (!this.qteManager) {
+      client.send("error", { message: "QTE não está ativo" });
+      return;
+    }
+
+    const userData = client.userData as { userId: string } | undefined;
+    if (!userData) return;
+
+    // Verificar se o jogador é o dono da unidade que deve responder
+    const unit = this.state.units.get(response.unitId);
+    if (!unit || unit.ownerId !== userData.userId) {
+      client.send("error", { message: "Não é sua vez de responder ao QTE" });
+      return;
+    }
+
+    // Processar a resposta
+    this.qteManager.processResponse(response);
+  }
+
+  /**
+   * Atualiza as unidades no QTE Manager com o estado atual
+   */
+  private updateQTEManagerUnits() {
+    if (!this.qteManager) return;
+
+    const units: BattleUnit[] = [];
+    this.state.units.forEach((schemaUnit) => {
+      units.push(this.schemaUnitToBattleUnit(schemaUnit));
+    });
+
+    const obstacles = Array.from(this.state.obstacles)
+      .filter((o): o is NonNullable<typeof o> => o !== undefined)
+      .map((o) => ({
+        id: o.id,
+        posX: o.posX,
+        posY: o.posY,
+        type: o.type,
+        hp: o.hp,
+        maxHp: o.maxHp,
+        destroyed: o.destroyed,
+      }));
+
+    this.qteManager.updateBattleState(
+      units,
+      obstacles as any,
+      this.state.gridWidth,
+      this.state.gridHeight
+    );
   }
 }

@@ -8,3 +8,4 @@ export * from "./arena";
 export * from "./events";
 export * from "./chat";
 export * from "./character-creator";
+export * from "./commands";

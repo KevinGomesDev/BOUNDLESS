@@ -67,10 +67,12 @@ export {
 export {
   getVisionRange,
   isInVision,
+  isInVisionWithLoS,
   getEnemies,
   getVisibleEnemies,
   getAllies,
   filterVisibleUnits,
+  filterVisibleUnitsWithLoS,
   evaluateThreatLevel,
   canDefeatTarget,
   calculateTargetScore,

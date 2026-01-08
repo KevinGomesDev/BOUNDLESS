@@ -14,6 +14,10 @@ import {
 import { prisma } from "../../lib/prisma";
 import { verifyToken } from "../../lib/auth";
 import { matchMaker } from "@colyseus/core";
+import {
+  findActiveBattleForUser,
+  findActiveMatchForUser,
+} from "../../services/battle-persistence.service";
 
 // Imports para Kingdom
 import { KINGDOM_TEMPLATES } from "../../../../shared/data/Templates/KingdomTemplates";
@@ -908,34 +912,110 @@ export class GlobalRoom extends Room<GlobalRoomState> {
     }
 
     try {
-      // Verificar se está em alguma room de arena
+      // 1. Verificar se está em alguma room de arena ativa (memória)
       const arenaRooms = await matchMaker.query({ name: "arena" });
 
       for (const room of arenaRooms) {
         if (room.metadata?.players?.includes(userData.userId)) {
+          // Determinar se é lobby ou batalha baseado no status
+          const isInBattle =
+            room.metadata?.status === "BATTLING" ||
+            room.metadata?.status === "BATTLE_ENDED";
+
+          // Obter kingdomId do mapeamento na metadata
+          const kingdomId =
+            room.metadata?.playerKingdoms?.[userData.userId] || null;
+
           client.send("session:active", {
-            type: "ARENA_BATTLE",
+            type: isInBattle ? "ARENA_BATTLE" : "ARENA_LOBBY",
             roomId: room.roomId,
+            battleId: room.roomId,
+            lobbyId: room.roomId,
+            kingdomId, // Incluir kingdomId na resposta
+            status: room.metadata?.status,
+            source: "memory",
           });
+          console.log(
+            `[GlobalRoom] Sessão ativa encontrada para ${userData.userId}: Arena ${room.roomId} (${room.metadata?.status}) [memória]`
+          );
           return;
         }
       }
 
-      // Verificar se está em match (partida estratégica)
+      // 2. Verificar se está em match (partida estratégica) ativo (memória)
       const matchRooms = await matchMaker.query({ name: "match" });
 
       for (const room of matchRooms) {
         if (room.metadata?.players?.includes(userData.userId)) {
+          // Obter kingdomId do mapeamento na metadata
+          const kingdomId =
+            room.metadata?.playerKingdoms?.[userData.userId] || null;
+
           client.send("session:active", {
             type: "MATCH",
             roomId: room.roomId,
+            matchId: room.roomId,
+            kingdomId, // Incluir kingdomId na resposta
+            status: room.metadata?.status,
+            source: "memory",
           });
+          console.log(
+            `[GlobalRoom] Sessão ativa encontrada para ${userData.userId}: Match ${room.roomId} (${room.metadata?.status}) [memória]`
+          );
+          return;
+        }
+      }
+
+      // 3. Verificar se há batalha pausada no banco de dados
+      const pausedBattle = await findActiveBattleForUser(userData.userId);
+      if (pausedBattle) {
+        // Encontrar o kingdomId do usuário na batalha pausada
+        const playerIndex = pausedBattle.playerIds.indexOf(userData.userId);
+        const kingdomId =
+          playerIndex >= 0 ? pausedBattle.kingdomIds[playerIndex] : null;
+
+        client.send("session:active", {
+          type: "ARENA_BATTLE",
+          roomId: pausedBattle.id,
+          battleId: pausedBattle.id,
+          lobbyId: pausedBattle.lobbyId,
+          kingdomId, // Incluir kingdomId na resposta
+          status: pausedBattle.status,
+          source: "database",
+          needsRestore: true,
+        });
+        console.log(
+          `[GlobalRoom] Batalha pausada encontrada para ${userData.userId}: ${pausedBattle.id} [banco]`
+        );
+        return;
+      }
+
+      // 4. Verificar se há match pausado no banco de dados
+      const pausedMatchId = await findActiveMatchForUser(userData.userId);
+      if (pausedMatchId) {
+        // Buscar status do match no banco
+        const match = await prisma.match.findUnique({
+          where: { id: pausedMatchId },
+        });
+        if (match && match.status !== "ENDED") {
+          client.send("session:active", {
+            type: "MATCH",
+            roomId: pausedMatchId,
+            matchId: pausedMatchId,
+            status: match.status,
+            source: "database",
+            needsRestore: true,
+          });
+          console.log(
+            `[GlobalRoom] Match pausado encontrado para ${userData.userId}: ${pausedMatchId} [banco]`
+          );
           return;
         }
       }
 
       client.send("session:none", {});
     } catch (error) {
+      console.error("[GlobalRoom] Erro ao verificar sessão:", error);
       client.send("session:none", {});
     }
   }

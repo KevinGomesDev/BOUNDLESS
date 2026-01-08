@@ -1,6 +1,7 @@
 // server/src/ai/core/pathfinding.ts
-// Pathfinding simples para a IA (A* simplificado)
+// Pathfinding usando Pathfinding.js
 
+import PF from "pathfinding";
 import type {
   BattleObstacle,
   BattleUnit,
@@ -12,12 +13,9 @@ interface Position {
   y: number;
 }
 
-interface PathNode extends Position {
-  g: number; // Custo do início até aqui
-  h: number; // Heurística (distância estimada até o objetivo)
-  f: number; // g + h
-  parent: PathNode | null;
-}
+// ============================================
+// FUNÇÕES UTILITÁRIAS DE DISTÂNCIA
+// ============================================
 
 /**
  * Calcula distância Manhattan entre dois pontos
@@ -33,6 +31,10 @@ export function manhattanDistance(a: Position, b: Position): number {
 export function chebyshevDistance(a: Position, b: Position): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
+
+// ============================================
+// FUNÇÕES DE VALIDAÇÃO DE GRID
+// ============================================
 
 /**
  * Verifica se uma posição está dentro do grid
@@ -105,8 +107,64 @@ export function getNeighbors(
     );
 }
 
+// ============================================
+// PATHFINDING.JS - GRID E FINDER
+// ============================================
+
 /**
- * Encontra o caminho mais curto entre dois pontos usando A*
+ * Cria um grid do Pathfinding.js a partir do estado atual da batalha
+ */
+function createPFGrid(
+  gridWidth: number,
+  gridHeight: number,
+  units: BattleUnit[],
+  obstacles: BattleObstacle[],
+  ignoreUnitId?: string
+): PF.Grid {
+  const grid = new PF.Grid(gridWidth, gridHeight);
+
+  // Marcar obstáculos como não walkable
+  for (const obs of obstacles) {
+    if (
+      !obs.destroyed &&
+      isInBounds({ x: obs.posX, y: obs.posY }, gridWidth, gridHeight)
+    ) {
+      grid.setWalkableAt(obs.posX, obs.posY, false);
+    }
+  }
+
+  // Marcar unidades como não walkable
+  for (const unit of units) {
+    if (unit.id === ignoreUnitId) continue;
+    if (!isInBounds({ x: unit.posX, y: unit.posY }, gridWidth, gridHeight))
+      continue;
+
+    // Unidades vivas bloqueiam
+    if (unit.isAlive) {
+      grid.setWalkableAt(unit.posX, unit.posY, false);
+      continue;
+    }
+
+    // Cadáveres bloqueiam (exceto se removidos)
+    if (!unit.conditions?.includes("CORPSE_REMOVED")) {
+      grid.setWalkableAt(unit.posX, unit.posY, false);
+    }
+  }
+
+  return grid;
+}
+
+// Finder singleton para performance (sem diagonais)
+const finder = new PF.AStarFinder({
+  diagonalMovement: PF.DiagonalMovement.Never,
+});
+
+// ============================================
+// FUNÇÕES PRINCIPAIS DE PATHFINDING
+// ============================================
+
+/**
+ * Encontra o caminho mais curto entre dois pontos usando A* (Pathfinding.js)
  * Retorna array de posições (excluindo a posição inicial)
  */
 export function findPath(
@@ -117,96 +175,65 @@ export function findPath(
   units: BattleUnit[],
   obstacles: BattleObstacle[],
   ignoreUnitId?: string,
-  maxSteps: number = 50
+  _maxSteps: number = 50 // Mantido para compatibilidade de API
 ): Position[] {
   // Se já está no objetivo, retorna vazio
   if (start.x === goal.x && start.y === goal.y) {
     return [];
   }
 
-  const openSet: PathNode[] = [];
-  const closedSet = new Set<string>();
+  // Validar bounds
+  if (
+    !isInBounds(start, gridWidth, gridHeight) ||
+    !isInBounds(goal, gridWidth, gridHeight)
+  ) {
+    return [];
+  }
 
-  const startNode: PathNode = {
-    x: start.x,
-    y: start.y,
-    g: 0,
-    h: manhattanDistance(start, goal),
-    f: manhattanDistance(start, goal),
-    parent: null,
-  };
+  // Criar grid e encontrar caminho
+  const grid = createPFGrid(
+    gridWidth,
+    gridHeight,
+    units,
+    obstacles,
+    ignoreUnitId
+  );
 
-  openSet.push(startNode);
-
-  while (openSet.length > 0 && closedSet.size < maxSteps) {
-    // Encontrar nó com menor f
-    openSet.sort((a, b) => a.f - b.f);
-    const current = openSet.shift()!;
-    const currentKey = `${current.x},${current.y}`;
-
-    // Se chegou ao objetivo, reconstruir caminho
-    if (current.x === goal.x && current.y === goal.y) {
-      const path: Position[] = [];
-      let node: PathNode | null = current;
-      while (node && node.parent) {
-        path.unshift({ x: node.x, y: node.y });
-        node = node.parent;
-      }
-      return path;
-    }
-
-    closedSet.add(currentKey);
-
-    // Explorar vizinhos
-    const neighbors = getNeighbors(
-      current,
+  // Se o destino está bloqueado, tentar encontrar posição adjacente mais próxima
+  if (!grid.isWalkableAt(goal.x, goal.y)) {
+    const adjacentPositions = getNeighbors(
+      goal,
       gridWidth,
       gridHeight,
       units,
       obstacles,
       ignoreUnitId
     );
-
-    for (const neighbor of neighbors) {
-      const neighborKey = `${neighbor.x},${neighbor.y}`;
-      if (closedSet.has(neighborKey)) continue;
-
-      const g = current.g + 1;
-      const h = manhattanDistance(neighbor, goal);
-      const f = g + h;
-
-      // Verificar se já existe no openSet com custo menor
-      const existingIndex = openSet.findIndex(
-        (n) => n.x === neighbor.x && n.y === neighbor.y
-      );
-
-      if (existingIndex !== -1) {
-        if (g < openSet[existingIndex].g) {
-          openSet[existingIndex].g = g;
-          openSet[existingIndex].f = f;
-          openSet[existingIndex].parent = current;
-        }
-      } else {
-        openSet.push({
-          x: neighbor.x,
-          y: neighbor.y,
-          g,
-          h,
-          f,
-          parent: current,
-        });
-      }
+    if (adjacentPositions.length === 0) {
+      return [];
     }
+    // Encontrar a posição adjacente mais próxima do start
+    adjacentPositions.sort(
+      (a, b) => manhattanDistance(start, a) - manhattanDistance(start, b)
+    );
+    goal = adjacentPositions[0];
   }
 
-  // Não encontrou caminho - retornar caminho parcial mais próximo
-  return [];
+  // Pathfinding.js modifica o grid, então clonamos
+  const gridClone = grid.clone();
+  const rawPath = finder.findPath(start.x, start.y, goal.x, goal.y, gridClone);
+
+  // Converter para nosso formato (excluindo posição inicial)
+  if (rawPath.length <= 1) {
+    return [];
+  }
+
+  return rawPath.slice(1).map(([x, y]) => ({ x, y }));
 }
 
 /**
  * Encontra a melhor posição para mover em direção a um alvo
  * Considerando movimentos disponíveis
- * Se A* falhar (alvo muito longe), usa movimento direto
  */
 export function findBestMoveTowards(
   unit: BattleUnit,
@@ -219,7 +246,6 @@ export function findBestMoveTowards(
 ): Position | null {
   if (movesLeft <= 0) return null;
 
-  // Tentar A* primeiro
   const path = findPath(
     { x: unit.posX, y: unit.posY },
     targetPos,
@@ -237,7 +263,6 @@ export function findBestMoveTowards(
   }
 
   // Fallback: movimento direto na direção do alvo
-  // Usado quando A* falha (alvo muito longe, sem caminho direto)
   return findDirectMoveTowards(
     unit,
     targetPos,
@@ -250,7 +275,7 @@ export function findBestMoveTowards(
 }
 
 /**
- * Movimento direto na direção do alvo (fallback quando A* falha)
+ * Movimento direto na direção do alvo (fallback quando pathfinding falha)
  * Tenta mover em linha reta, priorizando eixo com maior diferença
  */
 function findDirectMoveTowards(
@@ -266,11 +291,6 @@ function findDirectMoveTowards(
   let currentPos = { ...startPos };
   let stepsRemaining = movesLeft;
 
-  // Calcular direção
-  const dx = targetPos.x - unit.posX;
-  const dy = targetPos.y - unit.posY;
-
-  // Mover passo a passo na direção do alvo
   while (stepsRemaining > 0) {
     const remainingDx = targetPos.x - currentPos.x;
     const remainingDy = targetPos.y - currentPos.y;
@@ -282,9 +302,7 @@ function findDirectMoveTowards(
     let nextPos: Position | null = null;
     const candidates: Position[] = [];
 
-    // Priorizar baseado na distância restante
     if (Math.abs(remainingDx) >= Math.abs(remainingDy)) {
-      // Tentar X primeiro, depois Y
       if (remainingDx !== 0) {
         candidates.push({
           x: currentPos.x + Math.sign(remainingDx),
@@ -298,7 +316,6 @@ function findDirectMoveTowards(
         });
       }
     } else {
-      // Tentar Y primeiro, depois X
       if (remainingDy !== 0) {
         candidates.push({
           x: currentPos.x,
@@ -313,20 +330,6 @@ function findDirectMoveTowards(
       }
     }
 
-    // Adicionar movimentos laterais como fallback
-    if (remainingDx !== 0) {
-      candidates.push({
-        x: currentPos.x + Math.sign(remainingDx),
-        y: currentPos.y,
-      });
-    }
-    if (remainingDy !== 0) {
-      candidates.push({
-        x: currentPos.x,
-        y: currentPos.y + Math.sign(remainingDy),
-      });
-    }
-
     // Encontrar primeira posição válida
     for (const candidate of candidates) {
       if (
@@ -338,14 +341,12 @@ function findDirectMoveTowards(
       }
     }
 
-    // Se não há movimento válido, parar
     if (!nextPos) break;
 
     currentPos = nextPos;
     stepsRemaining--;
   }
 
-  // Retornar posição final se diferente da inicial
   if (currentPos.x !== startPos.x || currentPos.y !== startPos.y) {
     return currentPos;
   }
@@ -379,7 +380,6 @@ export function findBestRetreatPosition(
     y: unit.posY - enemyCenter.y,
   };
 
-  // Normalizar e escalar
   const magnitude = Math.sqrt(
     fleeDirection.x * fleeDirection.x + fleeDirection.y * fleeDirection.y
   );
@@ -390,7 +390,6 @@ export function findBestRetreatPosition(
     y: fleeDirection.y / magnitude,
   };
 
-  // Tentar posições na direção de fuga
   const targetPos = {
     x: Math.round(
       Math.max(
