@@ -2,7 +2,7 @@ import React from "react";
 import {
   ATTRIBUTE_NAMES,
   type AttributeKey,
-} from "../../../../../../shared/config/global.config";
+} from "../../../../../../shared/config";
 
 type AttributeInfo = {
   name: string;

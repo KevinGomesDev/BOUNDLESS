@@ -17,7 +17,7 @@ import { matchMaker } from "@colyseus/core";
 import {
   findActiveBattleForUser,
   findActiveMatchForUser,
-} from "../../services/battle-persistence.service";
+} from "../../modules/match/services/battle-persistence.service";
 
 // Imports para Kingdom
 import { KINGDOM_TEMPLATES } from "../../../../shared/data/Templates/KingdomTemplates";

@@ -2,7 +2,7 @@ import React from "react";
 import { useMatch } from "../../match";
 import { useAuth } from "../../auth";
 import { useColyseusConnection } from "../../../core";
-import { RESOURCE_NAMES } from "../../../../../shared/config/global.config";
+import { RESOURCE_NAMES } from "../../../../../shared/config";
 
 /**
  * TopHUD - Barra Superior do Mapa (estilo Topbar padrão)

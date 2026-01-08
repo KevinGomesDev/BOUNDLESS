@@ -1,7 +1,7 @@
 // shared/types/map.types.ts
 // Tipos de Mapa compartilhados entre Frontend e Backend
 
-import type { TerritorySize, TerrainType } from "../config/global.config";
+import type { TerritorySize, TerrainType } from "../config";
 
 // Re-export TerrainType e TerritorySize for convenience
 export type { TerritorySize, TerrainType };

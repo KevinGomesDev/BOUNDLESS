@@ -1,6 +1,6 @@
 import React from "react";
-import type { AttributeKey } from "../../../../shared/config/global.config";
-import { ALL_ATTRIBUTE_KEYS } from "../../../../shared/config/global.config";
+import type { AttributeKey } from "../../../../shared/config";
+import { ALL_ATTRIBUTE_KEYS } from "../../../../shared/config";
 import { AttributeBar } from "./AttributeBar";
 import type { AttributesDisplayProps } from "./types";
 

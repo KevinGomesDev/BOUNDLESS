@@ -1,4 +1,4 @@
-import type { AttributeKey } from "../../../../shared/config/global.config";
+import type { AttributeKey } from "../../../../shared/config";
 
 export interface AttributesDisplayProps {
   attributes: {

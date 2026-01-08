@@ -111,3 +111,25 @@ export interface PreparationData {
   isReady: boolean;
   freeBuildingsRemaining: number;
 }
+
+/**
+ * Submissão de tributo de um jogador
+ */
+export interface TributeSubmission {
+  playerId: string;
+  decision: "CONTRIBUIR" | "SABOTAR" | "NAOINTERVIER";
+  amount: number;
+}
+
+/**
+ * Resultado da pilha de tributo
+ */
+export interface TributePileResult {
+  totalValue: number;
+  contributionAmount: number;
+  sabotageAmount: number;
+  topContributor?: string;
+  topSaboteur?: string;
+  topContributionAmount: number;
+  topSabotageAmount: number;
+}

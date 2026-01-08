@@ -8,7 +8,7 @@ import {
   TERRAIN_DEFINITIONS,
   type TerrainType,
   type TerrainDefinition,
-} from "../../config/global.config";
+} from "../../config";
 import type { TerrainTypeConfig } from "../../types/map.types";
 
 // Formato legado para compatibilidade com worldmap (cores hex number)

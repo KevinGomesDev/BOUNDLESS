@@ -5,7 +5,7 @@
 import {
   isCellVisibleByUnit,
   isCellVisibleByUnitWithLoS,
-} from "../../../shared/config/global.config";
+} from "../../../shared/config";
 import type {
   BattleUnit,
   BattleObstacle,

@@ -12,7 +12,7 @@ export type {
   TerrainColor,
   ObstacleType,
   ObstacleVisualConfig,
-} from "../config/global.config";
+} from "../config";
 
 export {
   // Terreno
@@ -39,13 +39,13 @@ export {
   GRID_CONFIG,
   getGridDimensions,
   getRandomArenaSize,
-} from "../config/global.config";
+} from "../config";
 
 // =============================================================================
 // OBSTÁCULOS - Interface (mantida aqui por ser tipo de dados)
 // =============================================================================
 
-import type { ObstacleType } from "../config/global.config";
+import type { ObstacleType } from "../config";
 
 /**
  * Obstáculo no grid de batalha
@@ -68,11 +68,7 @@ export interface BattleObstacle {
 // CONFIGURAÇÃO DE BATALHA - Interface (mantida aqui por ser tipo de dados)
 // =============================================================================
 
-import type {
-  TerrainType,
-  TerritorySize,
-  UnitSize,
-} from "../config/global.config";
+import type { TerrainType, TerritorySize, UnitSize } from "../config";
 
 import type { ActiveEffectsMap } from "./conditions.types";
 

@@ -1,5 +1,6 @@
 // src/utils/items.generator.ts
-import { GeneratedItem, ItemRarity, AttributeKey } from "../types/items";
+import { GeneratedItem, ItemRarity } from "../../../shared/types";
+import { AttributeKey } from "../../../shared/config";
 
 function randomId(): string {
   // Simple UUID v4-like generator

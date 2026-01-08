@@ -5,10 +5,10 @@
 export * from "./common.schema";
 
 // Battle Unit
-export * from "./battle-unit.schema";
+export * from "../../modules/arena/colyseus/schemas/battle-unit.schema";
 
 // Arena (Lobby + Battle)
-export * from "./arena.schema";
+export * from "../../modules/arena/colyseus/schemas/arena.schema";
 
 // Match (Strategic Map)
-export * from "./match.schema";
+export * from "../../modules/match/colyseus/schemas/match.schema";

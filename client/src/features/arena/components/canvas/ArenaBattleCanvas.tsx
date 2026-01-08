@@ -15,7 +15,7 @@ import type {
   BattleObstacleState,
 } from "@/services/colyseus.service";
 import type { ObstacleType } from "../../../../../../shared/types/battle.types";
-import { getObstacleVisualConfig } from "../../../../../../shared/config/global.config";
+import { getObstacleVisualConfig } from "../../../../../../shared/config";
 import {
   getFullMovementInfo,
   type MovementCellInfo,
@@ -24,8 +24,6 @@ import {
   hasLineOfSight,
   obstaclesToBlockers,
   unitsToBlockers,
-  type UnitForLoS,
-  type ObstacleForLoS,
 } from "../../../../../../shared/utils/line-of-sight.utils";
 import { useSprites, updateSpriteFrame } from "./useSprites";
 import { useUnitAnimations } from "./useUnitAnimations";

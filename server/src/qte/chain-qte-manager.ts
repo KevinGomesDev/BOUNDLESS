@@ -3,7 +3,7 @@
 // Orquestra QTEs pré-calculados com validação por step
 
 import type { BattleUnit } from "../../../shared/types/battle.types";
-import { applyDamage } from "../utils/damage.utils";
+import { applyDamage } from "../modules/combat/damage.utils";
 import type {
   ChainQTEConfig,
   ChainQTEStepResponse,

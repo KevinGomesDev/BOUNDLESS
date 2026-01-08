@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { colyseusService } from "../../../../services/colyseus.service";
 import type { KingdomTemplateSummary, KingdomTemplateDetails } from "./types";
-import { RESOURCE_NAMES as GLOBAL_RESOURCE_NAMES } from "../../../../../../shared/config/global.config";
+import { RESOURCE_NAMES as GLOBAL_RESOURCE_NAMES } from "../../../../../../shared/config";
 
 interface TemplateCardProps {
   template: KingdomTemplateSummary;

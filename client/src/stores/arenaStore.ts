@@ -10,7 +10,7 @@ import {
   type BattlePlayerState,
   type BattleObstacleState,
 } from "../services/colyseus.service";
-import { ARENA_COLORS } from "../../../shared/config/global.config";
+import { ARENA_COLORS } from "../../../shared/config";
 import { CONDITION_COLORS } from "../config/colors.config";
 
 // ============================================

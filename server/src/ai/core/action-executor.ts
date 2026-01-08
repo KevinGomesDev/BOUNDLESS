@@ -7,12 +7,12 @@ import type { AIDecision } from "../types/ai.types";
 import {
   executeMoveAction,
   calculateBaseMovement,
-} from "../../logic/movement-actions";
+} from "../../modules/combat/movement-actions";
 import {
   executeSkill as executeSkillLogic,
   executeAttack as executeAttackLogic,
-} from "../../logic/skill-executors";
-import { executeSpell as executeSpellLogic } from "../../spells/executors";
+} from "../../modules/abilities/executors/skill-executors";
+import { executeSpell as executeSpellLogic } from "../../modules/abilities/executors/spell-executors";
 import { getAbilityByCode as getSpellByCode } from "../../../../shared/data/abilities.data";
 import {
   processAIUnit,
@@ -23,7 +23,7 @@ import {
 import {
   emitAttackHitEvent,
   emitAttackDodgedEvent,
-} from "../../logic/combat-events";
+} from "../../modules/combat/combat-events";
 
 // Delay padrão entre ações da IA (ms)
 const AI_ACTION_DELAY = 600;

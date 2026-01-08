@@ -21,7 +21,7 @@ import {
 import { selectBestSkill } from "../core/skill-evaluator";
 import { selectBestSpell } from "../core/spell-evaluator";
 import { BattleUnit } from "../../../../shared/types/battle.types";
-import { scanConditionsForAction } from "../../logic/conditions";
+import { scanConditionsForAction } from "../../modules/conditions/conditions";
 
 // =============================================================================
 // TIPOS
