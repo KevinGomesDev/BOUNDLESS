@@ -807,3 +807,95 @@ export async function emitFleeEvent(
     });
   }
 }
+
+// =============================================================================
+// EVENTOS DE ABILITY (HABILIDADE GENÉRICA)
+// =============================================================================
+
+import type {
+  AbilityDefinition,
+  AbilityExecutionResult,
+} from "@boundless/shared/types/ability.types";
+
+/**
+ * Emite evento quando uma ability é executada
+ * @param battleId - ID da batalha
+ * @param ability - Definição da ability executada
+ * @param caster - Unidade que usou a ability
+ * @param target - Alvo da ability (pode ser null)
+ * @param result - Resultado da execução
+ * @param allUnits - Todas as unidades para cálculo de visibilidade
+ */
+export async function emitAbilityExecutedEvent(
+  battleId: string,
+  ability: AbilityDefinition,
+  caster: BattleUnit,
+  target: BattleUnit | null,
+  result: AbilityExecutionResult,
+  allUnits: BattleUnit[]
+): Promise<void> {
+  // Construir mensagem detalhada
+  let message = `⚡ ${caster.name} usou ${ability.name}`;
+  if (target) {
+    message += ` em ${target.name}`;
+  }
+
+  // Adicionar detalhes de combate
+  if (result.damageDealt !== undefined && result.damageDealt > 0) {
+    if (result.damageReduction && result.damageReduction > 0) {
+      message += ` [${result.rawDamage ?? result.damageDealt} - ${
+        result.damageReduction
+      } redução = ${result.damageDealt} dano]`;
+    } else {
+      message += ` [${result.damageDealt} dano]`;
+    }
+  }
+  if (result.healAmount) {
+    message += ` [+${result.healAmount} HP]`;
+  }
+  if (result.conditionApplied) {
+    message += ` [aplicou ${result.conditionApplied}]`;
+  }
+  if (result.targetDefeated) {
+    message += ` [alvo derrotado!]`;
+  }
+
+  message += "!";
+
+  // Calcular visibilidade
+  const visibility = {
+    allUnits,
+    positions: [
+      { x: caster.posX, y: caster.posY },
+      ...(target ? [{ x: target.posX, y: target.posY }] : []),
+    ],
+    alwaysInclude: [caster.ownerId, ...(target ? [target.ownerId] : [])],
+  };
+
+  await createSkillEvent({
+    battleId,
+    code: EVENT_CODES.SKILL_USED,
+    message,
+    severity: result.healAmount
+      ? "SUCCESS"
+      : result.damageDealt
+      ? "DANGER"
+      : "INFO",
+    actorId: caster.id,
+    actorName: caster.name,
+    targetId: target?.id,
+    targetName: target?.name,
+    data: {
+      skillCode: ability.code,
+      skillName: ability.name,
+      abilityCategory: ability.category,
+      damageDealt: result.damageDealt,
+      rawDamage: result.rawDamage,
+      damageReduction: result.damageReduction,
+      healAmount: result.healAmount,
+      conditionApplied: result.conditionApplied,
+      targetDefeated: result.targetDefeated,
+    },
+    visibility,
+  });
+}
