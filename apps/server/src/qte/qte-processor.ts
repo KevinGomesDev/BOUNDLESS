@@ -17,6 +17,7 @@ import {
   QTE_DAMAGE_MULTIPLIERS,
   PERFECT_DODGE_BUFF,
 } from "@boundless/shared/qte";
+import { applyConditionToUnit } from "../modules/conditions/conditions";
 
 // =============================================================================
 // FUNÇÕES AUXILIARES
@@ -396,11 +397,8 @@ export function applyPerfectDodgeBuff(
   unit: BattleUnit,
   result: QTEResult
 ): void {
-  if (
-    result.perfectDodgeBuff &&
-    !unit.conditions.includes(result.perfectDodgeBuff)
-  ) {
-    unit.conditions.push(result.perfectDodgeBuff);
+  if (result.perfectDodgeBuff) {
+    applyConditionToUnit(unit, result.perfectDodgeBuff);
   }
 }
 

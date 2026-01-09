@@ -33,6 +33,18 @@ export const COMBAT_CONDITIONS: Record<string, ConditionDefinition> = {
     },
   },
 
+  DASHING: {
+    id: "DASHING",
+    name: "Disparada",
+    description: "Movimento dobrado neste turno.",
+    expiry: "end_of_turn",
+    icon: "💨",
+    color: "#22d3ee",
+    effects: {
+      immediateMovementBonus: "speed", // Aplica +speed ao movesLeft instantaneamente
+    },
+  },
+
   PROTECTED: {
     id: "PROTECTED",
     name: "Protegido",

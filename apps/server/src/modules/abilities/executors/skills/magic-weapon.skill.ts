@@ -7,6 +7,7 @@ import type {
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import { isAdjacentOmnidirectional } from "@boundless/shared/utils/distance.utils";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * MAGIC_WEAPON: Imbuí a arma de uma Unidade adjacente com Magia
@@ -40,9 +41,7 @@ export function executeMagicWeapon(
   }
 
   // Aplicar condição MAGIC_WEAPON ao alvo
-  if (!target.conditions.includes("MAGIC_WEAPON")) {
-    target.conditions.push("MAGIC_WEAPON");
-  }
+  applyConditionToUnit(target, "MAGIC_WEAPON");
 
   return {
     success: true,

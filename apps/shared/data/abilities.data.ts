@@ -44,6 +44,7 @@ export const COMMON_ACTION_DASH: AbilityDefinition = {
   functionName: "executeDash",
   consumesAction: true,
   cooldown: 0,
+  conditionApplied: "DASHING",
 };
 
 export const COMMON_ACTION_DODGE: AbilityDefinition = {

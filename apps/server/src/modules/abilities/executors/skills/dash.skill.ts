@@ -1,5 +1,5 @@
 // server/src/modules/abilities/executors/skills/dash.skill.ts
-// DASH (Disparada) - Gasta uma ação para dobrar o movimento
+// DASH (Disparada) - Gasta uma ação para aplicar condição DASHING
 
 import type {
   AbilityDefinition,
@@ -9,11 +9,13 @@ import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import {
   scanConditionsForAction,
   applyConditionScanResult,
+  applyConditionToUnit,
 } from "../../../conditions/conditions";
-import { calculateBaseMovement } from "../../../combat/movement-actions";
 
 /**
- * DASH (Disparada): Gasta uma ação para dobrar o movimento
+ * DASH (Disparada): Gasta uma ação para aplicar condição DASHING
+ * A condição DASHING aplica movimento extra = speed instantaneamente
+ * e dura até o fim do turno atual
  */
 export function executeDash(
   caster: BattleUnit,
@@ -26,15 +28,15 @@ export function executeDash(
     return { success: false, error: scan.blockReason };
   }
 
-  // Aplicar condições
+  // Aplicar expiração de condições pela ação
   caster.conditions = applyConditionScanResult(caster.conditions, scan);
 
-  // Adicionar movimento extra (igual ao movimento base)
-  const extraMovement = calculateBaseMovement(caster.speed);
-  caster.movesLeft = caster.movesLeft + extraMovement;
+  // Aplicar condição DASHING - efeitos imediatos são aplicados automaticamente!
+  const result = applyConditionToUnit(caster, "DASHING");
 
   return {
     success: true,
-    movementGained: extraMovement,
+    movementGained: result.movementChange,
+    conditionsApplied: result.wasAdded ? ["DASHING"] : [],
   };
 }

@@ -360,63 +360,6 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
       selectedUnit &&
       isPlayerControllable(selectedUnit, currentUserId);
 
-  // Calcular características derivadas (ANTES do early return para respeitar regras de hooks)
-  const derivedStats = useMemo(() => {
-    if (!selectedUnit) return [];
-
-    const result: IconBadgeProps[] = [];
-
-    // Esquiva
-    const baseDodge = selectedUnit.speed * 3;
-    const hasDodging = selectedUnit.conditions.includes("DODGING");
-    const dodgeBonus = hasDodging ? 50 : 0;
-    const totalDodge = Math.min(baseDodge + dodgeBonus, 75);
-
-    result.push({
-      icon: "🌀",
-      name: "Esquiva",
-      value: `${totalDodge}%`,
-      description: "Chance de evitar ataques físicos.",
-      color: "#22d3ee",
-      details: [
-        `Base (Speed × 3): ${baseDodge}%`,
-        ...(hasDodging ? [`Postura Defensiva: +${dodgeBonus}%`] : []),
-        `Máximo: 75%`,
-      ],
-    });
-
-    // Dano base
-    result.push({
-      icon: "⚔️",
-      name: "Dano",
-      value: selectedUnit.combat,
-      description: "Dano de ataques físicos.",
-      color: "#f87171",
-    });
-
-    // Poder mágico
-    if (selectedUnit.focus > 0) {
-      result.push({
-        icon: "✨",
-        name: "Poder Mágico",
-        value: selectedUnit.focus,
-        description: "Potência de magias.",
-        color: "#a78bfa",
-      });
-    }
-
-    // Movimento
-    result.push({
-      icon: "👣",
-      name: "Movimento",
-      value: selectedUnit.speed,
-      description: "Células por turno.",
-      color: "#60a5fa",
-    });
-
-    return result;
-  }, [selectedUnit]);
-
   if (!selectedUnit) {
     return (
       <div className="absolute bottom-0 left-0 right-0 bg-surface-900 border-t-2 border-surface-600 shadow-cosmic">
@@ -609,34 +552,20 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
           />
         </PanelStrip>
 
-        {/* FAIXA: Características Derivadas */}
+        {/* FAIXA: Efeitos Ativos (calculados pelo servidor) */}
         <PanelStripButton
-          icon="📊"
-          label="Características"
-          count={derivedStats.length}
-          color="#a78bfa"
+          icon="⚡"
+          label="Efeitos"
+          count={
+            selectedUnit.activeEffects
+              ? Object.keys(selectedUnit.activeEffects).length
+              : 0
+          }
+          color="#22c55e"
           hasPopup
         >
-          <div className="flex flex-wrap gap-1.5 max-w-[180px] justify-center">
-            {derivedStats.map((stat, i) => (
-              <IconBadge key={i} {...stat} />
-            ))}
-          </div>
+          <ActiveEffectsBadges activeEffects={selectedUnit.activeEffects} />
         </PanelStripButton>
-
-        {/* FAIXA: Efeitos Ativos (calculados pelo servidor) */}
-        {selectedUnit.activeEffects &&
-          Object.keys(selectedUnit.activeEffects).length > 0 && (
-            <PanelStripButton
-              icon="⚡"
-              label="Efeitos"
-              count={Object.keys(selectedUnit.activeEffects).length}
-              color="#22c55e"
-              hasPopup
-            >
-              <ActiveEffectsBadges activeEffects={selectedUnit.activeEffects} />
-            </PanelStripButton>
-          )}
 
         {/* FAIXA: Condições */}
         {selectedUnit.conditions.length > 0 && (

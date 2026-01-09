@@ -250,6 +250,24 @@ function broadcastDodge(
     });
   }
 
+  // Serializar activeEffects do defensor
+  const defenderActiveEffects: Record<string, any> = {};
+  target.activeEffects?.forEach((effect: any, key: string) => {
+    defenderActiveEffects[key] = {
+      key: effect.key,
+      value:
+        typeof effect.value === "string"
+          ? isNaN(Number(effect.value))
+            ? effect.value === "true"
+            : Number(effect.value)
+          : effect.value,
+      sources:
+        typeof effect.sources === "string"
+          ? JSON.parse(effect.sources)
+          : effect.sources,
+    };
+  });
+
   broadcast("battle:attack_dodged", {
     attackerId: attacker.id,
     targetId: target.id,
@@ -259,6 +277,11 @@ function broadcastDodge(
     attackerUpdated: {
       actionsLeft: attacker.actionsLeft,
       attacksLeftThisTurn: attacker.attacksLeftThisTurn,
+    },
+    // Dados atualizados do defensor (conditions + activeEffects, especialmente esquiva perfeita)
+    defenderUpdated: {
+      conditions: Array.from(target.conditions),
+      activeEffects: defenderActiveEffects,
     },
   });
 
@@ -296,6 +319,24 @@ function broadcastAttack(
   roomId: string,
   broadcast: Room<BattleSessionState>["broadcast"]
 ): void {
+  // Serializar activeEffects do alvo
+  const targetActiveEffects: Record<string, any> = {};
+  target.activeEffects?.forEach((effect: any, key: string) => {
+    targetActiveEffects[key] = {
+      key: effect.key,
+      value:
+        typeof effect.value === "string"
+          ? isNaN(Number(effect.value))
+            ? effect.value === "true"
+            : Number(effect.value)
+          : effect.value,
+      sources:
+        typeof effect.sources === "string"
+          ? JSON.parse(effect.sources)
+          : effect.sources,
+    };
+  });
+
   broadcast("battle:unit_attacked", {
     attackerId: attacker.id,
     targetId: target.id,
@@ -310,12 +351,14 @@ function broadcastAttack(
     targetDefeated: result.targetDefeated,
     damageTransferredToEidolon: result.damageTransferredToEidolon,
     eidolonDefeated: result.eidolonDefeated,
-    // Dados atualizados do alvo (proteções)
+    // Dados atualizados do alvo (proteções + conditions + activeEffects)
     targetUpdated: {
       currentHp: target.currentHp,
       physicalProtection: target.physicalProtection,
       magicalProtection: target.magicalProtection,
       isAlive: target.isAlive,
+      conditions: Array.from(target.conditions),
+      activeEffects: targetActiveEffects,
     },
     // Dados atualizados do atacante
     attackerUpdated: {

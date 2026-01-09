@@ -7,6 +7,8 @@ import type {
   ConditionDefinition,
   ConditionExpiry,
   ConditionInfo,
+  ActiveEffectsMap,
+  ActiveEffect,
 } from "@boundless/shared/types/conditions.types";
 
 // Importar definições centralizadas do shared
@@ -203,12 +205,23 @@ export function scanConditionsForAction(
 }
 
 // Aplica resultado da varredura, removendo condições expiradas
+// NOTA: Esta função retorna um novo array, não atualiza activeEffects
+// Para unidades, use applyConditionScanResultToUnit
 export function applyConditionScanResult(
   conditions: string[],
   scanResult: ConditionScanResult
 ): string[] {
   if (scanResult.conditionsToRemove.length === 0) return conditions;
   return conditions.filter((c) => !scanResult.conditionsToRemove.includes(c));
+}
+
+// Aplica resultado da varredura a uma unidade, atualizando activeEffects
+export function applyConditionScanResultToUnit(
+  unit: UnitForCondition,
+  scanResult: ConditionScanResult
+): void {
+  if (scanResult.conditionsToRemove.length === 0) return;
+  removeConditionsFromUnit(unit, scanResult.conditionsToRemove);
 }
 
 // Remove condições que expiram no fim do turno
@@ -247,6 +260,177 @@ export function removeCondition(
   conditionId: string
 ): string[] {
   return conditions.filter((c) => c !== conditionId);
+}
+
+// =============================================================================
+// APLICAÇÃO DE CONDIÇÕES COM EFEITOS IMEDIATOS
+// =============================================================================
+
+/**
+ * Interface mínima de unidade para aplicação de condições
+ * Permite que a função trabalhe com qualquer objeto que tenha esses campos
+ */
+export interface UnitForCondition {
+  conditions: string[];
+  speed: number;
+  movesLeft: number;
+  actionsLeft: number;
+  currentHp: number;
+  maxHp: number;
+  activeEffects?: ActiveEffectsMap;
+}
+
+/**
+ * Resultado da aplicação de uma condição
+ */
+export interface ApplyConditionResult {
+  /** Se a condição foi realmente adicionada (false se já existia) */
+  wasAdded: boolean;
+  /** Movimento ganho/perdido imediatamente */
+  movementChange: number;
+  /** Ações ganhas/perdidas imediatamente */
+  actionsChange: number;
+  /** HP modificado imediatamente */
+  hpChange: number;
+}
+
+/**
+ * FUNÇÃO PRINCIPAL: Aplica uma condição a uma unidade
+ *
+ * Esta é a ÚNICA função que deve ser usada para adicionar condições!
+ * Ela processa automaticamente todos os efeitos imediatos da condição.
+ *
+ * @param unit Unidade que receberá a condição (será mutada)
+ * @param conditionId ID da condição a aplicar
+ * @returns Resultado com informações sobre os efeitos aplicados
+ */
+export function applyConditionToUnit(
+  unit: UnitForCondition,
+  conditionId: string
+): ApplyConditionResult {
+  const result: ApplyConditionResult = {
+    wasAdded: false,
+    movementChange: 0,
+    actionsChange: 0,
+    hpChange: 0,
+  };
+
+  // Se já tem a condição, não adiciona novamente
+  if (unit.conditions.includes(conditionId)) {
+    return result;
+  }
+
+  // Adicionar condição
+  unit.conditions.push(conditionId);
+  result.wasAdded = true;
+
+  // Buscar definição da condição para aplicar efeitos imediatos
+  const condDef = CONDITIONS[conditionId];
+  if (!condDef?.effects) {
+    return result;
+  }
+
+  const effects = condDef.effects;
+
+  // === EFEITOS IMEDIATOS DE MOVIMENTO ===
+  if (effects.immediateMovementBonus !== undefined) {
+    if (effects.immediateMovementBonus === "speed") {
+      result.movementChange = Math.max(1, unit.speed);
+    } else if (typeof effects.immediateMovementBonus === "number") {
+      result.movementChange = effects.immediateMovementBonus;
+    }
+    unit.movesLeft += result.movementChange;
+  }
+
+  // === EFEITOS IMEDIATOS DE AÇÕES ===
+  if (effects.actionsMod !== undefined && effects.actionsMod !== 0) {
+    // actionsMod é aplicado imediatamente para condições como "EXTRA_ACTION"
+    result.actionsChange = effects.actionsMod;
+    unit.actionsLeft += result.actionsChange;
+  }
+
+  // === EFEITOS IMEDIATOS DE HP ===
+  if (effects.currentHpMod !== undefined && effects.currentHpMod !== 0) {
+    result.hpChange = effects.currentHpMod;
+    unit.currentHp = Math.min(
+      unit.maxHp,
+      Math.max(0, unit.currentHp + result.hpChange)
+    );
+  }
+
+  // === ATUALIZAR ACTIVE EFFECTS (fonte da verdade) ===
+  unit.activeEffects = calculateActiveEffects(unit.conditions);
+
+  return result;
+}
+
+/**
+ * Aplica múltiplas condições a uma unidade
+ * @param unit Unidade que receberá as condições
+ * @param conditionIds Lista de IDs de condições a aplicar
+ * @returns Lista de resultados para cada condição
+ */
+export function applyConditionsToUnit(
+  unit: UnitForCondition,
+  conditionIds: string[]
+): ApplyConditionResult[] {
+  const results = conditionIds.map((id) => applyConditionToUnit(unit, id));
+  // activeEffects já foi atualizado pela última chamada de applyConditionToUnit
+  return results;
+}
+
+/**
+ * Remove uma condição de uma unidade e atualiza activeEffects
+ * @param unit Unidade que perderá a condição
+ * @param conditionId ID da condição a remover
+ * @returns true se a condição foi removida, false se não existia
+ */
+export function removeConditionFromUnit(
+  unit: UnitForCondition,
+  conditionId: string
+): boolean {
+  const index = unit.conditions.indexOf(conditionId);
+  if (index === -1) {
+    return false;
+  }
+
+  unit.conditions.splice(index, 1);
+
+  // Atualizar activeEffects (fonte da verdade)
+  unit.activeEffects = calculateActiveEffects(unit.conditions);
+
+  return true;
+}
+
+/**
+ * Remove múltiplas condições de uma unidade e atualiza activeEffects
+ * @param unit Unidade que perderá as condições
+ * @param conditionIds Lista de IDs de condições a remover
+ * @returns Número de condições removidas
+ */
+export function removeConditionsFromUnit(
+  unit: UnitForCondition,
+  conditionIds: string[]
+): number {
+  const initialLength = unit.conditions.length;
+  unit.conditions = unit.conditions.filter((c) => !conditionIds.includes(c));
+  const removedCount = initialLength - unit.conditions.length;
+
+  if (removedCount > 0) {
+    // Atualizar activeEffects (fonte da verdade)
+    unit.activeEffects = calculateActiveEffects(unit.conditions);
+  }
+
+  return removedCount;
+}
+
+/**
+ * Sincroniza activeEffects com as condições atuais da unidade
+ * Use quando as condições foram modificadas externamente
+ * @param unit Unidade para sincronizar
+ */
+export function syncUnitActiveEffects(unit: UnitForCondition): void {
+  unit.activeEffects = calculateActiveEffects(unit.conditions);
 }
 
 // =============================================================================
@@ -477,11 +661,6 @@ export function getMinAttackSuccesses(conditions: string[]): number {
 // =============================================================================
 // CÁLCULO DE EFEITOS ATIVOS (AGREGADOS)
 // =============================================================================
-
-import type {
-  ActiveEffectsMap,
-  ActiveEffect,
-} from "@boundless/shared/types/conditions.types";
 
 /**
  * Calcula todos os efeitos ativos agregados das condições de uma unidade

@@ -9,6 +9,7 @@ import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import {
   scanConditionsForAction,
   applyConditionScanResult,
+  applyConditionToUnit,
 } from "../../../conditions/conditions";
 
 /**
@@ -29,9 +30,7 @@ export function executeDodge(
   caster.conditions = applyConditionScanResult(caster.conditions, scan);
 
   // Aplicar condição DODGING
-  if (!caster.conditions.includes("DODGING")) {
-    caster.conditions.push("DODGING");
-  }
+  applyConditionToUnit(caster, "DODGING");
 
   return {
     success: true,

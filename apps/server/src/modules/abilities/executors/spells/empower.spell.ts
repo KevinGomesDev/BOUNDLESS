@@ -8,6 +8,7 @@ import type {
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import { resolveSpellValue } from "../helpers";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * ⚡ EMPOWER - Potencializa unidade adjacente temporariamente
@@ -34,9 +35,7 @@ export function executeEmpower(
   const duration = resolveSpellValue(spell.conditionDuration, caster, 1);
 
   // Aplicar condição EMPOWERED
-  if (!targetUnit.conditions.includes("EMPOWERED")) {
-    targetUnit.conditions.push("EMPOWERED");
-  }
+  applyConditionToUnit(targetUnit, "EMPOWERED");
 
   // Valor do boost baseado no Focus do conjurador
   const boostValue = Math.floor(caster.focus / 2);

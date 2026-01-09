@@ -6,6 +6,7 @@ import type {
   AbilityExecutionResult,
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * ARCANE_SHIELD: Recebe Redução de Dano igual à metade do Foco até o próximo turno
@@ -21,9 +22,7 @@ export function executeArcaneShield(
   const damageReduction = Math.floor(caster.focus / 2);
 
   // Aplicar condição ARCANE_SHIELD
-  if (!caster.conditions.includes("ARCANE_SHIELD")) {
-    caster.conditions.push("ARCANE_SHIELD");
-  }
+  applyConditionToUnit(caster, "ARCANE_SHIELD");
 
   // Armazenar o valor da redução no damageReduction da unidade
   // Nota: A condição ARCANE_SHIELD será processada no sistema de dano

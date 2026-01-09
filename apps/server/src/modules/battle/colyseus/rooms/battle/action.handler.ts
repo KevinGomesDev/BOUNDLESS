@@ -309,6 +309,24 @@ function handleUseAbility(
     resultSuccess: result.success,
   });
 
+  // Serializar activeEffects para envio
+  const serializedActiveEffects: Record<string, any> = {};
+  unit.activeEffects?.forEach((effect: any, key: string) => {
+    serializedActiveEffects[key] = {
+      key: effect.key,
+      value:
+        typeof effect.value === "string"
+          ? isNaN(Number(effect.value))
+            ? effect.value === "true"
+            : Number(effect.value)
+          : effect.value,
+      sources:
+        typeof effect.sources === "string"
+          ? JSON.parse(effect.sources)
+          : effect.sources,
+    };
+  });
+
   broadcast("battle:skill_used", {
     casterUnitId: unitId,
     skillCode: abilityCode,
@@ -321,6 +339,8 @@ function handleUseAbility(
       currentHp: unit.currentHp,
       currentMana: unit.currentMana,
       attacksLeftThisTurn: unit.attacksLeftThisTurn,
+      conditions: Array.from(unit.conditions),
+      activeEffects: serializedActiveEffects,
     },
   });
 

@@ -727,6 +727,8 @@ export const useBattleStore = create<BattleState & BattleActions>(
           actionsLeft: number;
           attacksLeftThisTurn: number;
           hasStartedAction: boolean;
+          conditions?: string[];
+          activeEffects?: Record<string, any>;
         };
       }) => {
         console.log("[Battle] turn_changed:", data);
@@ -750,6 +752,9 @@ export const useBattleStore = create<BattleState & BattleActions>(
                     actionsLeft: data.unitUpdated!.actionsLeft,
                     attacksLeftThisTurn: data.unitUpdated!.attacksLeftThisTurn,
                     hasStartedAction: data.unitUpdated!.hasStartedAction,
+                    conditions: data.unitUpdated!.conditions ?? u.conditions,
+                    activeEffects:
+                      data.unitUpdated!.activeEffects ?? u.activeEffects,
                   }
                 : u
             ),
@@ -779,6 +784,8 @@ export const useBattleStore = create<BattleState & BattleActions>(
           physicalProtection: number;
           magicalProtection: number;
           isAlive: boolean;
+          conditions?: string[];
+          activeEffects?: Record<string, any>;
         };
         attackerUpdated?: {
           actionsLeft: number;
@@ -798,6 +805,9 @@ export const useBattleStore = create<BattleState & BattleActions>(
                   physicalProtection: data.targetUpdated.physicalProtection,
                   magicalProtection: data.targetUpdated.magicalProtection,
                   isAlive: data.targetUpdated.isAlive,
+                  conditions: data.targetUpdated.conditions ?? u.conditions,
+                  activeEffects:
+                    data.targetUpdated.activeEffects ?? u.activeEffects,
                 };
               }
               return {
@@ -839,6 +849,8 @@ export const useBattleStore = create<BattleState & BattleActions>(
           currentHp: number;
           currentMana: number;
           attacksLeftThisTurn: number;
+          conditions?: string[];
+          activeEffects?: Record<string, any>;
         };
       }) => {
         console.log("[Battle] skill_used:", data);
@@ -854,6 +866,9 @@ export const useBattleStore = create<BattleState & BattleActions>(
                     currentMana: data.casterUpdated!.currentMana,
                     attacksLeftThisTurn:
                       data.casterUpdated!.attacksLeftThisTurn,
+                    conditions: data.casterUpdated!.conditions ?? u.conditions,
+                    activeEffects:
+                      data.casterUpdated!.activeEffects ?? u.activeEffects,
                   }
                 : u
             ),
@@ -882,22 +897,34 @@ export const useBattleStore = create<BattleState & BattleActions>(
           actionsLeft: number;
           attacksLeftThisTurn: number;
         };
+        defenderUpdated?: {
+          conditions?: string[];
+          activeEffects?: Record<string, any>;
+        };
       }) => {
         console.log("[Battle] attack_dodged:", data);
-        if (data.attackerUpdated) {
-          set((state) => ({
-            units: state.units.map((u) =>
-              u.id === data.attackerId
-                ? {
-                    ...u,
-                    actionsLeft: data.attackerUpdated!.actionsLeft,
-                    attacksLeftThisTurn:
-                      data.attackerUpdated!.attacksLeftThisTurn,
-                  }
-                : u
-            ),
-          }));
-        }
+        set((state) => ({
+          units: state.units.map((u) => {
+            // Atualizar atacante
+            if (u.id === data.attackerId && data.attackerUpdated) {
+              return {
+                ...u,
+                actionsLeft: data.attackerUpdated.actionsLeft,
+                attacksLeftThisTurn: data.attackerUpdated.attacksLeftThisTurn,
+              };
+            }
+            // Atualizar defensor (conditions/activeEffects, especialmente esquiva perfeita)
+            if (u.id === data.targetId && data.defenderUpdated) {
+              return {
+                ...u,
+                conditions: data.defenderUpdated.conditions ?? u.conditions,
+                activeEffects:
+                  data.defenderUpdated.activeEffects ?? u.activeEffects,
+              };
+            }
+            return u;
+          }),
+        }));
       };
 
       // Handler para ataque no ar (miss) - atualiza recursos do atacante

@@ -12,7 +12,13 @@
 // =============================================================================
 
 import type { BattleUnit } from "../units/battle-unit.factory";
-import { CONDITIONS, removeNextTurnConditions } from "../conditions/conditions";
+import {
+  CONDITIONS,
+  removeNextTurnConditions,
+  applyConditionToUnit,
+  removeConditionsFromUnit,
+  syncUnitActiveEffects,
+} from "../conditions/conditions";
 import { getMaxMarksByCategory } from "./battle.utils";
 import { applyDamage } from "./damage.utils";
 import { tickUnitCooldowns } from "../abilities/executors";
@@ -117,15 +123,13 @@ export function processUnitTurnEndConditions(unit: BattleUnit): TurnEndResult {
     }
   }
 
-  // 4. Remover condições
+  // 4. Remover condições usando função centralizada
   for (const condId of conditionsToRemove) {
     if (unit.conditions.includes(condId)) {
       conditionsRemoved.push(condId);
     }
   }
-  unit.conditions = unit.conditions.filter(
-    (c) => !conditionsToRemove.includes(c)
-  );
+  removeConditionsFromUnit(unit, conditionsToRemove);
 
   // 5. Atualizar action marks (decrementar apenas se usou ação)
   if (unit.actionsLeft < 1) {
@@ -133,7 +137,7 @@ export function processUnitTurnEndConditions(unit: BattleUnit): TurnEndResult {
 
     // Se actionMarks chegou a 0, aplicar condição DISABLED
     if (unit.actionMarks <= 0 && !unit.conditions.includes("DISABLED")) {
-      unit.conditions.push("DISABLED");
+      applyConditionToUnit(unit, "DISABLED");
     }
   }
 
@@ -190,6 +194,9 @@ export function processUnitTurnStartConditions(
   );
   conditionsRemoved.push(...removed);
   unit.conditions = remainingConditions;
+
+  // Sincronizar activeEffects após remoções
+  syncUnitActiveEffects(unit);
 
   // 4. Preparar unidade para o turno
   unit.movesLeft = unit.speed;

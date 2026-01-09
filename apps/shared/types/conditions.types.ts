@@ -85,6 +85,10 @@ export interface ConditionEffects {
   learnsVisibleSpells?: boolean;
   convertPhysicalToMagical?: boolean; // Converte dano físico em mágico
   arcaneShieldActive?: boolean; // Escudo arcano ativo (redução = Focus/2)
+
+  // === EFEITOS IMEDIATOS (aplicados ao adicionar a condição) ===
+  /** Bônus de movimento imediato baseado no speed da unidade. Valor "speed" = usa speed da unidade */
+  immediateMovementBonus?: "speed" | number;
 }
 
 /**
@@ -133,6 +137,7 @@ export interface ConditionInfo {
 export type ConditionId =
   | "GRAPPLED"
   | "DODGING"
+  | "DASHING"
   | "PROTECTED"
   | "STUNNED"
   | "FROZEN"

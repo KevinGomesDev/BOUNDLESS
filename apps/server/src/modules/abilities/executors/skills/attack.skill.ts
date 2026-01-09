@@ -31,6 +31,7 @@ import {
   scanConditionsForAction,
   applyConditionScanResult,
   getExtraAttacksFromConditions,
+  applyConditionToUnit,
 } from "../../../conditions/conditions";
 import { applyDamage } from "../../../combat/damage.utils";
 
@@ -178,8 +179,8 @@ export function executeAttack(
     const corpseHp = OBSTACLE_CONFIG.corpseHp;
     const destroyed = rawDamage >= corpseHp;
 
-    if (destroyed && !target.conditions.includes("CORPSE_REMOVED")) {
-      target.conditions.push("CORPSE_REMOVED");
+    if (destroyed) {
+      applyConditionToUnit(target, "CORPSE_REMOVED");
     }
 
     attacker.conditions = applyConditionScanResult(
@@ -846,7 +847,7 @@ export function executeAttackFromQTEResult(
     // Aplicar buff de esquiva perfeita
     let perfectDodgeBuff: string | undefined;
     if (qteResult.defenderGrade === "PERFECT") {
-      target.conditions.push("ADRENALINE_RUSH");
+      applyConditionToUnit(target, "ADRENALINE_RUSH");
       perfectDodgeBuff = "ADRENALINE_RUSH";
     }
 

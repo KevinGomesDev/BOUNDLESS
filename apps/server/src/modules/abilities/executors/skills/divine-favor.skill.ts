@@ -6,6 +6,7 @@ import type {
   AbilityExecutionResult,
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * CLERIC_DIVINE_FAVOR: Próximo ataque tem vantagem
@@ -18,9 +19,7 @@ export function executeDivineFavor(
 ): AbilityExecutionResult {
   const effectTarget = target || caster;
 
-  if (!effectTarget.conditions.includes("HELP_NEXT")) {
-    effectTarget.conditions.push("HELP_NEXT");
-  }
+  applyConditionToUnit(effectTarget, "HELP_NEXT");
 
   return {
     success: true,

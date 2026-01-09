@@ -8,6 +8,7 @@ import type {
 import { resolveDynamicValue } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import { getManhattanDistance } from "@boundless/shared/utils/distance.utils";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * CLERIC_BLESS: Aliados em área ganham BLESSED
@@ -35,8 +36,8 @@ export function executeBless(
     );
     if (distance > radius) continue;
 
-    if (!unit.conditions.includes("BLESSED")) {
-      unit.conditions.push("BLESSED");
+    const result = applyConditionToUnit(unit, "BLESSED");
+    if (result.wasAdded) {
       unitsBlessed++;
     }
   }

@@ -10,7 +10,10 @@ import { BattleUnitSchema } from "../../../battle/colyseus/schemas";
 import { RACE_DEFINITIONS } from "@boundless/shared/data/Templates/RacesTemplates";
 import { HERO_CLASSES } from "@boundless/shared/data/abilities.data";
 import { determineUnitActions } from "../../../units/unit-actions";
-import { calculateActiveEffects } from "../../../conditions/conditions";
+import {
+  calculateActiveEffects,
+  applyConditionsToUnit,
+} from "../../../conditions/conditions";
 import { findAbilityByCode as findSkillByCode } from "@boundless/shared/data/abilities.data";
 import { getRacePassiveCondition } from "@boundless/shared/data/races.data";
 import {
@@ -258,7 +261,7 @@ export const executeSpawnCommand: CommandExecutorFn = (
 
     // Features, conditions, spells
     newUnit.features.push(...unitFeatures);
-    newUnit.conditions.push(...initialConditions);
+    applyConditionsToUnit(newUnit, initialConditions);
     newUnit.spells.clear();
 
     // Outros

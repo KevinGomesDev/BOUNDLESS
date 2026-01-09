@@ -7,6 +7,7 @@ import type {
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import { isAdjacentOmnidirectional } from "@boundless/shared/utils/distance.utils";
+import { applyConditionToUnit } from "../../../conditions/conditions";
 
 /**
  * CLERIC_TURN_UNDEAD: Aplica FRIGHTENED em inimigos adjacentes
@@ -27,8 +28,8 @@ export function executeTurnUndead(
     )
       continue;
 
-    if (!unit.conditions.includes("FRIGHTENED")) {
-      unit.conditions.push("FRIGHTENED");
+    const result = applyConditionToUnit(unit, "FRIGHTENED");
+    if (result.wasAdded) {
       affectedUnits.push(unit);
     }
   }

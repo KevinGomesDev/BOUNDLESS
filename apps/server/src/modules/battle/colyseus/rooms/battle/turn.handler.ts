@@ -198,6 +198,24 @@ export function advanceToNextUnit(
         `[BattleRoom] Turno para: ${unit.name} (isAIControlled: ${unit.isAIControlled})`
       );
 
+      // Serializar activeEffects para envio
+      const serializedActiveEffects: Record<string, any> = {};
+      unit.activeEffects?.forEach((effect: any, key: string) => {
+        serializedActiveEffects[key] = {
+          key: effect.key,
+          value:
+            typeof effect.value === "string"
+              ? isNaN(Number(effect.value))
+                ? effect.value === "true"
+                : Number(effect.value)
+              : effect.value,
+          sources:
+            typeof effect.sources === "string"
+              ? JSON.parse(effect.sources)
+              : effect.sources,
+        };
+      });
+
       broadcast("battle:turn_changed", {
         unitId: unitId,
         playerId: unit.ownerId,
@@ -209,6 +227,8 @@ export function advanceToNextUnit(
           actionsLeft: unit.actionsLeft,
           attacksLeftThisTurn: unit.attacksLeftThisTurn,
           hasStartedAction: unit.hasStartedAction,
+          conditions: Array.from(unit.conditions),
+          activeEffects: serializedActiveEffects,
         },
       });
 
