@@ -138,7 +138,15 @@ export function processDefenseQTEResponse(
   const input = response?.input ?? "NONE";
   const hitPosition = response?.hitPosition ?? 0;
 
-  const zones = calculateZones(config.hitZoneSize, config.perfectZoneSize);
+  // Zonas para ESQUIVA (Focus vs Focus)
+  const dodgeZones = calculateZones(config.hitZoneSize, config.perfectZoneSize);
+
+  // Zonas para BLOQUEIO (Resistance vs Combat ou Will vs Focus)
+  // Se não definidas, usa as mesmas da esquiva (compatibilidade)
+  const blockHitZoneSize = config.blockHitZoneSize ?? config.hitZoneSize;
+  const blockPerfectZoneSize =
+    config.blockPerfectZoneSize ?? config.perfectZoneSize;
+  const blockZones = calculateZones(blockHitZoneSize, blockPerfectZoneSize);
 
   // Determinar se é bloqueio ou esquiva
   const isBlock = input === "E";
@@ -157,16 +165,19 @@ export function processDefenseQTEResponse(
     isInvalidInput,
     invalidInputs: config.invalidInputs,
     attackDirection: config.attackDirection,
+    dodgeZones,
+    blockZones,
   });
 
   // === BLOQUEIO ===
   if (isBlock) {
+    // Usa zonas específicas de BLOCK (Resistance vs Combat)
     const grade = determineResultGrade(
       hitPosition,
-      zones.hitZoneStart,
-      zones.hitZoneEnd,
-      zones.perfectZoneStart,
-      zones.perfectZoneEnd,
+      blockZones.hitZoneStart,
+      blockZones.hitZoneEnd,
+      blockZones.perfectZoneStart,
+      blockZones.perfectZoneEnd,
       timedOut
     );
 
@@ -204,12 +215,13 @@ export function processDefenseQTEResponse(
 
   // === ESQUIVA ===
   if (isDodge && !isInvalidInput) {
+    // Usa zonas de DODGE (Focus vs Focus)
     const grade = determineResultGrade(
       hitPosition,
-      zones.hitZoneStart,
-      zones.hitZoneEnd,
-      zones.perfectZoneStart,
-      zones.perfectZoneEnd,
+      dodgeZones.hitZoneStart,
+      dodgeZones.hitZoneEnd,
+      dodgeZones.perfectZoneStart,
+      dodgeZones.perfectZoneEnd,
       false
     );
 

@@ -208,6 +208,8 @@ model Unit {
   conditions     String       @default("[]") // Códigos das condições ativas (JSON array)
   // Cooldowns de skills/spells entre batalhas
   unitCooldowns  String       @default("{}") // { code: turnosRestantes } (JSON object)
+  // Hotbar - Barra de atalhos (1-9 e Shift+1-9) - JSON: UnitHotbarConfig
+  hotbar         String       @default("{}") // { primary: [9 slots], secondary: [9 slots] }
   combat         Int
   speed          Int
   focus          Int
@@ -225,6 +227,12 @@ model Unit {
   locationIndex  Int?
   // NOTA: Campo 'actions' foi REMOVIDO - ações são calculadas em runtime
   // a partir de DEFAULT_UNIT_ACTIONS + skills ativas do features
+  
+  // === NEMESIS SYSTEM ===
+  // Identificador único se esta unidade é/foi um Nemesis
+  nemesisId           String?     // ID do Nemesis (se for um)
+  // Dados de Nemesis (apenas para unidades que são Nemesis)
+  nemesisData         String      @default("{}") // JSON: NemesisData completo
 }
 
 model Structure {
@@ -386,8 +394,24 @@ model BattleUnit {
   visionRange Int         @default(10)         // Vision range (max(10, focus))
   // Skill/Spell cooldowns
   unitCooldowns String     @default("{}")       // JSON: { "CODE": roundsLeft }
+  // Hotbar - Barra de atalhos (copiada do Unit original)
+  hotbar        String     @default("{}")       // JSON: UnitHotbarConfig { primary, secondary }
   // Active effects (efeitos temporários como buffs/debuffs)
   activeEffects String     @default("{}")       // JSON: { effectKey: { key, value, sources } }
+  
+  // === NEMESIS SYSTEM ===
+  // Se esta unidade é um Nemesis, carrega dados para narrativa emergente
+  nemesisId           String?                    // ID do Nemesis (referência)
+  isNemesis           Boolean    @default(false) // Flag rápida para identificar Nemesis
+  nemesisRank         String?                    // GRUNT | CAPTAIN | ELITE | WARLORD | OVERLORD
+  nemesisPowerLevel   Int        @default(0)     // Nível de poder do Nemesis
+  nemesisTraits       String     @default("[]") // JSON: PersonalityTrait[]
+  nemesisFears        String     @default("[]") // JSON: NemesisFear[]
+  nemesisStrengths    String     @default("[]") // JSON: NemesisStrength[]
+  nemesisScars        String     @default("[]") // JSON: ScarType[]
+  nemesisTitle        String?                    // Título conquistado
+  nemesisKillCount    Int        @default(0)     // Quantas vezes matou o jogador alvo
+  nemesisTargetPlayer String?                    // ID do jogador que é alvo
 }
 
 // =============================================================================

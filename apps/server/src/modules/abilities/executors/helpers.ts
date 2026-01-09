@@ -9,6 +9,7 @@ import {
   resolveDynamicValue,
   type DynamicValue,
   type CoordinatePattern,
+  type ImpactConfig,
 } from "@boundless/shared/types/ability.types";
 import { isAdjacentOmnidirectional } from "@boundless/shared/utils/distance.utils";
 import {
@@ -17,6 +18,12 @@ import {
   type TravelObstacle,
   type PatternCoordinate,
 } from "@boundless/shared/utils/targeting.utils";
+import {
+  calculateMultipleImpacts,
+  type ImpactUnit,
+  type ImpactObstacle,
+  type ImpactResult,
+} from "@boundless/shared/utils/impact.utils";
 
 // =============================================================================
 // SPELL HELPERS
@@ -365,5 +372,177 @@ export function resetEidolonOnDeath(): {
     resistance: 3,
     will: 1,
     vitality: 3,
+  };
+}
+
+// =============================================================================
+// IMPACT HELPERS
+// =============================================================================
+
+/**
+ * Converte BattleUnit para ImpactUnit
+ */
+function toImpactUnit(unit: BattleUnit): ImpactUnit {
+  return {
+    id: unit.id,
+    posX: unit.posX,
+    posY: unit.posY,
+    isAlive: unit.isAlive,
+    combat: unit.combat,
+    speed: unit.speed,
+    focus: unit.focus,
+    resistance: unit.resistance,
+    will: unit.will,
+    vitality: unit.vitality,
+    level: unit.level ?? 1,
+  };
+}
+
+/**
+ * Converte BattleObstacle para ImpactObstacle
+ */
+function toImpactObstacle(obstacle: BattleObstacle): ImpactObstacle {
+  return {
+    id: obstacle.id,
+    posX: obstacle.posX,
+    posY: obstacle.posY,
+    destroyed: obstacle.destroyed,
+    dimension:
+      typeof obstacle.size === "number"
+        ? obstacle.size
+        : obstacle.size === "LARGE"
+        ? 2
+        : 1,
+  };
+}
+
+/**
+ * Resultado do processamento de impacto
+ */
+export interface ProcessImpactResult {
+  /** Resultados individuais de cada unidade empurrada */
+  impacts: ImpactResult[];
+  /** Dano total adicional causado por colisões */
+  totalCollisionDamage: number;
+  /** Unidades que sofreram dano de colisão */
+  collisionDamageApplied: Array<{
+    unitId: string;
+    damage: number;
+    hpAfter: number;
+    defeated: boolean;
+  }>;
+}
+
+/**
+ * Processa o impacto (knockback) de uma ability para as unidades atingidas
+ * Atualiza as posições das unidades e aplica dano de colisão se configurado
+ *
+ * @param impactConfig Configuração de impacto da ability
+ * @param caster Unidade que usou a ability
+ * @param targetsHit Unidades atingidas pela ability
+ * @param impactOriginX Ponto X de origem do impacto (ex: centro da explosão)
+ * @param impactOriginY Ponto Y de origem do impacto
+ * @param baseDamage Dano base da ability (para calcular dano de colisão)
+ * @param allUnits Todas as unidades na batalha
+ * @param obstacles Obstáculos na batalha
+ * @param gridWidth Largura do grid
+ * @param gridHeight Altura do grid
+ * @param applyDamageFn Função para aplicar dano (injetada para evitar dependência circular)
+ */
+export function processImpact(
+  impactConfig: ImpactConfig,
+  caster: BattleUnit,
+  targetsHit: BattleUnit[],
+  impactOriginX: number,
+  impactOriginY: number,
+  baseDamage: number,
+  allUnits: BattleUnit[],
+  obstacles: BattleObstacle[],
+  gridWidth: number,
+  gridHeight: number,
+  applyDamageFn?: (
+    unit: BattleUnit,
+    damage: number,
+    damageType: "FISICO" | "MAGICO"
+  ) => { newHp: number; defeated: boolean }
+): ProcessImpactResult {
+  // Converter para tipos de impacto
+  const impactTargets = targetsHit.map(toImpactUnit);
+  const impactUnits = allUnits.map(toImpactUnit);
+  const impactObstacles = obstacles.map(toImpactObstacle);
+
+  // Atributos do caster para resolver valores dinâmicos
+  const casterAttrs = {
+    combat: caster.combat,
+    speed: caster.speed,
+    focus: caster.focus,
+    resistance: caster.resistance,
+    will: caster.will,
+    vitality: caster.vitality,
+    level: caster.level ?? 1,
+  };
+
+  // Calcular impactos
+  const impacts = calculateMultipleImpacts(
+    impactTargets,
+    impactOriginX,
+    impactOriginY,
+    impactConfig,
+    casterAttrs,
+    baseDamage,
+    impactUnits,
+    impactObstacles,
+    gridWidth,
+    gridHeight
+  );
+
+  // Aplicar resultados às unidades originais
+  let totalCollisionDamage = 0;
+  const collisionDamageApplied: ProcessImpactResult["collisionDamageApplied"] =
+    [];
+
+  for (const impact of impacts) {
+    // Encontrar unidade original e atualizar posição
+    const unit = allUnits.find((u) => u.id === impact.unitId);
+    if (!unit) continue;
+
+    // Mover unidade
+    if (impact.distancePushed > 0) {
+      unit.posX = impact.toX;
+      unit.posY = impact.toY;
+      console.log(
+        `💨 ${unit.name} empurrado de (${impact.fromX}, ${impact.fromY}) para (${impact.toX}, ${impact.toY})`
+      );
+    }
+
+    // Aplicar dano de colisão
+    if (impact.collisionDamage > 0) {
+      totalCollisionDamage += impact.collisionDamage;
+
+      if (applyDamageFn) {
+        const damageResult = applyDamageFn(
+          unit,
+          impact.collisionDamage,
+          "FISICO" // Dano de colisão é sempre físico
+        );
+
+        collisionDamageApplied.push({
+          unitId: unit.id,
+          damage: impact.collisionDamage,
+          hpAfter: damageResult.newHp,
+          defeated: damageResult.defeated,
+        });
+
+        console.log(
+          `💥 ${unit.name} sofreu ${impact.collisionDamage} de dano de colisão (${impact.collisionType})`
+        );
+      }
+    }
+  }
+
+  return {
+    impacts,
+    totalCollisionDamage,
+    collisionDamageApplied,
   };
 }

@@ -77,6 +77,18 @@ export interface QTEConfig {
   /** Tamanho da zona perfeita em porcentagem (1-15%, subset da hitZone) */
   perfectZoneSize: number;
 
+  /**
+   * Tamanho da zona de acerto para BLOQUEIO (afetado por Resistance vs Combat)
+   * Se não definido, usa hitZoneSize
+   */
+  blockHitZoneSize?: number;
+
+  /**
+   * Tamanho da zona perfeita para BLOQUEIO (subset da blockHitZone)
+   * Se não definido, usa perfectZoneSize
+   */
+  blockPerfectZoneSize?: number;
+
   /** Posição inicial do indicador (0-100%) */
   startPosition: number;
 

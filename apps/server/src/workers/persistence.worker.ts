@@ -130,6 +130,18 @@ function serializeUnit(unit: BattleUnitSchema): Record<string, any> {
     visionRange: unit.visionRange || 10,
     unitCooldowns: JSON.stringify(cooldowns),
     activeEffects: JSON.stringify(activeEffects),
+    // === NEMESIS SYSTEM ===
+    nemesisId: unit.nemesisId || null,
+    isNemesis: unit.isNemesis || false,
+    nemesisRank: unit.nemesisRank || null,
+    nemesisPowerLevel: unit.nemesisPowerLevel || 0,
+    nemesisTraits: JSON.stringify(Array.from(unit.nemesisTraits || [])),
+    nemesisFears: JSON.stringify(Array.from(unit.nemesisFears || [])),
+    nemesisStrengths: JSON.stringify(Array.from(unit.nemesisStrengths || [])),
+    nemesisScars: JSON.stringify(Array.from(unit.nemesisScars || [])),
+    nemesisTitle: unit.nemesisTitle || null,
+    nemesisKillCount: unit.nemesisKillCount || 0,
+    nemesisTargetPlayer: unit.nemesisTargetPlayer || null,
   };
 }
 

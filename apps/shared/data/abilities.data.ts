@@ -531,7 +531,7 @@ export const FIRE: AbilityDefinition = {
   code: "FIRE",
   name: "Fogo",
   description:
-    "Lança uma bola de fogo que viaja até o alvo e explode, causando dano mágico a todas as unidades na área (3x3). Se algo interceptar no caminho, explode nesse ponto.",
+    "Lança uma bola de fogo que viaja até o alvo e explode, causando dano mágico a todas as unidades na área (3x3). Se algo interceptar no caminho, explode nesse ponto. O impacto empurra as unidades atingidas.",
   category: "SPELL",
   range: "RANGED",
   targetType: "POSITION",
@@ -544,6 +544,13 @@ export const FIRE: AbilityDefinition = {
   manaCost: 8,
   baseDamage: ATTRIBUTE.FOCUS,
   damageMultiplier: 0.5,
+  impact: {
+    distance: 1,
+    collisionDamage: true,
+    collisionDamagePercent: 0.5,
+    stopsAtUnits: true,
+    stopsAtObstacles: true,
+  },
 };
 
 export const EMPOWER: AbilityDefinition = {

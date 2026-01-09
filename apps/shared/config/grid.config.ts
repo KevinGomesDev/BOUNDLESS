@@ -59,6 +59,11 @@ export const BATTLE_COLORS = {
   cellMovableEngagementBorder: "rgba(251, 146, 60, 0.8)",
   cellMovableBlocked: "rgba(239, 68, 68, 0.4)",
   cellMovableBlockedBorder: "rgba(239, 68, 68, 0.8)",
+  // Células de disparada (dash) - azul ciano
+  cellDashNormal: "rgba(34, 211, 238, 0.35)",
+  cellDashNormalBorder: "rgba(34, 211, 238, 0.7)",
+  cellDashEngagement: "rgba(6, 182, 212, 0.35)",
+  cellDashEngagementBorder: "rgba(6, 182, 212, 0.7)",
 
   // Cores de preview de área (spells/skills)
   areaPreviewEmpty: "rgba(255, 255, 255, 0.3)",

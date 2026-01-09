@@ -81,9 +81,25 @@ export class BattleUnitSchema extends Schema {
   // Cooldowns como mapa
   @type({ map: "number" }) unitCooldowns = new MapSchema<number>();
 
+  // Hotbar - Barra de atalhos (JSON serializado: UnitHotbarConfig)
+  @type("string") hotbar: string = "{}";
+
   // Efeitos ativos (JSON serializado para cada efeito)
   @type({ map: ActiveEffectSchema }) activeEffects =
     new MapSchema<ActiveEffectSchema>();
+
+  // === NEMESIS SYSTEM ===
+  @type("string") nemesisId: string = "";
+  @type("boolean") isNemesis: boolean = false;
+  @type("string") nemesisRank: string = "";
+  @type("number") nemesisPowerLevel: number = 0;
+  @type(["string"]) nemesisTraits = new ArraySchema<string>();
+  @type(["string"]) nemesisFears = new ArraySchema<string>();
+  @type(["string"]) nemesisStrengths = new ArraySchema<string>();
+  @type(["string"]) nemesisScars = new ArraySchema<string>();
+  @type("string") nemesisTitle: string = "";
+  @type("number") nemesisKillCount: number = 0;
+  @type("string") nemesisTargetPlayer: string = "";
 
   /**
    * Recalcula activeEffects baseado nas conditions atuais.
@@ -180,6 +196,16 @@ export class BattleUnitSchema extends Schema {
       });
     }
 
+    // Hotbar (se existir no BattleUnit)
+    // @ts-expect-error hotbar pode não existir no BattleUnit type ainda
+    if (unit.hotbar) {
+      // @ts-expect-error hotbar pode ser string ou objeto
+      schema.hotbar =
+        typeof unit.hotbar === "string"
+          ? unit.hotbar
+          : JSON.stringify(unit.hotbar);
+    }
+
     // Efeitos ativos (converter do formato ActiveEffectsMap para schema)
     if (unit.activeEffects) {
       Object.entries(unit.activeEffects).forEach(([key, effect]) => {
@@ -192,6 +218,27 @@ export class BattleUnitSchema extends Schema {
         }
       });
     }
+
+    // === NEMESIS SYSTEM ===
+    schema.nemesisId = unit.nemesisId || "";
+    schema.isNemesis = unit.isNemesis || false;
+    schema.nemesisRank = unit.nemesisRank || "";
+    schema.nemesisPowerLevel = unit.nemesisPowerLevel || 0;
+    if (unit.nemesisTraits) {
+      unit.nemesisTraits.forEach((t) => schema.nemesisTraits.push(t));
+    }
+    if (unit.nemesisFears) {
+      unit.nemesisFears.forEach((f) => schema.nemesisFears.push(f));
+    }
+    if (unit.nemesisStrengths) {
+      unit.nemesisStrengths.forEach((s) => schema.nemesisStrengths.push(s));
+    }
+    if (unit.nemesisScars) {
+      unit.nemesisScars.forEach((s) => schema.nemesisScars.push(s));
+    }
+    schema.nemesisTitle = unit.nemesisTitle || "";
+    schema.nemesisKillCount = unit.nemesisKillCount || 0;
+    schema.nemesisTargetPlayer = unit.nemesisTargetPlayer || "";
 
     return schema;
   }
@@ -250,6 +297,26 @@ export class BattleUnitSchema extends Schema {
       unitCooldowns: cooldowns,
       isAIControlled: this.isAIControlled,
       aiBehavior: this.aiBehavior as any,
+      // === NEMESIS SYSTEM ===
+      nemesisId: this.nemesisId || undefined,
+      isNemesis: this.isNemesis || undefined,
+      nemesisRank: this.nemesisRank || undefined,
+      nemesisPowerLevel: this.nemesisPowerLevel || undefined,
+      nemesisTraits: Array.from(this.nemesisTraits).filter(
+        (t): t is string => !!t
+      ),
+      nemesisFears: Array.from(this.nemesisFears).filter(
+        (f): f is string => !!f
+      ),
+      nemesisStrengths: Array.from(this.nemesisStrengths).filter(
+        (s): s is string => !!s
+      ),
+      nemesisScars: Array.from(this.nemesisScars).filter(
+        (s): s is string => !!s
+      ),
+      nemesisTitle: this.nemesisTitle || undefined,
+      nemesisKillCount: this.nemesisKillCount || undefined,
+      nemesisTargetPlayer: this.nemesisTargetPlayer || undefined,
     };
   }
 

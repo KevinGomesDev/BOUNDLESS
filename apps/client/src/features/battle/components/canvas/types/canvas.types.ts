@@ -183,6 +183,11 @@ export interface GridColors {
   cellMovableNormalBorder: string;
   cellMovableEngagement: string;
   cellMovableEngagementBorder: string;
+  // Células de disparada (dash)
+  cellDashNormal: string;
+  cellDashNormalBorder: string;
+  cellDashEngagement: string;
+  cellDashEngagementBorder: string;
   cellAttackable: string;
   areaPreviewTarget: string;
   areaPreviewTargetBorder: string;

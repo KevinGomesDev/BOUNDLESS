@@ -151,3 +151,37 @@ export function getSkillConditionEffects(
 ): ConditionDefinition["effects"] | undefined {
   return SKILL_CONDITIONS[conditionId]?.effects;
 }
+
+// =============================================================================
+// FUNÇÕES DE VERIFICAÇÃO DE AÇÕES
+// =============================================================================
+
+/**
+ * Verifica se uma unidade pode usar Dash (Disparada)
+ * Condições: ter actionsLeft > 0 E não estar bloqueado por condições
+ */
+export function canUseDash(conditions: string[], actionsLeft: number): boolean {
+  // Precisa de ação disponível
+  if (actionsLeft <= 0) return false;
+
+  // Verificar se alguma condição bloqueia dash
+  for (const condId of conditions) {
+    const cond = CONDITIONS[condId];
+    if (!cond) continue;
+
+    // Bloqueio geral
+    if (cond.effects.blockAllActions) return false;
+
+    // Bloqueio específico de dash
+    if (cond.effects.blockDash) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Verifica se uma unidade já usou dash (tem condição DASHING ativa)
+ */
+export function hasDashingCondition(conditions: string[]): boolean {
+  return conditions.includes("DASHING");
+}

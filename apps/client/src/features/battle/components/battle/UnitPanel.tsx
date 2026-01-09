@@ -1,12 +1,8 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef } from "react";
 import { getConditionInfo } from "../../constants";
-import {
-  getAbilityInfo,
-  isCommonAction,
-  findAbilityByCode,
-} from "@boundless/shared/data/abilities.data";
 import type { PendingAbility } from "../../types/pending-ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
+import type { UnitHotbarConfig } from "@boundless/shared/types/hotbar.types";
 import { AttributesDisplay } from "@/components/AttributesDisplay/index";
 import { Tooltip } from "@/components/Tooltip";
 import {
@@ -14,15 +10,10 @@ import {
   parseAvatarToHeroId,
 } from "../../../kingdom/components/CreateKingdom";
 import { isPlayerControllable } from "../../utils/unit-control";
-import {
-  PanelStrip,
-  PanelStripButton,
-  ActionStripButton,
-  usePopupContainer,
-  type ActionStripItem,
-} from "./PanelStrip";
+import { PanelStrip, PanelStripButton, usePopupContainer } from "./PanelStrip";
 import { TurnResources } from "./TurnResources";
 import { ActiveEffectsBadges } from "./ActiveEffectsBadges";
+import { HotBar } from "./HotBar";
 
 // =============================================================================
 // TIPOS E INTERFACES
@@ -284,16 +275,6 @@ const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
 };
 
 // =============================================================================
-// CORES DAS AÇÕES
-// =============================================================================
-
-const ACTION_COLORS = {
-  action: { main: "#f59e0b", hover: "#fbbf24" }, // Amber
-  skill: { main: "#a855f7", hover: "#c084fc" }, // Purple
-  spell: { main: "#3b82f6", hover: "#60a5fa" }, // Blue
-};
-
-// =============================================================================
 // COMPONENTE PRINCIPAL
 // =============================================================================
 
@@ -303,8 +284,10 @@ interface UnitPanelProps {
   isMyTurn: boolean;
   currentUserId: string;
   pendingAbility: PendingAbility | null;
+  hotbar: UnitHotbarConfig | null;
   onSelectAbility: (abilityCode: string) => void;
   onExecuteAbility: (abilityCode: string, unitId: string) => void;
+  onUpdateHotbar: (unitId: string, hotbar: UnitHotbarConfig) => void;
 }
 
 export const UnitPanel: React.FC<UnitPanelProps> = ({
@@ -313,45 +296,13 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
   isMyTurn,
   currentUserId,
   pendingAbility,
+  hotbar,
   onSelectAbility,
   onExecuteAbility,
+  onUpdateHotbar,
 }) => {
   // Categorizar abilities (ações comuns, skills de classe, spells)
   // Skills passivas NÃO aparecem (já mostradas como condições)
-  const categorizedAbilities = useMemo(() => {
-    const commonActions: string[] = [];
-    const classAbilities: string[] = [];
-    const spellAbilities: string[] = [];
-
-    if (selectedUnit) {
-      // Features da unidade (ações comuns + skills de classe)
-      selectedUnit.features?.forEach((featureCode) => {
-        if (isCommonAction(featureCode)) {
-          commonActions.push(featureCode);
-        } else {
-          // Abilities de classe - só adiciona se for ATIVA
-          const abilityDef = findAbilityByCode(featureCode);
-          if (abilityDef && abilityDef.activationType === "ACTIVE") {
-            classAbilities.push(featureCode);
-          }
-        }
-      });
-
-      // Spells (também são Abilities, só com category diferente)
-      if (selectedUnit.spells && selectedUnit.spells.length > 0) {
-        selectedUnit.spells.forEach((spellCode) => {
-          spellAbilities.push(spellCode);
-        });
-      }
-    }
-
-    return {
-      actions: commonActions,
-      abilities: classAbilities,
-      spells: spellAbilities,
-    };
-  }, [selectedUnit]);
-
   // Se activeUnitId está undefined mas é meu turno e a unidade é minha (e controlável),
   // consideramos que está "aguardando ativação" e tratamos como se fosse ativa
   const isActiveOrPending = activeUnitId
@@ -379,80 +330,30 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
     isPlayerControllable(selectedUnit, currentUserId) &&
     isActiveOrPending;
 
-  // Preparar items das ações comuns
-  const actionItems: ActionStripItem[] = categorizedAbilities.actions
-    .map((actionCode) => {
-      const abilityInfo = getAbilityInfo(actionCode);
-      if (!abilityInfo) return null;
-
-      const isAttackAction = actionCode === "ATTACK";
-      const hasExtraAttacks = (selectedUnit.attacksLeftThisTurn ?? 0) > 0;
-      const canExecute = isAttackAction
-        ? selectedUnit.actionsLeft > 0 || hasExtraAttacks
-        : selectedUnit.actionsLeft > 0;
-
-      return {
-        code: actionCode,
-        icon: abilityInfo.icon,
-        name: abilityInfo.name,
-        description: abilityInfo.description,
-        requiresTarget: abilityInfo.requiresTarget,
-        disabled: !canExecute,
-      };
-    })
-    .filter(Boolean) as ActionStripItem[];
-
-  // Preparar items de abilities de classe
-  const abilityItems: ActionStripItem[] = categorizedAbilities.abilities
-    .map((abilityCode) => {
-      const abilityInfo = getAbilityInfo(abilityCode);
-      if (!abilityInfo) return null;
-
-      const cooldownLeft = selectedUnit.unitCooldowns?.[abilityCode] ?? 0;
-      const isOnCooldown = cooldownLeft > 0;
-      const canExecute = selectedUnit.actionsLeft > 0 && !isOnCooldown;
-
-      return {
-        code: abilityCode,
-        icon: abilityInfo.icon,
-        name: abilityInfo.name,
-        description: abilityInfo.description,
-        requiresTarget: abilityInfo.requiresTarget,
-        cooldown: cooldownLeft,
-        disabled: !canExecute,
-      };
-    })
-    .filter(Boolean) as ActionStripItem[];
-
-  // Preparar items de spells (também Abilities, category=SPELL)
-  const spellItems: ActionStripItem[] = categorizedAbilities.spells
-    .map((spellCode) => {
-      const abilityInfo = getAbilityInfo(spellCode);
-      if (!abilityInfo) return null;
-
-      const cooldownLeft = selectedUnit.unitCooldowns?.[spellCode] ?? 0;
-      const isOnCooldown = cooldownLeft > 0;
-      const currentMana = selectedUnit.currentMana ?? 0;
-      const manaCost = abilityInfo.manaCost ?? 0;
-      const hasEnoughMana = currentMana >= manaCost;
-      const canExecute =
-        selectedUnit.actionsLeft > 0 && !isOnCooldown && hasEnoughMana;
-
-      return {
-        code: spellCode,
-        icon: abilityInfo.icon,
-        name: abilityInfo.name,
-        description: abilityInfo.description,
-        requiresTarget: abilityInfo.requiresTarget,
-        cooldown: cooldownLeft,
-        disabled: !canExecute,
-      };
-    })
-    .filter(Boolean) as ActionStripItem[];
+  // Callback para atualizar hotbar
+  const handleUpdateHotbar = (newHotbar: UnitHotbarConfig) => {
+    onUpdateHotbar(selectedUnit.id, newHotbar);
+  };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-20">
-      <div className="flex items-stretch bg-surface-900/95 backdrop-blur-sm border-t-2 border-stellar-amber/30 shadow-cosmic min-h-[56px]">
+    <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center">
+      {/* HotBar - Barra numérica de habilidades (1-9 e Shift+1-9) */}
+      {canAct && (
+        <div className="mb-2">
+          <HotBar
+            unit={selectedUnit}
+            hotbar={hotbar}
+            canAct={canAct}
+            pendingAbilityCode={pendingAbility?.code ?? null}
+            onSelectAbility={onSelectAbility}
+            onExecuteAbility={onExecuteAbility}
+            onUpdateHotbar={handleUpdateHotbar}
+          />
+        </div>
+      )}
+
+      {/* Panel de informações da unidade */}
+      <div className="w-full flex items-stretch bg-surface-900/95 backdrop-blur-sm border-t-2 border-stellar-amber/30 shadow-cosmic min-h-[56px]">
         {/* FAIXA: Avatar e Identificação */}
         <PanelStrip>
           <div className="flex items-center gap-2">
@@ -610,59 +511,6 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
               </div>
             </PanelStrip>
           )}
-
-        {/* FAIXA: Ações (destaque especial) */}
-        {canAct && (
-          <div className="flex items-stretch gap-0.5 flex-shrink-0 bg-surface-800/30 pl-1">
-            <ActionStripButton
-              icon="⚔️"
-              label="Ações"
-              color={ACTION_COLORS.action.main}
-              hoverColor={ACTION_COLORS.action.hover}
-              items={actionItems}
-              pendingAbilityCode={pendingAbility?.code ?? null}
-              onExecuteAction={(code, requiresTarget) => {
-                if (requiresTarget) {
-                  onSelectAbility(code);
-                } else {
-                  onExecuteAbility(code, selectedUnit.id);
-                }
-              }}
-            />
-
-            <ActionStripButton
-              icon="✨"
-              label="Habilidades"
-              color={ACTION_COLORS.skill.main}
-              hoverColor={ACTION_COLORS.skill.hover}
-              items={abilityItems}
-              pendingAbilityCode={pendingAbility?.code ?? null}
-              onExecuteAction={(code, requiresTarget) => {
-                if (requiresTarget) {
-                  onSelectAbility(code);
-                } else {
-                  onExecuteAbility(code, selectedUnit.id);
-                }
-              }}
-            />
-
-            <ActionStripButton
-              icon="🔮"
-              label="Magias"
-              color={ACTION_COLORS.spell.main}
-              hoverColor={ACTION_COLORS.spell.hover}
-              items={spellItems}
-              pendingAbilityCode={pendingAbility?.code ?? null}
-              onExecuteAction={(code, requiresTarget) => {
-                if (requiresTarget) {
-                  onSelectAbility(code);
-                } else {
-                  onExecuteAbility(code, selectedUnit.id);
-                }
-              }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

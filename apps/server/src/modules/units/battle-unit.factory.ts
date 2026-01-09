@@ -50,6 +50,9 @@ interface DBUnit {
   maxMana: number; // Mana máxima (persistida)
   currentMana: number; // Mana atual (persistida)
   size?: UnitSize | null;
+  // === NEMESIS SYSTEM ===
+  nemesisId?: string | null;
+  nemesisData?: string | null; // JSON: dados completos do Nemesis
 }
 
 interface KingdomInfo {
@@ -189,6 +192,18 @@ export function createBattleUnit(
     // Summons e Monsters são controlados por IA
     isAIControlled:
       dbUnit.category === "SUMMON" || dbUnit.category === "MONSTER",
+    // === NEMESIS SYSTEM (valores padrão - não vinculado) ===
+    nemesisId: undefined,
+    isNemesis: false,
+    nemesisRank: undefined,
+    nemesisPowerLevel: undefined,
+    nemesisTraits: [],
+    nemesisFears: [],
+    nemesisStrengths: [],
+    nemesisScars: [],
+    nemesisTitle: undefined,
+    nemesisKillCount: undefined,
+    nemesisTargetPlayer: undefined,
   };
 }
 

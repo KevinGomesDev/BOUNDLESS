@@ -10,6 +10,9 @@ export * from "./distance.utils";
 // Engagement
 export * from "./engagement.utils";
 
+// Impact/Knockback
+export * from "./impact.utils";
+
 // Line of sight - export seletivo para evitar re-export de unitsToBlockers
 export {
   hasLineOfSight,

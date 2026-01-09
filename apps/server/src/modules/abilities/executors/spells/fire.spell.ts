@@ -6,7 +6,11 @@ import type {
   AbilityExecutionResult,
 } from "@boundless/shared/types/ability.types";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
-import { resolveSpellValue, processAbilityTargeting } from "../helpers";
+import {
+  resolveSpellValue,
+  processAbilityTargeting,
+  processImpact,
+} from "../helpers";
 import type { SpellExecutionContext } from "../types";
 import { scanConditionsForAction } from "../../../conditions/conditions";
 import { processUnitDeath } from "../../../combat/death-logic";
@@ -131,7 +135,6 @@ export function executeFire(
       success: true,
       damageDealt: 0,
       targetIds: [],
-      dodgeResults: [],
       metadata: {
         impactPoint,
         intercepted,
@@ -201,6 +204,82 @@ export function executeFire(
     console.log(`🔥 ${targetUnit.name} recebeu ${finalDamage} de dano mágico`);
   }
 
+  // === PROCESSAR IMPACTO (KNOCKBACK) ===
+  let impactResults: AbilityExecutionResult["impactResults"];
+
+  if (spell.impact) {
+    // Filtrar apenas unidades vivas para o impacto
+    const aliveTargets = targetsInArea.filter((u) => u.isAlive);
+
+    if (aliveTargets.length > 0) {
+      // Calcular dano base para colisão
+      const baseDamageForImpact = resolveSpellValue(
+        spell.baseDamage,
+        caster,
+        caster.focus
+      );
+
+      // Função wrapper para aplicar dano de colisão
+      const applyCollisionDamage = (
+        unit: BattleUnit,
+        damage: number,
+        damageType: "FISICO" | "MAGICO"
+      ) => {
+        const result = applyDamage(
+          unit.physicalProtection,
+          unit.magicalProtection,
+          unit.currentHp,
+          damage,
+          damageType
+        );
+
+        unit.physicalProtection = result.newPhysicalProtection;
+        unit.magicalProtection = result.newMagicalProtection;
+        unit.currentHp = result.newHp;
+
+        const defeated = unit.currentHp <= 0;
+        if (defeated) {
+          unit.currentHp = 0;
+          processUnitDeath(unit, allUnits, caster, "battle", battleId);
+        }
+
+        return { newHp: result.newHp, defeated };
+      };
+
+      const impactResult = processImpact(
+        spell.impact,
+        caster,
+        aliveTargets,
+        impactPoint.x,
+        impactPoint.y,
+        baseDamageForImpact,
+        allUnits,
+        obstacles,
+        gridWidth,
+        gridHeight,
+        applyCollisionDamage
+      );
+
+      // Converter para o formato do resultado
+      impactResults = impactResult.impacts;
+
+      // Somar dano de colisão ao total
+      totalDamage += impactResult.totalCollisionDamage;
+
+      // Atualizar unidades afetadas com dano de colisão
+      for (const collision of impactResult.collisionDamageApplied) {
+        const existingUnit = affectedUnits.find(
+          (u) => u.unitId === collision.unitId
+        );
+        if (existingUnit) {
+          existingUnit.damage += collision.damage;
+          existingUnit.hpAfter = collision.hpAfter;
+          existingUnit.defeated = existingUnit.defeated || collision.defeated;
+        }
+      }
+    }
+  }
+
   return {
     success: true,
     damageDealt: totalDamage,
@@ -208,6 +287,7 @@ export function executeFire(
     damageReduction: totalDamageReduction,
     targetIds,
     affectedUnits,
+    impactResults,
     metadata: {
       impactPoint,
       intercepted,

@@ -138,6 +138,34 @@ export function calculateDefenseHitZoneSize(
 }
 
 /**
+ * Calcula o tamanho da zona de acerto para BLOQUEIO
+ * Defensor: Resistance aumenta zona (absorve melhor o impacto)
+ * Atacante: Combat diminui zona (golpe mais poderoso é mais difícil de bloquear)
+ *
+ * Usa Resistance vs Combat para ataques físicos
+ * Usa Will vs Focus para ataques mágicos
+ */
+export function calculateBlockHitZoneSize(
+  defenderResistance: number,
+  attackerCombat: number,
+  isMagicAttack: boolean = false,
+  defenderWill: number = 0,
+  attackerFocus: number = 0,
+  config: QTECalculationConfig = QTE_DEFAULT_CONFIG
+): number {
+  // Para ataque mágico, usa Will vs Focus
+  // Para ataque físico, usa Resistance vs Combat
+  const defenderStat = isMagicAttack ? defenderWill : defenderResistance;
+  const attackerStat = isMagicAttack ? attackerFocus : attackerCombat;
+
+  const statDelta = defenderStat - attackerStat;
+  const hitZone = config.baseHitZone + statDelta * config.focusZoneMod;
+
+  // Retorna zona calculada sem limites, apenas garante mínimo de 1% para ser visível
+  return Math.max(1, Math.round(hitZone));
+}
+
+/**
  * Calcula células bloqueadas para esquiva
  */
 export function calculateBlockedCells(
@@ -322,13 +350,25 @@ export function generateDefenseQTE(
     defenderDefense
   );
 
-  // Zona de acerto para defesa
+  // Zona de acerto para ESQUIVA (Focus vs Focus)
   const hitZoneSize = calculateDefenseHitZoneSize(
     defender.focus,
     attacker.focus
   );
   const perfectZoneSize = Math.round(
     hitZoneSize * QTE_DEFAULT_CONFIG.perfectZoneRatio
+  );
+
+  // Zona de acerto para BLOQUEIO (Resistance vs Combat ou Will vs Focus)
+  const blockHitZoneSize = calculateBlockHitZoneSize(
+    defender.resistance,
+    attacker.combat,
+    isMagicAttack,
+    defender.will,
+    attacker.focus
+  );
+  const blockPerfectZoneSize = Math.round(
+    blockHitZoneSize * QTE_DEFAULT_CONFIG.perfectZoneRatio
   );
 
   // Células bloqueadas para esquiva
@@ -379,6 +419,8 @@ export function generateDefenseQTE(
     shakeIntensity,
     hitZoneSize,
     perfectZoneSize,
+    blockHitZoneSize,
+    blockPerfectZoneSize,
     startPosition: 0,
     validInputs: ["E", "W", "A", "S", "D"], // Todos os inputs são válidos
     invalidInputs,

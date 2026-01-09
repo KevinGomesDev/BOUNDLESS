@@ -398,6 +398,40 @@ export class BattleRoom extends Room<BattleSessionState> {
 
     this.onMessage("event:unsubscribe", () => {});
 
+    // Hotbar update - Salva a configuração de hotbar de uma unidade
+    this.onMessage(
+      "battle:update_hotbar",
+      async (client, { unitId, hotbar }) => {
+        const userData = getUserData(client);
+        if (!userData) return;
+
+        // Verificar se a unidade pertence ao jogador
+        const unit = this.state.units.get(unitId);
+        if (!unit || unit.ownerId !== userData.userId) {
+          console.warn(
+            `[BattleRoom] Tentativa de atualizar hotbar de unidade alheia: ${unitId}`
+          );
+          return;
+        }
+
+        // Atualizar hotbar no schema
+        unit.hotbar = JSON.stringify(hotbar);
+
+        // Persistir no banco se tiver sourceUnitId (unidade original)
+        if (unit.sourceUnitId) {
+          try {
+            const { prisma } = await import("../../../../lib/prisma");
+            await prisma.unit.update({
+              where: { id: unit.sourceUnitId },
+              data: { hotbar: JSON.stringify(hotbar) },
+            });
+          } catch (err) {
+            console.error(`[BattleRoom] Erro ao persistir hotbar: ${err}`);
+          }
+        }
+      }
+    );
+
     // Commands
     this.onMessage("battle:command", (client, payload: CommandPayload) => {
       const userData = getUserData(client);

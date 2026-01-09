@@ -85,6 +85,18 @@ export interface PersistedBattleUnit {
   visionRange: number;
   unitCooldowns: Record<string, number>;
   activeEffects: ActiveEffectsMap;
+  // === NEMESIS SYSTEM ===
+  nemesisId: string | null;
+  isNemesis: boolean;
+  nemesisRank: string | null;
+  nemesisPowerLevel: number;
+  nemesisTraits: string[];
+  nemesisFears: string[];
+  nemesisStrengths: string[];
+  nemesisScars: string[];
+  nemesisTitle: string | null;
+  nemesisKillCount: number;
+  nemesisTargetPlayer: string | null;
 }
 
 // ============================================
@@ -322,5 +334,17 @@ function parseUnitFromDb(unit: BattleUnit): PersistedBattleUnit {
     visionRange: unit.visionRange,
     unitCooldowns: JSON.parse(unit.unitCooldowns || "{}"),
     activeEffects: calculateActiveEffects(conditions),
+    // === NEMESIS SYSTEM ===
+    nemesisId: unit.nemesisId,
+    isNemesis: unit.isNemesis,
+    nemesisRank: unit.nemesisRank,
+    nemesisPowerLevel: unit.nemesisPowerLevel,
+    nemesisTraits: JSON.parse(unit.nemesisTraits || "[]"),
+    nemesisFears: JSON.parse(unit.nemesisFears || "[]"),
+    nemesisStrengths: JSON.parse(unit.nemesisStrengths || "[]"),
+    nemesisScars: JSON.parse(unit.nemesisScars || "[]"),
+    nemesisTitle: unit.nemesisTitle,
+    nemesisKillCount: unit.nemesisKillCount,
+    nemesisTargetPlayer: unit.nemesisTargetPlayer,
   };
 }

@@ -9,6 +9,7 @@ export {
   calculateShakeIntensity,
   calculateHitZoneSize,
   calculateDefenseHitZoneSize,
+  calculateBlockHitZoneSize,
   calculateBlockedCells,
   generateAttackQTE,
   generateDefenseQTE,

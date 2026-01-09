@@ -27,6 +27,10 @@ import { useChat } from "../../chat";
 import { ChatBox } from "../../chat/components/ChatBox";
 import type { BattleUnit } from "@boundless/shared/types/battle.types";
 import { findAbilityByCode } from "@boundless/shared/data/abilities.data";
+import {
+  canUseDash,
+  hasDashingCondition,
+} from "@boundless/shared/data/conditions.data";
 import { resolveDynamicValue } from "@boundless/shared/types/ability.types";
 import { getFullMovementInfo } from "@boundless/shared/utils/engagement.utils";
 import {
@@ -53,6 +57,7 @@ import {
   type PendingAbility,
   createPendingAbility,
 } from "../types/pending-ability.types";
+import type { UnitHotbarConfig } from "@boundless/shared/types/hotbar.types";
 import {
   getUnitSizeDefinition,
   getObstacleDimension,
@@ -165,6 +170,11 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
     null
   ); // Ability aguardando alvo
 
+  // Hotbars por unidade (armazenado localmente, depois será sincronizado com server)
+  const [unitHotbars, setUnitHotbars] = useState<
+    Record<string, UnitHotbarConfig>
+  >({});
+
   const [hoveredCell, setHoveredCell] = useState<{
     x: number;
     y: number;
@@ -182,6 +192,8 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
   const isMovingRef = useRef<boolean>(false); // Lock para evitar cliques rápidos
   const cameraCenteredRef = useRef<string | null>(null); // Controla se já centralizou a câmera neste turno
   const lastRoundRef = useRef<number | null>(null); // Rastreia a última rodada para detectar mudança
+  // Ref para movimento pendente após disparada automática
+  const pendingDashMoveRef = useRef<{ x: number; y: number } | null>(null);
 
   // Hook do QTE (Quick Time Event)
   const {
@@ -659,6 +671,7 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
   useEffect(() => {
     if (battleError) {
       isMovingRef.current = false;
+      pendingDashMoveRef.current = null; // Limpar movimento pendente de dash em caso de erro
     }
   }, [battleError]);
 
@@ -684,6 +697,29 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
   const isMyTurn = battle?.currentPlayerId === user?.id;
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
   const myUnits = user ? getControllableUnits(units, user.id) : [];
+
+  // Efeito para executar movimento pendente após disparada automática
+  useEffect(() => {
+    if (!selectedUnit || !pendingDashMoveRef.current) return;
+
+    // Verificar se a unidade agora tem a condição DASHING
+    if (hasDashingCondition(selectedUnit.conditions)) {
+      const pendingMove = pendingDashMoveRef.current;
+      pendingDashMoveRef.current = null; // Limpar antes de executar para evitar loops
+
+      console.log(
+        "%c[BattleView] 💨 Executando movimento após disparada!",
+        "color: #22d3ee; font-weight: bold;",
+        {
+          targetPosition: pendingMove,
+          movesLeft: selectedUnit.movesLeft,
+        }
+      );
+
+      // Executar movimento para a posição alvo
+      moveUnit(selectedUnit.id, pendingMove.x, pendingMove.y);
+    }
+  }, [selectedUnit, moveUnit]);
 
   // Hook de targeting - calcula preview de células selecionáveis e afetadas
   // Chamado ANTES dos early returns para seguir as regras de hooks
@@ -956,6 +992,29 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
       { abilityCode, ability: ability.name, targetType: ability.targetType }
     );
   }, []);
+
+  // Handler para atualizar hotbar de uma unidade
+  const handleUpdateHotbar = useCallback(
+    (unitId: string, newHotbar: UnitHotbarConfig) => {
+      setUnitHotbars((prev) => ({
+        ...prev,
+        [unitId]: newHotbar,
+      }));
+
+      // Enviar para o servidor para persistir
+      colyseusService.sendToBattle("battle:update_hotbar", {
+        unitId,
+        hotbar: newHotbar,
+      });
+
+      console.log(
+        "%c[BattleView] 📊 Hotbar atualizada",
+        "color: #a855f7; font-weight: bold;",
+        { unitId, hotbar: newHotbar }
+      );
+    },
+    []
+  );
 
   // === EARLY RETURNS (após todos os hooks) ===
 
@@ -1464,6 +1523,7 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
         return;
       }
 
+      // Verificar se está dentro do range normal de movimento
       if (moveInfo.totalCost <= selectedUnit.movesLeft) {
         if (moveInfo.hasEngagementPenalty) {
           console.log(
@@ -1476,11 +1536,51 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
         isMovingRef.current = true; // Lock para evitar cliques rápidos
         moveUnit(selectedUnit.id, x, y);
       } else {
-        console.log(
-          "%c[BattleView] ❌ Custo de movimento muito alto",
-          "color: #ef4444;",
-          { totalCost: moveInfo.totalCost, movesLeft: selectedUnit.movesLeft }
-        );
+        // Verificar se pode usar disparada automática
+        const dashRange = selectedUnit.movesLeft + selectedUnit.speed;
+        const canUseDashNow =
+          canUseDash(selectedUnit.conditions, selectedUnit.actionsLeft) &&
+          !hasDashingCondition(selectedUnit.conditions);
+
+        if (
+          canUseDashNow &&
+          !moveInfo.isBlocked &&
+          moveInfo.totalCost <= dashRange
+        ) {
+          // Disparada automática! Primeiro executa DASH, depois move
+          console.log(
+            "%c[BattleView] 💨 Disparada automática ativada!",
+            "color: #22d3ee; font-weight: bold;",
+            {
+              targetPosition: { x, y },
+              totalCost: moveInfo.totalCost,
+              currentMoves: selectedUnit.movesLeft,
+              dashBonus: selectedUnit.speed,
+              totalAfterDash: dashRange,
+            }
+          );
+
+          // Registrar posição alvo para movimento após dash
+          pendingDashMoveRef.current = { x, y };
+          isMovingRef.current = true;
+
+          // Executar DASH (dispara movimento quando receber confirmação)
+          executeAction("use_ability", selectedUnit.id, {
+            abilityCode: "DASH",
+            casterUnitId: selectedUnit.id,
+          });
+        } else {
+          console.log(
+            "%c[BattleView] ❌ Custo de movimento muito alto (sem dash disponível)",
+            "color: #ef4444;",
+            {
+              totalCost: moveInfo.totalCost,
+              movesLeft: selectedUnit.movesLeft,
+              canDash: canUseDashNow,
+              dashRange,
+            }
+          );
+        }
       }
     } else {
       console.log(
@@ -1606,8 +1706,10 @@ const BattleViewInner: React.FC<{ battleId: string }> = ({ battleId }) => {
           isMyTurn={isMyTurn}
           currentUserId={user.id}
           pendingAbility={pendingAbility}
+          hotbar={selectedUnit ? unitHotbars[selectedUnit.id] ?? null : null}
           onSelectAbility={handleSelectAbility}
           onExecuteAbility={handleExecuteAbility}
+          onUpdateHotbar={handleUpdateHotbar}
         />
       </div>
 

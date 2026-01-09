@@ -56,16 +56,46 @@ export const QTEOverlay: React.FC<QTEOverlayProps> = ({
   const [hasResponded, setHasResponded] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [resultGrade, setResultGrade] = useState<QTEResultGrade | null>(null);
+  // Indica se o jogador está "hovering" no modo block (para preview visual)
+  const [isBlockMode, setIsBlockMode] = useState(false);
 
   // Refs para animação
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  // Calcular zonas
-  const hitZoneStart = config ? 50 - config.hitZoneSize / 2 : 0;
-  const hitZoneEnd = config ? 50 + config.hitZoneSize / 2 : 100;
-  const perfectZoneStart = config ? 50 - config.perfectZoneSize / 2 : 0;
-  const perfectZoneEnd = config ? 50 + config.perfectZoneSize / 2 : 100;
+  // Calcular zonas de ESQUIVA (Focus vs Focus)
+  const dodgeHitZoneStart = config ? 50 - config.hitZoneSize / 2 : 0;
+  const dodgeHitZoneEnd = config ? 50 + config.hitZoneSize / 2 : 100;
+  const dodgePerfectZoneStart = config ? 50 - config.perfectZoneSize / 2 : 0;
+  const dodgePerfectZoneEnd = config ? 50 + config.perfectZoneSize / 2 : 100;
+
+  // Calcular zonas de BLOQUEIO (Resistance vs Combat)
+  const blockHitZoneSize =
+    config?.blockHitZoneSize ?? config?.hitZoneSize ?? 25;
+  const blockPerfectZoneSize =
+    config?.blockPerfectZoneSize ?? config?.perfectZoneSize ?? 7.5;
+  const blockHitZoneStart = 50 - blockHitZoneSize / 2;
+  const blockHitZoneEnd = 50 + blockHitZoneSize / 2;
+  const blockPerfectZoneStart = 50 - blockPerfectZoneSize / 2;
+  const blockPerfectZoneEnd = 50 + blockPerfectZoneSize / 2;
+
+  // Usar zonas de BLOCK ou DODGE baseado no modo atual
+  const isDefenseQTE =
+    config?.actionType === "DODGE" || config?.actionType === "BLOCK";
+  const hitZoneStart =
+    isDefenseQTE && isBlockMode ? blockHitZoneStart : dodgeHitZoneStart;
+  const hitZoneEnd =
+    isDefenseQTE && isBlockMode ? blockHitZoneEnd : dodgeHitZoneEnd;
+  const perfectZoneStart =
+    isDefenseQTE && isBlockMode ? blockPerfectZoneStart : dodgePerfectZoneStart;
+  const perfectZoneEnd =
+    isDefenseQTE && isBlockMode ? blockPerfectZoneEnd : dodgePerfectZoneEnd;
+  const currentHitZoneSize =
+    isDefenseQTE && isBlockMode ? blockHitZoneSize : config?.hitZoneSize ?? 25;
+  const currentPerfectZoneSize =
+    isDefenseQTE && isBlockMode
+      ? blockPerfectZoneSize
+      : config?.perfectZoneSize ?? 7.5;
 
   // Resetar estado quando novo QTE chega
   useEffect(() => {
@@ -74,6 +104,7 @@ export const QTEOverlay: React.FC<QTEOverlayProps> = ({
       setHasResponded(false);
       setShowResult(false);
       setResultGrade(null);
+      setIsBlockMode(false);
       startTimeRef.current = performance.now();
     }
   }, [config?.qteId, isVisualActive]);
@@ -173,6 +204,32 @@ export const QTEOverlay: React.FC<QTEOverlayProps> = ({
       onResponse,
     ]
   );
+
+  // Detectar quando o jogador está "hovering" sobre a tecla E para preview da zona de BLOCK
+  useEffect(() => {
+    if (!isResponder || hasResponded || !isVisualActive || !isDefenseQTE)
+      return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "e" && !e.repeat) {
+        setIsBlockMode(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "e") {
+        setIsBlockMode(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [isResponder, hasResponded, isVisualActive, isDefenseQTE]);
 
   // Hotkeys
   useHotkeys(
@@ -322,9 +379,27 @@ export const QTEOverlay: React.FC<QTEOverlayProps> = ({
             )}
             {isResponder && isDefense && (
               <p className="text-sm text-gray-300 mt-1">
-                <kbd className="px-2 py-1 bg-gray-700 rounded">E</kbd> Bloquear
-                | <kbd className="px-2 py-1 bg-gray-700 rounded">WASD</kbd>{" "}
+                <kbd
+                  className={`px-2 py-1 rounded ${
+                    isBlockMode ? "bg-blue-600 text-white" : "bg-gray-700"
+                  }`}
+                >
+                  E
+                </kbd>{" "}
+                Bloquear |{" "}
+                <kbd
+                  className={`px-2 py-1 rounded ${
+                    !isBlockMode ? "bg-green-600 text-white" : "bg-gray-700"
+                  }`}
+                >
+                  WASD
+                </kbd>{" "}
                 Esquivar
+              </p>
+            )}
+            {isResponder && isDefense && isBlockMode && (
+              <p className="text-xs text-blue-400 mt-1">
+                🛡️ Modo Bloqueio (Resistance)
               </p>
             )}
             {isResponder && isAttack && (
@@ -337,22 +412,34 @@ export const QTEOverlay: React.FC<QTEOverlayProps> = ({
 
           {/* Barra do QTE */}
           <div className="relative w-80 h-12 bg-gray-800 rounded-full overflow-hidden border-2 border-gray-600">
-            {/* Zona de acerto (verde) */}
-            <div
-              className="absolute top-0 bottom-0 bg-green-500/40"
+            {/* Zona de acerto (verde para esquiva, azul para bloqueio) */}
+            <motion.div
+              className={`absolute top-0 bottom-0 ${
+                isBlockMode ? "bg-blue-500/40" : "bg-green-500/40"
+              }`}
               style={{
                 left: `${hitZoneStart}%`,
-                width: `${config.hitZoneSize}%`,
+                width: `${currentHitZoneSize}%`,
               }}
+              animate={{
+                left: `${hitZoneStart}%`,
+                width: `${currentHitZoneSize}%`,
+              }}
+              transition={{ duration: 0.1 }}
             />
 
             {/* Zona perfeita (dourada) */}
-            <div
+            <motion.div
               className="absolute top-0 bottom-0 bg-yellow-400/60"
               style={{
                 left: `${perfectZoneStart}%`,
-                width: `${config.perfectZoneSize}%`,
+                width: `${currentPerfectZoneSize}%`,
               }}
+              animate={{
+                left: `${perfectZoneStart}%`,
+                width: `${currentPerfectZoneSize}%`,
+              }}
+              transition={{ duration: 0.1 }}
             />
 
             {/* Indicador */}

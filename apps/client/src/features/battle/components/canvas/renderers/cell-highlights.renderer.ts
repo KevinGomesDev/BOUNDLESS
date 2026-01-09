@@ -1,5 +1,5 @@
 /**
- * Renderer para highlights de células (movíveis, atacáveis, hover)
+ * Renderer para highlights de células (movíveis, atacáveis, disparada, hover)
  * Responsável por desenhar indicadores visuais de interação no grid
  */
 
@@ -10,6 +10,7 @@ interface DrawCellHighlightsParams {
   ctx: CanvasRenderingContext2D;
   cellSize: number;
   movableCellsMap: Map<string, MovementCellInfo>;
+  dashableCellsMap: Map<string, MovementCellInfo>;
   attackableCells: Set<string>;
   hoveredCell: Position | null;
   gridColors: GridColors;
@@ -17,18 +18,43 @@ interface DrawCellHighlightsParams {
 }
 
 /**
- * Desenha highlights de células movíveis e atacáveis
+ * Desenha highlights de células movíveis, de disparada e atacáveis
  */
 export function drawCellHighlights({
   ctx,
   cellSize,
   movableCellsMap,
+  dashableCellsMap,
   attackableCells,
   hoveredCell,
   gridColors,
   hasAbilityAreaPreview,
 }: DrawCellHighlightsParams): void {
-  // Desenhar células movíveis
+  // Desenhar células de disparada primeiro (ficam atrás)
+  dashableCellsMap.forEach((cellInfo, cellKey) => {
+    const [x, y] = cellKey.split(",").map(Number);
+    const cellX = x * cellSize;
+    const cellY = y * cellSize;
+
+    // Cores baseadas no tipo de célula
+    if (cellInfo.hasEngagementPenalty) {
+      // Ciano escuro - disparada com custo de engajamento
+      ctx.fillStyle = gridColors.cellDashEngagement;
+      ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      ctx.strokeStyle = gridColors.cellDashEngagementBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+    } else {
+      // Ciano claro - disparada normal
+      ctx.fillStyle = gridColors.cellDashNormal;
+      ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      ctx.strokeStyle = gridColors.cellDashNormalBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+    }
+  });
+
+  // Desenhar células movíveis normais (ficam na frente das de disparada)
   movableCellsMap.forEach((cellInfo, cellKey) => {
     const [x, y] = cellKey.split(",").map(Number);
     const cellX = x * cellSize;

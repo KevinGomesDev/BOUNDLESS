@@ -204,20 +204,21 @@ export const BattleCanvas = memo(
       });
 
       // === HOOKS DE CÉLULAS ===
-      const { movableCellsMap, movableCells } = useMovableCells({
-        selectedUnit,
-        activeUnitId,
-        units,
-        obstacles: OBSTACLES,
-        visibleCells,
-        unitPositionMap,
-        corpsePositionMap,
-        obstaclePositionMap,
-        currentUserId,
-        isMyTurn,
-        gridWidth: GRID_WIDTH,
-        gridHeight: GRID_HEIGHT,
-      });
+      const { movableCellsMap, movableCells, dashableCellsMap, dashableCells } =
+        useMovableCells({
+          selectedUnit,
+          activeUnitId,
+          units,
+          obstacles: OBSTACLES,
+          visibleCells,
+          unitPositionMap,
+          corpsePositionMap,
+          obstaclePositionMap,
+          currentUserId,
+          isMyTurn,
+          gridWidth: GRID_WIDTH,
+          gridHeight: GRID_HEIGHT,
+        });
 
       const attackableCells = useAttackableCells({
         selectedUnit,
@@ -349,6 +350,7 @@ export const BattleCanvas = memo(
           ctx,
           cellSize,
           movableCellsMap,
+          dashableCellsMap,
           attackableCells,
           hoveredCell,
           gridColors: GRID_COLORS,
@@ -767,9 +769,16 @@ export const BattleCanvas = memo(
         const cellKey = `${hoveredCell.x},${hoveredCell.y}`;
         if (unitPositionMap.has(cellKey)) return "pointer";
         if (movableCells.has(cellKey)) return "pointer";
+        if (dashableCells.has(cellKey)) return "pointer"; // Células de disparada também são clicáveis
         if (attackableCells.has(cellKey)) return "crosshair";
         return "default";
-      }, [hoveredCell, unitPositionMap, movableCells, attackableCells]);
+      }, [
+        hoveredCell,
+        unitPositionMap,
+        movableCells,
+        dashableCells,
+        attackableCells,
+      ]);
 
       // === RENDER ===
       return (

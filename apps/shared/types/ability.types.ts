@@ -379,6 +379,50 @@ export const COST_VALUES: Record<AbilityCostTier, number> = {
 };
 
 // =============================================================================
+// IMPACTO / KNOCKBACK
+// =============================================================================
+
+/**
+ * Configuração de impacto (knockback) de uma habilidade
+ * Empurra unidades atingidas na direção oposta à origem do ataque
+ */
+export interface ImpactConfig {
+  /**
+   * Distância base de empurrão em células
+   * Pode ser número fixo ou baseado em atributo
+   */
+  distance: DynamicValue;
+
+  /**
+   * Se causa dano extra ao colidir com obstáculo/unidade/borda
+   * Default: false
+   */
+  collisionDamage?: boolean;
+
+  /**
+   * Dano causado ao colidir (% do dano original da ability)
+   * Default: 0.5 (50% do dano original)
+   */
+  collisionDamagePercent?: number;
+
+  /**
+   * Se a unidade empurrada para ao encontrar outra unidade
+   * true = para e ambas tomam dano de colisão
+   * false = atravessa (knockback não acontece)
+   * Default: true
+   */
+  stopsAtUnits?: boolean;
+
+  /**
+   * Se a unidade empurrada para ao encontrar obstáculo
+   * true = para e toma dano de colisão
+   * false = atravessa (knockback não acontece)
+   * Default: true
+   */
+  stopsAtObstacles?: boolean;
+}
+
+// =============================================================================
 // DEFINIÇÃO UNIFICADA DE HABILIDADE
 // =============================================================================
 
@@ -447,6 +491,13 @@ export interface AbilityDefinition {
   piercing?: boolean;
   /** Número máximo de alvos afetados em sequência (do mais próximo ao mais distante) */
   maxTargets?: number;
+
+  // === IMPACTO (KNOCKBACK) ===
+  /**
+   * Configuração de impacto/knockback da habilidade
+   * Empurra unidades atingidas na direção oposta à origem do ataque
+   */
+  impact?: ImpactConfig;
 
   // === ATRIBUTOS DINÂMICOS ===
   /** Dano base (pode ser número ou atributo) */
@@ -610,6 +661,22 @@ export interface AbilityExecutionResult {
     damage: number;
     hpAfter: number;
     defeated: boolean;
+  }>;
+
+  // === IMPACTO / KNOCKBACK ===
+  /** Resultados de impacto (knockback) aplicados às unidades */
+  impactResults?: Array<{
+    unitId: string;
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    distancePushed: number;
+    collided: boolean;
+    collisionType?: "UNIT" | "OBSTACLE" | "EDGE";
+    collidedWithUnitId?: string;
+    collidedWithObstacleId?: string;
+    collisionDamage: number;
   }>;
 }
 

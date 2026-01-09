@@ -131,8 +131,37 @@ export interface BattleUnit {
   /** Comportamento de IA para summons/monsters (default: AGGRESSIVE) */
   aiBehavior?: "AGGRESSIVE" | "TACTICAL" | "DEFENSIVE" | "SUPPORT" | "RANGED";
   /**
+   * Hotbar configuration (JSON string ou objeto)
+   * Armazena a configuração de atalhos 1-9 e Shift+1-9
+   */
+  hotbar?: string;
+  /**
    * Efeitos ativos calculados a partir das condições
    * Agregados pelo servidor e enviados ao cliente para exibição dinâmica
    */
   activeEffects?: ActiveEffectsMap;
+
+  // === NEMESIS SYSTEM ===
+  /** ID único do Nemesis (se for um) */
+  nemesisId?: string;
+  /** Flag rápida para identificar se é um Nemesis */
+  isNemesis?: boolean;
+  /** Rank do Nemesis: GRUNT | CAPTAIN | ELITE | WARLORD | OVERLORD */
+  nemesisRank?: string;
+  /** Nível de poder do Nemesis */
+  nemesisPowerLevel?: number;
+  /** Traços de personalidade (ex: VENGEFUL, COWARD, BERSERKER) */
+  nemesisTraits?: string[];
+  /** Medos desenvolvidos (ex: FIRE, MAGIC) */
+  nemesisFears?: string[];
+  /** Forças desenvolvidas (ex: FIRE_PROOF, DETERMINED) */
+  nemesisStrengths?: string[];
+  /** Cicatrizes visuais (ex: BURN_FACE, MISSING_EYE) */
+  nemesisScars?: string[];
+  /** Título conquistado (ex: "Matador de Heróis") */
+  nemesisTitle?: string;
+  /** Quantas vezes matou unidades do jogador alvo */
+  nemesisKillCount?: number;
+  /** ID do jogador que é alvo principal deste Nemesis */
+  nemesisTargetPlayer?: string;
 }
