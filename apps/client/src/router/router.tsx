@@ -24,7 +24,9 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: (
-          <Suspense fallback={<FullScreenLoading message="Carregando página..." />}>
+          <Suspense
+            fallback={<FullScreenLoading message="Carregando página..." />}
+          >
             <HomePage />
           </Suspense>
         ),
@@ -33,7 +35,9 @@ export const router = createBrowserRouter([
         path: "dashboard",
         element: (
           <ProtectedRoute>
-            <Suspense fallback={<FullScreenLoading message="Carregando página..." />}>
+            <Suspense
+              fallback={<FullScreenLoading message="Carregando página..." />}
+            >
               <DashboardPage />
             </Suspense>
           </ProtectedRoute>
@@ -43,7 +47,9 @@ export const router = createBrowserRouter([
         path: "battle",
         element: (
           <ProtectedRoute>
-            <Suspense fallback={<FullScreenLoading message="Carregando página..." />}>
+            <Suspense
+              fallback={<FullScreenLoading message="Carregando página..." />}
+            >
               <BattleSessionPage />
             </Suspense>
           </ProtectedRoute>
@@ -53,7 +59,9 @@ export const router = createBrowserRouter([
         path: "match",
         element: (
           <ProtectedRoute>
-            <Suspense fallback={<FullScreenLoading message="Carregando página..." />}>
+            <Suspense
+              fallback={<FullScreenLoading message="Carregando página..." />}
+            >
               <MapPage />
             </Suspense>
           </ProtectedRoute>
